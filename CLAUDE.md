@@ -62,3 +62,8 @@ src/
   - Build UI layout cards featuring 1-click execution triggers.
 - [ ] **Phase 4: Concurrency Rules & Financial Logic**
   - Implement lock-in timers, day-of bill modifiers, and cancellation upfront charge engines.
+
+## 🌿 Git & Agent Workflow (Feature-Isolator Pattern)
+- **Branch Strategy:** Never execute major code generations or package installations directly on `main`
+- **Isolation Rule:** Claude must ask the user to create a feature branch (e.g., `feat/intake-schema` or `fix/booking-overlap`) or use `claude --worktree` before starting a new roadmap phase.
+- **Commit Standards:** All agent-generated commits must use clean, imperative git summaries (e.g., `feat: implement intake prisma models`, `fix: correct timezone overlap calculation`).
