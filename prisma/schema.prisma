@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +8,118 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+  COMPLETED
+}
+
+enum SlotStatus {
+  REQUESTED
+  BOOKED
+  RELEASED
+}
+
+model Artist {
+  id              String   @id @default(cuid())
+  name            String
+  instagramHandle String   @unique
+  email           String   @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  intakeRequests IntakeRequest[]
+  timeSlots      TimeSlot[]
+}
+
+// Tracks cancellation history and the resulting precharge flag (CLAUDE.md
+// "Flagging Mechanism"). cancellationCount/enforcePrecharge are toggled by
+// the billing domain service, not derived at query time.
+model ClientProfile {
+  id                String   @id @default(cuid())
+  instagramHandle   String   @unique
+  email             String?
+  phone             String?
+  cancellationCount Int      @default(0)
+  enforcePrecharge  Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  intakeRequests IntakeRequest[]
+}
+
+model IntakeRequest {
+  id     String        @id @default(cuid())
+  status RequestStatus @default(PENDING)
+
+  client   ClientProfile @relation(fields: [clientId], references: [id])
+  clientId String
+
+  artist   Artist @relation(fields: [artistId], references: [id])
+  artistId String
+
+  // Client-proposed candidate times (e.g. 11:00, 14:00, 17:30); exactly one
+  // is promoted to BOOKED when the artist approves. No row here implies an
+  // allocated calendar slot on its own.
+  requestedSlots TimeSlot[]
+
+  designReferences DesignReference[]
+  addons           Addon[]
+
+  estimatedPrice Decimal @db.Decimal(10, 2)
+  depositPaid    Boolean @default(false)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Visual Enforcement: every IntakeRequest must carry at least one high-res
+// design reference image. The one-or-more minimum is a domain-service
+// validation rule (Phase 2), not something the schema itself can enforce.
+model DesignReference {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  createdAt DateTime @default(now())
+
+  intakeRequest   IntakeRequest @relation(fields: [intakeRequestId], references: [id], onDelete: Cascade)
+  intakeRequestId String
+}
+
+// Line-item add-ons applied dynamically on the day of service, layered on
+// top of the base estimatedPrice for the final bill.
+model Addon {
+  id        String   @id @default(cuid())
+  label     String
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  intakeRequest   IntakeRequest @relation(fields: [intakeRequestId], references: [id], onDelete: Cascade)
+  intakeRequestId String
+}
+
+// No Auto-Booking: a slot starts life as REQUESTED alongside its
+// IntakeRequest and only becomes BOOKED via an explicit artist approval
+// action. Sibling candidate slots on the same request are RELEASED at
+// that point.
+model TimeSlot {
+  id        String     @id @default(cuid())
+  startTime DateTime
+  endTime   DateTime
+  status    SlotStatus @default(REQUESTED)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  artist   Artist @relation(fields: [artistId], references: [id])
+  artistId String
+
+  intakeRequest   IntakeRequest @relation(fields: [intakeRequestId], references: [id], onDelete: Cascade)
+  intakeRequestId String
+
+  @@index([artistId, startTime])
 }
