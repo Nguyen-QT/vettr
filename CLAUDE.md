@@ -14,6 +14,11 @@ This project strictly enforces **Domain-Driven Design (DDD)**, **Clean Architect
 - **Single Responsibility (SOLID):** UI components only render views. Business mutations live in Server Actions. Data orchestration lives in custom React hooks.
 - **Data Encapsulation:** Enforce structural boundaries using the pattern: `Data Gateway (Prisma) -> Domain Service (Business Logic) -> Controller/Action -> View`.
 
+## 🧪 Automated Testing Guardrails
+- **Mandatory Coverage:** Every core domain service (especially booking logic, slot allocations, and billing multipliers) must have accompanying unit tests.
+- **Edge-Case Matrix:** Tests must explicitly cover race conditions, double-booking attempts, invalid timezone bounds, and past cancellation tracking.
+- **The CLI Verification Rule:** Before marking any task in the roadmap as complete, Claude must execute `npm run test` in the terminal and verify a 100% green pass rate.
+
 ## 🧭 Project Blueprint & Core Constraints
 This app is *not* a standard calendar app (like Calendly). It is a **curation and screening tool**. 
 1. **No Auto-Booking:** Clients request slots (11:00 AM, 2:00 PM, 5:30 PM). No database allocation occurs until the artist manually clicks "Approve".
@@ -53,10 +58,10 @@ src/
 - **Execute Test Suite:** `npm run test`
 
 ## 🗺️ Current Status & Roadmap
-- [ ] **Phase 1: Database Foundation & Domain Mapping** ◄ CURRENT FOCUS
+- [x] **Phase 1: Database Foundation & Domain Mapping**
   - Initialize PostgreSQL schema via Prisma.
   - Setup core entity relationships (`Artist`, `ClientProfile`, `IntakeRequest`, `TimeSlot`).
-- [ ] **Phase 2: Core Intake Engine & Visual Guardrails**
+- [ ] **Phase 2: Core Intake Engine & Visual Guardrails** ◄ CURRENT FOCUS
   - Implement dynamic multi-image upload & Instagram validation.
 - [ ] **Phase 3: Artist Decision Dashboard**
   - Build UI layout cards featuring 1-click execution triggers.
