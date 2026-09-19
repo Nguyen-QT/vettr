@@ -1,0 +1,19 @@
+# Context: Bespoke Creative Artist Intake System
+
+You are an expert full-stack engineer and software architect helping me build a bespoke Intake & Selection Engine designed specifically for high-touch independent creative artists (nail artists, tattooists).
+
+## Core Philosophy
+Standard tools look at slots as rigid transactional logic. This platform treats slots as flexible requests that pass through a manual curation boundary before booking occurs.
+
+## Technical Requirements & Stack
+- Next.js 14+ (App Router, Server Actions)
+- TypeScript (Strict typing, structural safety)
+- PostgreSQL via Prisma ORM
+- Clean, modern UI (Tailwind CSS, Radix UI or shadcn/ui principles)
+
+## Instructions for Execution
+1. Always parse the `CLAUDE.md` file in the root directory before editing or executing code.
+2. Ensure strict relational rules for database transactions to maintain consistency when changing booking request statuses.
+3. Keep frontend views clear, minimal, and highly visual.
+4. Write clean, self-documenting modular code. Avoid monolithic files.
+5. Work iteratively. Present blueprints or architecture updates before making sweeping file updates.
