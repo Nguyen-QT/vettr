@@ -58,17 +58,32 @@ src/
 - **Execute Test Suite:** `npm run test`
 
 ## 🗺️ Current Status & Roadmap
-- [x] **Phase 1: Database Foundation & Domain Mapping**
-  - Initialize PostgreSQL schema via Prisma.
-  - Setup core entity relationships (`Artist`, `ClientProfile`, `IntakeRequest`, `TimeSlot`).
-- [ ] **Phase 2: Core Intake Engine & Visual Guardrails** ◄ CURRENT FOCUS
-  - Implement dynamic multi-image upload & Instagram validation.
-- [ ] **Phase 3: Artist Decision Dashboard**
-  - Build UI layout cards featuring 1-click execution triggers.
-- [ ] **Phase 4: Concurrency Rules & Financial Logic**
-  - Implement lock-in timers, day-of bill modifiers, and cancellation upfront charge engines.
+### 📦 Phase 1: Database Foundation & Domain Mapping
+- [x] 1.1: Initialize PostgreSQL schema via Prisma.
+- [x] 1.2: Setup core entity relationships (`Artist`, `ClientProfile`, `IntakeRequest`, `TimeSlot`).
 
-## 🌿 Git & Agent Workflow (Feature-Isolator Pattern)
-- **Branch Strategy:** Never execute major code generations or package installations directly on `main`
-- **Isolation Rule:** Claude must ask the user to create a feature branch (e.g., `feat/intake-schema` or `fix/booking-overlap`) or use `claude --worktree` before starting a new roadmap phase.
-- **Commit Standards:** All agent-generated commits must use clean, imperative git summaries (e.g., `feat: implement intake prisma models`, `fix: correct timezone overlap calculation`).
+### 📦 Phase 2: Core Intake Engine & Visual Guardrails ◄ CURRENT FOCUS
+- [ ] **2.1: Client Input Validation Layers** (Build Zod schemas for validation, including strict Instagram handle regex and image string array boundaries).
+- [ ] **2.2: UploadThing Backend Integration** (Configure the UploadThing backend API route handlers and initial server endpoint configurations).
+- [ ] **2.3: Pure Business Logic Core** (Write `services/validateComplexity.ts` to inspect incoming fields, flag empty sets, and hook up unit tests).
+- [ ] **2.4: React Server Action Layer** (Build `actions.ts` to intake user submissions, pipe to domain services, and save a PENDING record in Prisma).
+- [ ] **2.5: Visual Intake Form Component** (Construct the frontend `VisualIntakeForm.tsx` using Shadcn primitives, linking directly to the server action).
+
+### 📦 Phase 3: Artist Decision Dashboard
+- [ ] **3.1: Dashboard Layout Scaffold** (Build basic layout wrapper with authentic mobile-first rendering tailored for working artists).
+- [ ] **3.2: Interactive Review Cards** (Build component that accepts intake data and renders 1-click Instagram deep links and reference images).
+- [ ] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
+
+### 📦 Phase 4: Concurrency Rules & Financial Logic
+- [ ] **4.1: Reservation Lock-In Timers** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently).
+- [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
+- [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
+
+
+## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
+- **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
+- **Atomic Functional Scope:** Claude must treat **every numbered bullet point** (e.g., `2.1`, `2.2`) as a single, isolated, conceptually complete Pull Request. Do not combine or cross-pollinate different numbered tasks into a single run.
+- **Dynamic Blast Radius Limit:** There is no hard file-count maximum. If a single atomic task naturally spans 6+ files across data, domain services, actions, and views to preserve high architectural cohesion, write them all. 
+- **Zero Context Bleed:** Absolute ban on adding unrelated "quick styling updates", formatting changes, or side-fixes to files outside the direct functional requirement of the active sub-task.
+- **Review Interception:** Upon completing a single numbered sub-task, Claude must pause, execute `npm run test` to verify zero system regressions, present the target file diff map to the user, and request confirmation before starting the next item.
+- **Commit Standards:** Use clear, atomic git summaries matching the domain (e.g., `feat(intake): add zod schema validation for instagram handles`, `test(intake): implement logic checks for design complexity`).
