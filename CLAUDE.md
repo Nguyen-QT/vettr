@@ -1,4 +1,4 @@
-# Bespoke Intake & Selection Engine - Project Guide
+# Vettr — Bespoke Intake & Selection Engine - Project Guide
 
 ## 🛠️ Tech Stack & Tooling Core
 - **Framework:** Next.js 15+ (App Router, Server Actions)
