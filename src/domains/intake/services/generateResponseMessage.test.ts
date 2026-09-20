@@ -16,4 +16,10 @@ describe("generateResponseMessage", () => {
       generateResponseMessage("DECLINED")
     );
   });
+
+  it("returns off-platform confirmation copy for AWAITING_SLOT_CONFIRMATION", () => {
+    expect(generateResponseMessage("AWAITING_SLOT_CONFIRMATION")).toMatch(
+      /reach out/i
+    );
+  });
 });
