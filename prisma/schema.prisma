@@ -24,6 +24,13 @@ enum SlotStatus {
   RELEASED
 }
 
+enum ComplexityTier {
+  TIER_2
+  TIER_3
+  TIER_4
+  FREESTYLE
+}
+
 model Artist {
   id              String   @id @default(cuid())
   name            String
@@ -70,10 +77,18 @@ model IntakeRequest {
   designReferences DesignReference[]
   addons           Addon[]
 
-  estimatedPrice Decimal @db.Decimal(10, 2)
-  depositPaid    Boolean @default(false)
+  tier          ComplexityTier
+  minPrice      Decimal        @db.Decimal(10, 2)
+  maxPrice      Decimal        @db.Decimal(10, 2)
+  designTags    String[]
+  aestheticTags String[]
 
-  notes String?
+  // Null until the artist triages the request and sets a base estimate;
+  // the client does not supply a price at intake time.
+  estimatedPrice Decimal? @db.Decimal(10, 2)
+  depositPaid    Boolean  @default(false)
+
+  clientNotes String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
