@@ -93,7 +93,7 @@ src/
   - [x] 4.1c: Server Action Boundary (`confirmTimeSlotAction`).
   - [x] 4.1d: Data Gateway (`IntakeRequest.requestedStartTime`, `IntakeRequest.proposedDurationMinutes`, and a new `RequestStatus.AWAITING_SLOT_CONFIRMATION` value).
   - [x] 4.1e: Intake Capture (client picks a date + one of the artist's fixed daily times (11:00/14:00/17:30) on the intake form; saved as `requestedStartTime`).
-  - [ ] 4.1f: Review/Propose Domain Service (artist enters a duration; a single-slot fit atomically books + approves, a two-slot spillover stores the proposal and moves to `AWAITING_SLOT_CONFIRMATION` instead of booking, since that case needs off-platform confirmation with the client first).
+  - [x] 4.1f: Review/Propose Domain Service (artist enters a duration; a single-slot fit atomically books + approves, a two-slot spillover stores the proposal and moves to `AWAITING_SLOT_CONFIRMATION` instead of booking, since that case needs off-platform confirmation with the client first).
   - [ ] 4.1g: Confirm-Proposed-Booking Domain Service (finalizes an `AWAITING_SLOT_CONFIRMATION` request once the artist has confirmed the double-slot booking with the client off-platform).
   - [ ] 4.1h: Controller/Action Boundary (server actions for the review step and the confirm-booking step).
   - [ ] 4.1i: Artist Dashboard UI (duration input on approve, the two outcome messages, and a "Confirm Booking" control for awaiting-confirmation requests).
