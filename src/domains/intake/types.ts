@@ -56,11 +56,19 @@ export interface ClientIntakeInput {
   requestedTime: SlotTime;
 }
 
-// Read-shaped projection of a PENDING IntakeRequest for the artist
-// dashboard (Phase 3). Distinct from ClientIntakeInput: this describes
-// what the artist reviews, not what the client submitted.
+// Requests the artist dashboard shows because they need action:
+// PENDING (never reviewed) or AWAITING_SLOT_CONFIRMATION (a proposed
+// double-slot booking waiting on the artist's off-platform confirmation,
+// CLAUDE.md 4.1f/g). Distinct from RequestStatus, which has other values
+// (APPROVED, DECLINED, ...) the dashboard never needs to render.
+export type ActionableRequestStatus = "PENDING" | "AWAITING_SLOT_CONFIRMATION";
+
+// Read-shaped projection of an actionable IntakeRequest for the artist
+// dashboard (Phase 3, extended 4.1i). Distinct from ClientIntakeInput:
+// this describes what the artist reviews, not what the client submitted.
 export interface PendingIntakeRequestSummary {
   id: string;
+  status: ActionableRequestStatus;
   clientInstagramHandle: string;
   tier: ComplexityTier;
   minPrice: number;
