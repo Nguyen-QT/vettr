@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { Separator } from "@/components/ui/separator";
+import { RequestActions } from "@/domains/intake/components/RequestActions";
 import type { PendingIntakeRequestSummary } from "@/domains/intake/types";
 
 interface RequestCardProps {
@@ -8,7 +9,8 @@ interface RequestCardProps {
 }
 
 // Pure view (CLAUDE.md): renders whatever summary it's handed, makes no
-// decisions and fetches nothing. 3.3 adds the Approve/Decline controls.
+// decisions and fetches nothing. Approve/Decline state lives in
+// RequestActions' own hook, not here.
 export function RequestCard({ request }: RequestCardProps) {
   const instagramUrl = `https://instagram.com/${request.clientInstagramHandle}`;
   const tags = [...request.designTags, ...request.aestheticTags];
@@ -57,6 +59,9 @@ export function RequestCard({ request }: RequestCardProps) {
           <p className="text-sm">{request.clientNotes}</p>
         </>
       ) : null}
+
+      <Separator />
+      <RequestActions intakeRequestId={request.id} />
     </article>
   );
 }
