@@ -13,6 +13,12 @@
 # testing
 /coverage
 
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/e2e/.fixture.json
+
 # next.js
 /.next/
 /out/
