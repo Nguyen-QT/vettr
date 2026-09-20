@@ -108,6 +108,8 @@ describe("clientIntakeInputSchema", () => {
     tier: "TIER_2" as const,
     clientBudgetRange: { minPrice: 50, maxPrice: 100 },
     designTags: ["fine-line-detail" as const],
+    requestedDate: "2027-01-01",
+    requestedTime: "11:00" as const,
   };
 
   const freestylePayload = {
@@ -116,6 +118,8 @@ describe("clientIntakeInputSchema", () => {
     tier: "FREESTYLE" as const,
     clientBudgetRange: { minPrice: 50, maxPrice: 500 },
     aestheticTags: ["watercolor-blend" as const],
+    requestedDate: "2027-01-01",
+    requestedTime: "11:00" as const,
   };
 
   it("accepts the minimum required fields for a non-FREESTYLE tier", () => {
@@ -239,6 +243,31 @@ describe("clientIntakeInputSchema", () => {
     const result = clientIntakeInputSchema.safeParse({
       ...freestylePayload,
       aestheticTags: ["OTHER" as const],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a requestedDate/requestedTime combination in the past", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      requestedDate: "2020-01-01",
+      requestedTime: "11:00" as const,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a requestedTime outside the fixed daily options", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      requestedTime: "09:00",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a malformed requestedDate", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      requestedDate: "not-a-date",
     });
     expect(result.success).toBe(false);
   });

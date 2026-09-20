@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 
-import { clientIntakeInputSchema } from "./intake.schema";
+import { clientIntakeInputSchema, combineRequestedDateAndTime } from "./intake.schema";
 import { generateResponseMessage } from "./services/generateResponseMessage";
 import { validateComplexity } from "./services/validateComplexity";
 
@@ -71,6 +71,10 @@ export async function submitIntakeRequest(
       designTags: data.designTags ?? [],
       aestheticTags: data.aestheticTags ?? [],
       clientNotes: data.clientNotes,
+      requestedStartTime: combineRequestedDateAndTime(
+        data.requestedDate,
+        data.requestedTime
+      ),
       designReferences: {
         create: data.designReferenceImageUrls.map((imageUrl) => ({
           imageUrl,
