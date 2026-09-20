@@ -19,6 +19,7 @@ This project strictly enforces **Domain-Driven Design (DDD)**, **Clean Architect
 - **Mandatory Coverage:** Every core domain service (especially booking logic, slot allocations, and billing multipliers) must have accompanying unit tests.
 - **Edge-Case Matrix:** Tests must explicitly cover race conditions, double-booking attempts, invalid timezone bounds, and past cancellation tracking.
 - **The CLI Verification Rule:** Before marking any task in the roadmap as complete, Claude must execute `npm run test` in the terminal and verify a 100% green pass rate.
+- **Manual E2E Verification Gate:** Playwright (`e2e/`, `playwright.config.ts`) is a second, explicitly *manual* testing layer on top of the automated one above. For any sub-task touching a view/route layer, Claude must add or update the relevant `e2e/*.spec.ts`, run `npm run test:e2e` headless as a sanity check, then point the user to `npm run test:e2e:ui` (Playwright UI Mode) to interactively click through the affected flow themselves before giving their go-ahead to commit. A headless `npm run test:e2e` pass does not substitute for the user's own UI Mode pass.
 
 ## 🧭 Project Blueprint & Core Constraints
 This app is *not* a standard calendar app (like Calendly). It is a **curation and screening tool**. 
@@ -99,6 +100,6 @@ src/
 Domain Hook & Logic PRs must focus purely on state management, validation, and domain services.
 View & Route PRs must focus purely on JSX composition and page routing.
 - **Zero Context Bleed:** Absolute ban on adding unrelated "quick styling updates", formatting changes, or side-fixes to files outside the direct functional requirement of the active sub-task.
-- **Review Interception:** Upon completing a single numbered sub-task, Claude must pause, execute `npm run test` to verify zero system regressions, present the target file diff map to the user, and request confirmation before starting the next item.
+- **Review Interception:** Upon completing a single numbered sub-task, Claude must pause, execute `npm run test` to verify zero system regressions, present the target file diff map to the user, and request confirmation before starting the next item. For view/route-layer sub-tasks, this also means adding/updating the relevant `e2e/*.spec.ts` and explicitly telling the user to run `npm run test:e2e:ui` (see Manual E2E Verification Gate) as part of requesting their go-ahead.
 - **Commit Standards:** Use clear, atomic git summaries matching the domain (e.g., `feat(intake): add zod schema validation for instagram handles`, `test(intake): implement logic checks for design complexity`).
 - **Mandatory PR Description Policy** Never raise a PR without this description block. Include a brief summary of the change and why it was made. The `gh` CLI is installed and authenticated (`C:\Users\thang\tools\bin\gh.exe`, on the user PATH) — after pushing, Claude must raise the PR directly with `gh pr create --title "..." --body "..."`, passing the description block via `--body`, rather than handing the user a manual compare-URL link.
