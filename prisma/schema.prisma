@@ -12,6 +12,10 @@ datasource db {
 
 enum RequestStatus {
   PENDING
+  // Artist proposed a duration that spills into a second slot; awaiting
+  // off-platform confirmation with the client before the booking is
+  // finalized (CLAUDE.md 4.1f/4.1g).
+  AWAITING_SLOT_CONFIRMATION
   APPROVED
   DECLINED
   CANCELLED
@@ -69,10 +73,25 @@ model IntakeRequest {
   artist   Artist @relation(fields: [artistId], references: [id])
   artistId String
 
-  // Client-proposed candidate times (e.g. 11:00, 14:00, 17:30); exactly one
-  // is promoted to BOOKED when the artist approves. No row here implies an
-  // allocated calendar slot on its own.
-  requestedSlots TimeSlot[]
+  // Real time-slot allocations for this request -- always BOOKED, created
+  // only once the artist approves (CLAUDE.md "No Auto-Booking"). The
+  // client's own preference lives in requestedStartTime below, a plain
+  // field rather than a TimeSlot row, since no allocation exists yet.
+  timeSlots TimeSlot[]
+
+  // Client's chosen slot at intake time (one of the artist's fixed daily
+  // times, e.g. 11:00/14:00/17:30, on a client-picked date). Not itself an
+  // allocation -- see timeSlots above. Nullable at the DB level only
+  // because intake capture (CLAUDE.md 4.1e) hasn't landed yet, same as
+  // estimatedPrice below -- intake.schema.ts is what actually enforces it
+  // once that lands.
+  requestedStartTime DateTime?
+
+  // Set when the artist's chosen duration spills into a second slot
+  // (status becomes AWAITING_SLOT_CONFIRMATION); holds the proposal until
+  // the artist confirms off-platform with the client and finalizes the
+  // booking. Unused for a single-slot approval, which books immediately.
+  proposedDurationMinutes Int?
 
   designReferences DesignReference[]
   addons           Addon[]
@@ -118,10 +137,12 @@ model Addon {
   intakeRequestId String
 }
 
-// No Auto-Booking: a slot starts life as REQUESTED alongside its
-// IntakeRequest and only becomes BOOKED via an explicit artist approval
-// action. Sibling candidate slots on the same request are RELEASED at
-// that point.
+// No Auto-Booking: rows here are only ever created already BOOKED, by
+// the artist's approval action (see confirmTimeSlot) -- the client's own
+// slot preference is IntakeRequest.requestedStartTime, a plain field,
+// not a row here. REQUESTED/RELEASED remain on SlotStatus for a future
+// cancellation flow (Phase 4.4) that would transition a BOOKED row back
+// out rather than delete it.
 model TimeSlot {
   id        String     @id @default(cuid())
   startTime DateTime
