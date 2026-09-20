@@ -23,7 +23,7 @@ This project strictly enforces **Domain-Driven Design (DDD)**, **Clean Architect
 
 ## 🧭 Project Blueprint & Core Constraints
 This app is *not* a standard calendar app (like Calendly). It is a **curation and screening tool**. 
-1. **No Auto-Booking:** Clients request slots (11:00 AM, 2:00 PM, 5:30 PM). No database allocation occurs until the artist manually clicks "Approve".
+1. **No Auto-Booking:** Clients request slots (11:00 AM, 2:00 PM, 5:30 PM) as start-time candidates only — they never set the service duration. The artist decides duration upon reviewing the request, and no database allocation occurs until the artist manually clicks "Approve". If the artist-decided duration overflows the requested slot's length, the booking consumes the next adjacent slot too and marks it unavailable (for now, capped at two consecutive slots — typically only FREESTYLE services need this).
 2. **Visual Enforcement & Filtering:** Every request *must* contain an Instagram handle and at least one high-resolution design reference image. If the text input contains blacklisted terms for basic/simple work (and no advanced modifiers), programmatically reject it with a friendly redirection message before database persistence occurs.
 3. **Flexible Pricing & Final Bill:** The schema must support a structural `depositPaid` flag, a dynamic base `estimatedPrice`, and line-item `addons` added dynamically on the day of service.
 4. **Flagging Mechanism:** The `ClientProfile` model must track cancellation history and automatically toggle an `enforcePrecharge` state (50% upfront penalty) if flagged.
@@ -87,7 +87,7 @@ src/
 - [x] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
 
 ### 📦 Phase 4: Concurrency Rules & Financial Logic ◄ CURRENT FOCUS
-- [ ] **4.1: Reservation Lock-In Timers** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently).
+- [ ] **4.1: Reservation Lock-In Timers** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now).
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 - [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
 
