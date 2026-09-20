@@ -13,6 +13,7 @@ This project strictly enforces **Domain-Driven Design (DDD)**, **Clean Architect
 - **Domain-Driven Structure:** Code is grouped by business boundaries, not technical types.
 - **Single Responsibility (SOLID):** UI components only render views. Business mutations live in Server Actions. Data orchestration lives in custom React hooks.
 - **Data Encapsulation:** Enforce structural boundaries using the pattern: `Data Gateway (Prisma) -> Domain Service (Business Logic) -> Controller/Action -> View`.
+- **Mandatory File-Splitting (Single Responsibility):** Every domain that requires runtime input validation must decompose into three decoupled files at its root: `constants.ts` (domain arrays, baselines, and boundaries), `types.ts` (pure, standalone TypeScript entity contracts — never derived via Zod's `z.infer`), and `[domain].schema.ts` (Zod runtime validation only, importing from the other two). This is a mandatory technical step for every current and future domain (`intake`, `scheduling`, `billing`), not just intake.
 
 ## 🧪 Automated Testing Guardrails
 - **Mandatory Coverage:** Every core domain service (especially booking logic, slot allocations, and billing multipliers) must have accompanying unit tests.
@@ -22,7 +23,7 @@ This project strictly enforces **Domain-Driven Design (DDD)**, **Clean Architect
 ## 🧭 Project Blueprint & Core Constraints
 This app is *not* a standard calendar app (like Calendly). It is a **curation and screening tool**. 
 1. **No Auto-Booking:** Clients request slots (11:00 AM, 2:00 PM, 5:30 PM). No database allocation occurs until the artist manually clicks "Approve".
-2. **Visual Enforcement:** Every request *must* contain an Instagram handle and at least one high-resolution design reference image.
+2. **Visual Enforcement & Filtering:** Every request *must* contain an Instagram handle and at least one high-resolution design reference image. If the text input contains blacklisted terms for basic/simple work (and no advanced modifiers), programmatically reject it with a friendly redirection message before database persistence occurs.
 3. **Flexible Pricing & Final Bill:** The schema must support a structural `depositPaid` flag, a dynamic base `estimatedPrice`, and line-item `addons` added dynamically on the day of service.
 4. **Flagging Mechanism:** The `ClientProfile` model must track cancellation history and automatically toggle an `enforcePrecharge` state (50% upfront penalty) if flagged.
 
@@ -40,9 +41,14 @@ src/
 │   │   ├── components/       # Domain-specific UI (VisualIntakeForm, RequestCard)
 │   │   ├── hooks/            # Presentation state orchestrators (useIntakeApproval)
 │   │   ├── services/         # Pure business logic (validateComplexity, routeRequest)
+│   │   ├── constants.ts      # Domain arrays, baselines, and boundaries
+│   │   ├── types.ts          # Pure TypeScript entity contracts (no z.infer)
+│   │   ├── intake.schema.ts  # Zod runtime validation only
 │   │   └── actions.ts        # Next.js Server Actions boundary
 │   ├── scheduling/           # Domain 2: Slot booking, flex-shifts, concurrent blocks
+│   │                         # (same constants.ts / types.ts / scheduling.schema.ts split)
 │   └── billing/              # Domain 3: Dynamic tabs, cancellation penalty engines
+│                              # (same constants.ts / types.ts / billing.schema.ts split)
 ├── lib/                      # Framework/Utility infrastructure configuration
 │   ├── prisma.ts             # Prisma Client instance singleton
 │   └── utils.ts              # Tailwind merging utilities
@@ -58,6 +64,8 @@ src/
 - **Execute Test Suite:** `npm run test`
 
 ## 🗺️ Current Status & Roadmap
+> **Structural mandate (applies to every phase below):** any task that introduces domain input validation must follow the `constants.ts` / `types.ts` / `[domain].schema.ts` split defined in the Architecture section — this is not intake-specific and carries forward into Phase 2's remaining tasks and into the `scheduling`/`billing` domains built in Phases 3-4.
+
 ### 📦 Phase 1: Database Foundation & Domain Mapping
 - [x] 1.1: Initialize PostgreSQL schema via Prisma.
 - [x] 1.2: Setup core entity relationships (`Artist`, `ClientProfile`, `IntakeRequest`, `TimeSlot`).

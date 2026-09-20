@@ -105,18 +105,35 @@ describe("clientIntakeInputSchema", () => {
   const validPayload = {
     instagramHandle: "nailartist",
     designReferenceImageUrls: ["https://files.example.com/ref-1.png"],
+    tier: "TIER_2" as const,
+    clientBudgetRange: { minPrice: 50, maxPrice: 100 },
+    designTags: ["fine-line-detail" as const],
   };
 
-  it("accepts the minimum required fields", () => {
+  const freestylePayload = {
+    instagramHandle: "nailartist",
+    designReferenceImageUrls: ["https://files.example.com/ref-1.png"],
+    tier: "FREESTYLE" as const,
+    clientBudgetRange: { minPrice: 50, maxPrice: 500 },
+    aestheticTags: ["watercolor-blend" as const],
+  };
+
+  it("accepts the minimum required fields for a non-FREESTYLE tier", () => {
     expect(clientIntakeInputSchema.safeParse(validPayload).success).toBe(true);
   });
 
-  it("accepts optional email, phone, and notes", () => {
+  it("accepts the minimum required fields for FREESTYLE", () => {
+    expect(clientIntakeInputSchema.safeParse(freestylePayload).success).toBe(
+      true
+    );
+  });
+
+  it("accepts optional email, phone, and clientNotes", () => {
     const result = clientIntakeInputSchema.safeParse({
       ...validPayload,
       email: "client@example.com",
       phone: "+1 555 0100",
-      notes: "Prefers weekday afternoons.",
+      clientNotes: "Prefers weekday afternoons.",
     });
     expect(result.success).toBe(true);
   });
@@ -139,14 +156,89 @@ describe("clientIntakeInputSchema", () => {
 
   it("rejects when designReferenceImageUrls is missing", () => {
     const result = clientIntakeInputSchema.safeParse({
-      instagramHandle: "nailartist",
+      ...validPayload,
+      designReferenceImageUrls: undefined,
     });
     expect(result.success).toBe(false);
   });
 
   it("rejects when instagramHandle is missing", () => {
     const result = clientIntakeInputSchema.safeParse({
-      designReferenceImageUrls: ["https://files.example.com/ref-1.png"],
+      ...validPayload,
+      instagramHandle: undefined,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a budget where maxPrice is not greater than minPrice", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      clientBudgetRange: { minPrice: 100, maxPrice: 100 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a budget amount that is not a multiple of 5", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      clientBudgetRange: { minPrice: 52, maxPrice: 100 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-positive budget amount", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      clientBudgetRange: { minPrice: 0, maxPrice: 100 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects TIER_2/3/4 requests with no designTags", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      designTags: undefined,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects FREESTYLE requests with no aestheticTags", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...freestylePayload,
+      aestheticTags: undefined,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("ignores an empty designTags array on FREESTYLE (aestheticTags governs instead)", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...freestylePayload,
+      designTags: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("requires clientNotes when OTHER is selected in designTags", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      designTags: ["OTHER" as const],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts OTHER in designTags when clientNotes is provided", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      designTags: ["OTHER" as const],
+      clientNotes: "A custom piece I'll describe over a call.",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("requires clientNotes when OTHER is selected in aestheticTags", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...freestylePayload,
+      aestheticTags: ["OTHER" as const],
     });
     expect(result.success).toBe(false);
   });

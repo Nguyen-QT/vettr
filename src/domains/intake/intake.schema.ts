@@ -1,9 +1,14 @@
 import { z } from "zod";
 
-// Real Instagram handle rules: 1-30 chars, letters/digits/periods/
-// underscores, and must start and end on an alphanumeric character.
-export const INSTAGRAM_HANDLE_REGEX =
-  /^[a-zA-Z0-9](?:[a-zA-Z0-9._]{0,28}[a-zA-Z0-9])?$/;
+import {
+  AESTHETIC_TAG_OPTIONS,
+  COMPLEXITY_TIERS,
+  DESIGN_TAG_OPTIONS,
+  INSTAGRAM_HANDLE_REGEX,
+  MAX_DESIGN_REFERENCE_IMAGES,
+  MIN_DESIGN_REFERENCE_IMAGES,
+  OTHER_TAG_VALUE,
+} from "./constants";
 
 export const instagramHandleSchema = z
   .string()
@@ -16,9 +21,6 @@ export const instagramHandleSchema = z
       .max(30, "Instagram handle must be 30 characters or fewer.")
       .regex(INSTAGRAM_HANDLE_REGEX, "Enter a valid Instagram handle.")
   );
-
-export const MIN_DESIGN_REFERENCE_IMAGES = 1;
-export const MAX_DESIGN_REFERENCE_IMAGES = 5;
 
 // Visual Enforcement (CLAUDE.md): every request must carry at least one
 // high-resolution design reference image.
@@ -33,15 +35,59 @@ export const designReferenceImagesSchema = z
     `You can attach up to ${MAX_DESIGN_REFERENCE_IMAGES} design reference images.`
   );
 
-// Client-supplied fields only. Artist-controlled state (estimatedPrice,
-// depositPaid, enforcePrecharge, cancellationCount) is set elsewhere and
-// never accepted as input here.
-export const clientIntakeInputSchema = z.object({
-  instagramHandle: instagramHandleSchema,
-  designReferenceImageUrls: designReferenceImagesSchema,
-  email: z.email().optional(),
-  phone: z.string().trim().min(1).optional(),
-  notes: z.string().trim().max(1000).optional(),
-});
+export const complexityTierSchema = z.enum(COMPLEXITY_TIERS);
 
-export type ClientIntakeInput = z.infer<typeof clientIntakeInputSchema>;
+export const designTagSchema = z.enum(DESIGN_TAG_OPTIONS);
+
+export const aestheticTagSchema = z.enum(AESTHETIC_TAG_OPTIONS);
+
+export const clientBudgetRangeSchema = z
+  .object({
+    minPrice: z.number().positive().multipleOf(5),
+    maxPrice: z.number().positive().multipleOf(5),
+  })
+  .refine((range) => range.maxPrice > range.minPrice, {
+    message: "Maximum budget must be greater than the minimum budget.",
+    path: ["maxPrice"],
+  });
+
+// Network firewall for client submissions. Structural validity only —
+// see src/domains/intake/services/validateComplexity.ts for the content
+// gatekeeper that judges an already-valid request's tags/notes.
+export const clientIntakeInputSchema = z
+  .object({
+    instagramHandle: instagramHandleSchema,
+    designReferenceImageUrls: designReferenceImagesSchema,
+    tier: complexityTierSchema,
+    clientBudgetRange: clientBudgetRangeSchema,
+    designTags: z.array(designTagSchema).optional(),
+    aestheticTags: z.array(aestheticTagSchema).optional(),
+    email: z.email().optional(),
+    phone: z.string().trim().min(1).optional(),
+    clientNotes: z.string().trim().max(1000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const isFreestyle = data.tier === "FREESTYLE";
+    const relevantTags = isFreestyle ? data.aestheticTags : data.designTags;
+    const tagFieldPath = isFreestyle ? "aestheticTags" : "designTags";
+
+    if (!relevantTags || relevantTags.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: [tagFieldPath],
+        message: isFreestyle
+          ? "Select at least one aesthetic theme tag."
+          : "Select at least one design tag.",
+      });
+    }
+
+    const hasOtherTag = (relevantTags ?? []).includes(OTHER_TAG_VALUE);
+    if (hasOtherTag && !data.clientNotes) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["clientNotes"],
+        message:
+          'Please describe your idea in the notes field when selecting "Other".',
+      });
+    }
+  });

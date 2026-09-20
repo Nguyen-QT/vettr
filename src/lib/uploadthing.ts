@@ -3,7 +3,7 @@ import { createUploadthing, type FileRouter } from "uploadthing/next";
 import {
   MAX_DESIGN_REFERENCE_IMAGES,
   MIN_DESIGN_REFERENCE_IMAGES,
-} from "@/domains/intake/intake.schema";
+} from "@/domains/intake/constants";
 
 const f = createUploadthing();
 
