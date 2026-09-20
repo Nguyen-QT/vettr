@@ -10,6 +10,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    setupFiles: ["./vitest.setup.ts"],
     // e2e/*.spec.ts are Playwright specs (npm run test:e2e), not vitest's.
     exclude: ["node_modules/**", "e2e/**"],
   },
