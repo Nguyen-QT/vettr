@@ -91,7 +91,10 @@ src/
 ## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
 - **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
 - **Atomic Functional Scope:** Claude must treat **every numbered bullet point** (e.g., `2.1`, `2.2`) as a single, isolated, conceptually complete Pull Request. Do not combine or cross-pollinate different numbered tasks into a single run.
-- **Dynamic Blast Radius Limit:** There is no hard file-count maximum. If a single atomic task naturally spans 6+ files across data, domain services, actions, and views to preserve high architectural cohesion, write them all. 
+- **Mandatory Task Breakdown Rule:** If a single task requirement involves infrastructure/primitives + domain state/hooks + page views, Claude MUST propose decomposing it into sub-tasks (a, b, c) BEFORE writing code. A single PR must NEVER cross layer boundaries (e.g., adding UI primitives AND writing complex hooks AND setting up page routes in one run).
+- **Blast Radius Boundaries:** UI Primitive & Config PRs must be max setup files with zero business logic.
+Domain Hook & Logic PRs must focus purely on state management, validation, and domain services.
+View & Route PRs must focus purely on JSX composition and page routing.
 - **Zero Context Bleed:** Absolute ban on adding unrelated "quick styling updates", formatting changes, or side-fixes to files outside the direct functional requirement of the active sub-task.
 - **Review Interception:** Upon completing a single numbered sub-task, Claude must pause, execute `npm run test` to verify zero system regressions, present the target file diff map to the user, and request confirmation before starting the next item.
 - **Commit Standards:** Use clear, atomic git summaries matching the domain (e.g., `feat(intake): add zod schema validation for instagram handles`, `test(intake): implement logic checks for design complexity`).
