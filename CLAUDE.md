@@ -82,7 +82,7 @@ src/
 
 ### 📦 Phase 3: Artist Decision Dashboard ◄ CURRENT FOCUS
 - [x] **3.1: Dashboard Layout Scaffold** (Build basic layout wrapper with authentic mobile-first rendering tailored for working artists).
-- [ ] **3.2: Interactive Review Cards** (Build component that accepts intake data and renders 1-click Instagram deep links and reference images).
+- [x] **3.2: Interactive Review Cards** (Build component that accepts intake data and renders 1-click Instagram deep links and reference images).
 - [ ] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
 
 ### 📦 Phase 4: Concurrency Rules & Financial Logic
@@ -101,3 +101,4 @@ View & Route PRs must focus purely on JSX composition and page routing.
 - **Zero Context Bleed:** Absolute ban on adding unrelated "quick styling updates", formatting changes, or side-fixes to files outside the direct functional requirement of the active sub-task.
 - **Review Interception:** Upon completing a single numbered sub-task, Claude must pause, execute `npm run test` to verify zero system regressions, present the target file diff map to the user, and request confirmation before starting the next item.
 - **Commit Standards:** Use clear, atomic git summaries matching the domain (e.g., `feat(intake): add zod schema validation for instagram handles`, `test(intake): implement logic checks for design complexity`).
+- **Mandatory PR Description Policy** Never raise a PR without this description block. Include a brief summary of the change and why it was made. The `gh` CLI is installed and authenticated (`C:\Users\thang\tools\bin\gh.exe`, on the user PATH) — after pushing, Claude must raise the PR directly with `gh pr create --title "..." --body "..."`, passing the description block via `--body`, rather than handing the user a manual compare-URL link.
