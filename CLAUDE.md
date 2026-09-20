@@ -75,7 +75,10 @@ src/
 - [x] **2.2: UploadThing Backend Integration** (Configure the UploadThing backend API route handlers and initial server endpoint configurations).
 - [x] **2.3: Pure Business Logic Core** (Write `services/validateComplexity.ts` to inspect incoming fields, flag empty sets, and hook up unit tests).
 - [x] **2.4: React Server Action Layer** (Build `actions.ts` to intake user submissions, pipe to domain services, and save a PENDING record in Prisma).
-- [ ] **2.5: Visual Intake Form Component** (Construct the frontend `VisualIntakeForm.tsx` using Shadcn primitives, linking directly to the server action).
+- **2.5: Visual Intake Form Component** (Construct the frontend `VisualIntakeForm.tsx` using Shadcn primitives, linking directly to the server action), decomposed per the Mandatory Task Breakdown Rule:
+  - [x] 2.5a: UI Primitive & Config Setup (Shadcn init/primitives, UploadThing client helper, image config).
+  - [ ] 2.5b: Domain Hook & Logic (`useVisualIntakeForm` state/validation orchestration).
+  - [ ] 2.5c: View & Route (`VisualIntakeForm.tsx` composition + `/book/[artistId]` routing).
 
 ### 📦 Phase 3: Artist Decision Dashboard
 - [ ] **3.1: Dashboard Layout Scaffold** (Build basic layout wrapper with authentic mobile-first rendering tailored for working artists).
