@@ -6,17 +6,24 @@ import type { PendingIntakeRequestSummary } from "../types";
 // IntakeRequest rows into the read-only summary the dashboard renders.
 // No business rules here, purely a query + mapping — validateComplexity
 // remains the only place complexity/content rules are evaluated.
+// Includes AWAITING_SLOT_CONFIRMATION alongside PENDING (4.1i) so a
+// proposed double-slot booking stays visible for the artist to confirm,
+// not just brand-new requests.
 export async function getPendingIntakeRequests(
   artistId: string
 ): Promise<PendingIntakeRequestSummary[]> {
   const requests = await prisma.intakeRequest.findMany({
-    where: { artistId, status: "PENDING" },
+    where: {
+      artistId,
+      status: { in: ["PENDING", "AWAITING_SLOT_CONFIRMATION"] },
+    },
     include: { client: true, designReferences: true },
     orderBy: { createdAt: "asc" },
   });
 
   return requests.map((request) => ({
     id: request.id,
+    status: request.status as "PENDING" | "AWAITING_SLOT_CONFIRMATION",
     clientInstagramHandle: request.client.instagramHandle,
     tier: request.tier,
     minPrice: Number(request.minPrice),

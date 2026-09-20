@@ -40,4 +40,23 @@ test.describe("artist dashboard approve/decline", () => {
       card.getByRole("button", { name: /Copy message/ })
     ).toBeVisible();
   });
+
+  test("confirming a proposed double-slot booking shows the approval message", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+
+    await page.goto(`/artist/${fixture.artistId}`);
+    const card = page.locator("article", {
+      hasText: fixture.awaitingConfirmationClientHandle,
+    });
+
+    await expect(card.getByText(/double-slot booking/i)).toBeVisible();
+    await card.getByRole("button", { name: "Confirm Booking" }).click();
+
+    await expect(card.getByText(/approved/i)).toBeVisible();
+    await expect(
+      card.getByRole("button", { name: /Copy message/ })
+    ).toBeVisible();
+  });
 });
