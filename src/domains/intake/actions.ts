@@ -2,8 +2,20 @@
 
 import { prisma } from "@/lib/prisma";
 
-import { clientIntakeInputSchema, combineRequestedDateAndTime } from "./intake.schema";
+import {
+  clientIntakeInputSchema,
+  combineRequestedDateAndTime,
+  reviewIntakeRequestInputSchema,
+} from "./intake.schema";
+import {
+  confirmProposedBooking,
+  type ConfirmProposedBookingResult,
+} from "./services/confirmProposedBooking";
 import { generateResponseMessage } from "./services/generateResponseMessage";
+import {
+  reviewIntakeRequest,
+  type ReviewIntakeRequestResult,
+} from "./services/reviewIntakeRequest";
 import { validateComplexity } from "./services/validateComplexity";
 
 export type SubmitIntakeRequestResult =
@@ -100,6 +112,40 @@ export async function declineIntakeRequest(
   intakeRequestId: string
 ): Promise<RequestActionResult> {
   return setIntakeRequestStatus(intakeRequestId, "DECLINED");
+}
+
+// Controller/Action boundary (CLAUDE.md 4.1h) for the artist's review
+// decision: validates the duration structurally, then delegates to
+// reviewIntakeRequest for the booking/propose logic. Supersedes
+// approveIntakeRequest above for any flow that also needs a booked slot
+// -- 4.1i wires the dashboard over to this one.
+export async function reviewIntakeRequestAction(
+  intakeRequestId: string,
+  input: unknown
+): Promise<ReviewIntakeRequestResult> {
+  const parsed = reviewIntakeRequestInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid duration.",
+    };
+  }
+
+  return reviewIntakeRequest({
+    intakeRequestId,
+    durationMinutes: parsed.data.durationMinutes,
+  });
+}
+
+// Controller/Action boundary (CLAUDE.md 4.1h) for finalizing a proposed
+// double-slot booking once the artist has confirmed it with the client
+// off-platform. No input beyond the id -- confirmProposedBooking reads
+// the stored proposal itself.
+export async function confirmProposedBookingAction(
+  intakeRequestId: string
+): Promise<ConfirmProposedBookingResult> {
+  return confirmProposedBooking(intakeRequestId);
 }
 
 async function setIntakeRequestStatus(
