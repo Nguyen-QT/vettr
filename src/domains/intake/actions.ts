@@ -3,10 +3,15 @@
 import { prisma } from "@/lib/prisma";
 
 import { clientIntakeInputSchema } from "./intake.schema";
+import { generateResponseMessage } from "./services/generateResponseMessage";
 import { validateComplexity } from "./services/validateComplexity";
 
 export type SubmitIntakeRequestResult =
   | { success: true; intakeRequestId: string }
+  | { success: false; error: string };
+
+export type RequestActionResult =
+  | { success: true; responseMessage: string }
   | { success: false; error: string };
 
 // No Auto-Booking (CLAUDE.md): this only ever creates PENDING rows with
@@ -75,4 +80,40 @@ export async function submitIntakeRequest(
   });
 
   return { success: true, intakeRequestId: intakeRequest.id };
+}
+
+// Toggles an IntakeRequest's status (CLAUDE.md 3.3: "Action Mutators").
+// Deliberately does not touch TimeSlots — slot promotion to BOOKED is
+// scheduling-domain territory and out of scope here, same as the
+// No-Auto-Booking note above.
+export async function approveIntakeRequest(
+  intakeRequestId: string
+): Promise<RequestActionResult> {
+  return setIntakeRequestStatus(intakeRequestId, "APPROVED");
+}
+
+export async function declineIntakeRequest(
+  intakeRequestId: string
+): Promise<RequestActionResult> {
+  return setIntakeRequestStatus(intakeRequestId, "DECLINED");
+}
+
+async function setIntakeRequestStatus(
+  intakeRequestId: string,
+  status: "APPROVED" | "DECLINED"
+): Promise<RequestActionResult> {
+  const existing = await prisma.intakeRequest.findUnique({
+    where: { id: intakeRequestId },
+  });
+
+  if (!existing) {
+    return { success: false, error: "This request could not be found." };
+  }
+
+  await prisma.intakeRequest.update({
+    where: { id: intakeRequestId },
+    data: { status },
+  });
+
+  return { success: true, responseMessage: generateResponseMessage(status) };
 }
