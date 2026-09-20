@@ -12,6 +12,10 @@ export const COMPLEXITY_TIERS = ["TIER_2", "TIER_3", "TIER_4", "FREESTYLE"] as c
 
 export const OTHER_TAG_VALUE = "OTHER";
 
+// Placeholder set -- tune to the artist's actual daily schedule. Kept
+// structurally in sync with types.ts's SlotTime union by hand.
+export const DAILY_SLOT_TIME_OPTIONS = ["11:00", "14:00", "17:30"] as const;
+
 // Curated design tags for TIER_2/3/4 requests. Placeholder vocabulary —
 // tune to the actual business taxonomy. Kept structurally in sync with
 // types.ts's DesignTag union by hand, not derived from it.

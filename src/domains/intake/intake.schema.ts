@@ -3,12 +3,25 @@ import { z } from "zod";
 import {
   AESTHETIC_TAG_OPTIONS,
   COMPLEXITY_TIERS,
+  DAILY_SLOT_TIME_OPTIONS,
   DESIGN_TAG_OPTIONS,
   INSTAGRAM_HANDLE_REGEX,
   MAX_DESIGN_REFERENCE_IMAGES,
   MIN_DESIGN_REFERENCE_IMAGES,
   OTHER_TAG_VALUE,
 } from "./constants";
+import type { SlotTime } from "./types";
+
+// Combines the form's separate date/time-of-day fields into the single
+// Date IntakeRequest.requestedStartTime actually stores. Local-time
+// combination only -- no timezone handling yet, same placeholder scope
+// as the rest of intake's fields.
+export function combineRequestedDateAndTime(
+  requestedDate: string,
+  requestedTime: SlotTime
+): Date {
+  return new Date(`${requestedDate}T${requestedTime}:00`);
+}
 
 export const instagramHandleSchema = z
   .string()
@@ -36,6 +49,10 @@ export const designReferenceImagesSchema = z
   );
 
 export const complexityTierSchema = z.enum(COMPLEXITY_TIERS);
+
+export const requestedDateSchema = z.iso.date("Enter a valid date.");
+
+export const requestedTimeSchema = z.enum(DAILY_SLOT_TIME_OPTIONS);
 
 export const designTagSchema = z.enum(DESIGN_TAG_OPTIONS);
 
@@ -65,8 +82,22 @@ export const clientIntakeInputSchema = z
     email: z.email().optional(),
     phone: z.string().trim().min(1).optional(),
     clientNotes: z.string().trim().max(1000).optional(),
+    requestedDate: requestedDateSchema,
+    requestedTime: requestedTimeSchema,
   })
   .superRefine((data, ctx) => {
+    const requestedStartTime = combineRequestedDateAndTime(
+      data.requestedDate,
+      data.requestedTime
+    );
+    if (requestedStartTime.getTime() <= Date.now()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["requestedDate"],
+        message: "Choose a date and time in the future.",
+      });
+    }
+
     const isFreestyle = data.tier === "FREESTYLE";
     const relevantTags = isFreestyle ? data.aestheticTags : data.designTags;
     const tagFieldPath = isFreestyle ? "aestheticTags" : "designTags";

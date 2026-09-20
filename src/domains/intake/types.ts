@@ -32,6 +32,10 @@ export interface ClientBudgetRange {
   maxPrice: number;
 }
 
+// One of the artist's fixed daily times (CLAUDE.md 4.1e), e.g. 11:00,
+// 14:00, 17:30. Placeholder set -- tune to the actual daily schedule.
+export type SlotTime = "11:00" | "14:00" | "17:30";
+
 // Client-supplied fields only. Artist-controlled state (estimatedPrice,
 // depositPaid, enforcePrecharge, cancellationCount) is set elsewhere and
 // never accepted as input here.
@@ -45,6 +49,11 @@ export interface ClientIntakeInput {
   email?: string;
   phone?: string;
   clientNotes?: string;
+  // Combined into IntakeRequest.requestedStartTime on submission
+  // (CLAUDE.md 4.1e) -- kept as separate date/time fields here since
+  // that's how the form actually collects them.
+  requestedDate: string;
+  requestedTime: SlotTime;
 }
 
 // Read-shaped projection of a PENDING IntakeRequest for the artist

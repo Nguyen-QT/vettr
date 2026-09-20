@@ -19,7 +19,11 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
-import { COMPLEXITY_TIERS, OTHER_TAG_VALUE } from "@/domains/intake/constants";
+import {
+  COMPLEXITY_TIERS,
+  DAILY_SLOT_TIME_OPTIONS,
+  OTHER_TAG_VALUE,
+} from "@/domains/intake/constants";
 import { useVisualIntakeForm } from "@/domains/intake/hooks/useVisualIntakeForm";
 import { DesignReferenceDropzone } from "@/lib/uploadthing-client";
 
@@ -98,6 +102,37 @@ export function VisualIntakeForm({ artistId }: VisualIntakeFormProps) {
             )}
           />
           <FieldError errors={errors.tier && [errors.tier]} />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="requestedDate">Preferred date</FieldLabel>
+          <Input
+            id="requestedDate"
+            type="date"
+            {...register("requestedDate")}
+          />
+          <FieldError errors={errors.requestedDate && [errors.requestedDate]} />
+        </Field>
+
+        <Field>
+          <FieldLegend variant="label">Preferred time</FieldLegend>
+          <Controller
+            control={control}
+            name="requestedTime"
+            render={({ field }) => (
+              <RadioGroup value={field.value} onValueChange={field.onChange}>
+                {DAILY_SLOT_TIME_OPTIONS.map((time) => (
+                  <FieldLabel key={time} htmlFor={`requestedTime-${time}`}>
+                    <Field orientation="horizontal">
+                      <RadioGroupItem value={time} id={`requestedTime-${time}`} />
+                      <FieldContent>{time}</FieldContent>
+                    </Field>
+                  </FieldLabel>
+                ))}
+              </RadioGroup>
+            )}
+          />
+          <FieldError errors={errors.requestedTime && [errors.requestedTime]} />
         </Field>
 
         <Field>

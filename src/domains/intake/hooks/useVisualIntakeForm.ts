@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { submitIntakeRequest } from "@/domains/intake/actions";
 import {
   AESTHETIC_TAG_OPTIONS,
+  DAILY_SLOT_TIME_OPTIONS,
   DESIGN_TAG_OPTIONS,
   TIER_BASELINE_BUDGETS,
 } from "@/domains/intake/constants";
@@ -32,6 +33,8 @@ export function useVisualIntakeForm({ artistId }: UseVisualIntakeFormArgs) {
       email: "",
       phone: "",
       clientNotes: "",
+      requestedDate: "",
+      requestedTime: DAILY_SLOT_TIME_OPTIONS[0],
     },
   });
 
