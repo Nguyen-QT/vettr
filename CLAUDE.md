@@ -81,7 +81,7 @@ src/
   - [x] 2.5c: View & Route (`VisualIntakeForm.tsx` composition + `/book/[artistId]` routing).
 
 ### 📦 Phase 3: Artist Decision Dashboard ◄ CURRENT FOCUS
-- [ ] **3.1: Dashboard Layout Scaffold** (Build basic layout wrapper with authentic mobile-first rendering tailored for working artists).
+- [x] **3.1: Dashboard Layout Scaffold** (Build basic layout wrapper with authentic mobile-first rendering tailored for working artists).
 - [ ] **3.2: Interactive Review Cards** (Build component that accepts intake data and renders 1-click Instagram deep links and reference images).
 - [ ] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
 
