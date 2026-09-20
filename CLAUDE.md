@@ -80,12 +80,12 @@ src/
   - [x] 2.5b: Domain Hook & Logic (`useVisualIntakeForm` state/validation orchestration).
   - [x] 2.5c: View & Route (`VisualIntakeForm.tsx` composition + `/book/[artistId]` routing).
 
-### 📦 Phase 3: Artist Decision Dashboard ◄ CURRENT FOCUS
+### 📦 Phase 3: Artist Decision Dashboard
 - [x] **3.1: Dashboard Layout Scaffold** (Build basic layout wrapper with authentic mobile-first rendering tailored for working artists).
 - [x] **3.2: Interactive Review Cards** (Build component that accepts intake data and renders 1-click Instagram deep links and reference images).
-- [ ] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
+- [x] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
 
-### 📦 Phase 4: Concurrency Rules & Financial Logic
+### 📦 Phase 4: Concurrency Rules & Financial Logic ◄ CURRENT FOCUS
 - [ ] **4.1: Reservation Lock-In Timers** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently).
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 - [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
