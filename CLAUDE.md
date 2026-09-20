@@ -97,6 +97,7 @@ src/
   - [ ] 4.1g: Confirm-Proposed-Booking Domain Service (finalizes an `AWAITING_SLOT_CONFIRMATION` request once the artist has confirmed the double-slot booking with the client off-platform).
   - [ ] 4.1h: Controller/Action Boundary (server actions for the review step and the confirm-booking step).
   - [ ] 4.1i: Artist Dashboard UI (duration input on approve, the two outcome messages, and a "Confirm Booking" control for awaiting-confirmation requests).
+  - [ ] 4.1j: Live Slot Availability (client's date/time picker reflects real availability instead of any date being pickable; needs a `getAvailableSlots(artistId, date)` scheduling query plus dynamic UI disabling already-BOOKED options as the client picks a date -- deliberately sequenced after 4.1f-i so the core approve/confirm mechanics ship first).
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 - [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
 
