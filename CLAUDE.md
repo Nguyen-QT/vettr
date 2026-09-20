@@ -87,7 +87,7 @@ src/
 - [x] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
 
 ### 📦 Phase 4: Concurrency Rules & Financial Logic ◄ CURRENT FOCUS
-- [ ] **4.1: Reservation Lock-In Timers** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now).
+- [x] **4.1: Reservation Lock-In Timers** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now).
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 - [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
 
