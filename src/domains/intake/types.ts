@@ -46,3 +46,19 @@ export interface ClientIntakeInput {
   phone?: string;
   clientNotes?: string;
 }
+
+// Read-shaped projection of a PENDING IntakeRequest for the artist
+// dashboard (Phase 3). Distinct from ClientIntakeInput: this describes
+// what the artist reviews, not what the client submitted.
+export interface PendingIntakeRequestSummary {
+  id: string;
+  clientInstagramHandle: string;
+  tier: ComplexityTier;
+  minPrice: number;
+  maxPrice: number;
+  designTags: string[];
+  aestheticTags: string[];
+  clientNotes: string | null;
+  designReferenceImageUrls: string[];
+  createdAt: Date;
+}
