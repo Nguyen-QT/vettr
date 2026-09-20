@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 import {
+  MAX_TOTAL_SERVICE_DURATION_MINUTES,
+  MIN_SLOT_DURATION_MINUTES,
+} from "@/domains/scheduling/constants";
+
+import {
   AESTHETIC_TAG_OPTIONS,
   COMPLEXITY_TIERS,
   DAILY_SLOT_TIME_OPTIONS,
@@ -22,6 +27,24 @@ export function combineRequestedDateAndTime(
 ): Date {
   return new Date(`${requestedDate}T${requestedTime}:00`);
 }
+
+// Structural validity only for the artist's review step (4.1h) -- see
+// services/reviewIntakeRequest.ts for the domain logic that decides what
+// happens with a valid duration. Shares scheduling's bounds constants
+// rather than redefining them.
+export const reviewIntakeRequestInputSchema = z.object({
+  durationMinutes: z
+    .number()
+    .int()
+    .min(
+      MIN_SLOT_DURATION_MINUTES,
+      `The service duration must be at least ${MIN_SLOT_DURATION_MINUTES} minutes.`
+    )
+    .max(
+      MAX_TOTAL_SERVICE_DURATION_MINUTES,
+      `The service duration cannot exceed ${MAX_TOTAL_SERVICE_DURATION_MINUTES} minutes.`
+    ),
+});
 
 export const instagramHandleSchema = z
   .string()
