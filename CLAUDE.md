@@ -88,15 +88,15 @@ src/
 
 ### 📦 Phase 4: Concurrency Rules & Financial Logic ◄ CURRENT FOCUS
 - [x] **4.1: Reservation Lock-In Timers** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now).
-- [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
-- [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
-- [ ] **4.4: Artist Duration & Slot Confirmation UI** (Wire `confirmTimeSlotAction` into the artist dashboard: the artist sets the service duration as part of approving a request, replacing intake's status-only approve call for the flow that also needs a booked slot).
+- [ ] **4.2: Artist Duration & Slot Confirmation UI** (Wire `confirmTimeSlotAction` into the artist dashboard: the artist sets the service duration as part of approving a request, replacing intake's status-only approve call for the flow that also needs a booked slot).
+- [ ] **4.3: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
+- [ ] **4.4: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
 
 
 ## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
 - **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
 - **Atomic Functional Scope:** Claude must treat **every numbered bullet point** (e.g., `2.1`, `2.2`) as a single, isolated, conceptually complete Pull Request. Do not combine or cross-pollinate different numbered tasks into a single run.
-- **Vertical Feature Completion:** A numbered roadmap item is the full feature, backend through frontend — not "backend, then frontend later" as separate numbered items. Its own sub-tasks (a, b, c) are split by architectural layer per the Mandatory Task Breakdown Rule below, not by BE/FE scope; all of them still ship under that one number. If a task's literal wording produces a domain service with no view/route deliverable named in its own text (as 4.1 did), Claude must add an explicit follow-up roadmap bullet for the UI wiring in the same pass that scopes it, so backend work is never left without a planned path to the view layer.
+- **Vertical Feature Completion:** A numbered roadmap item is the full feature, backend through frontend — not "backend, then frontend later" as separate numbered items. Its own sub-tasks (a, b, c) are split by architectural layer per the Mandatory Task Breakdown Rule below, not by BE/FE scope; all of them still ship under that one number. If a task's literal wording produces a domain service with no view/route deliverable named in its own text (as 4.1 did), Claude must add an explicit follow-up roadmap bullet for the UI wiring in the same pass that scopes it, and that bullet must be inserted immediately after the backend item — not appended to the end of the phase — so the FE work is next in the queue, not merely tracked for someday.
 - **Mandatory Task Breakdown Rule:** If a single task requirement involves infrastructure/primitives + domain state/hooks + page views, Claude MUST propose decomposing it into sub-tasks (a, b, c) BEFORE writing code. A single PR must NEVER cross layer boundaries (e.g., adding UI primitives AND writing complex hooks AND setting up page routes in one run).
 - **Blast Radius Boundaries:** UI Primitive & Config PRs must be max setup files with zero business logic.
 Domain Hook & Logic PRs must focus purely on state management, validation, and domain services.
