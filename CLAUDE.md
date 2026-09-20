@@ -77,7 +77,7 @@ src/
 - [x] **2.4: React Server Action Layer** (Build `actions.ts` to intake user submissions, pipe to domain services, and save a PENDING record in Prisma).
 - **2.5: Visual Intake Form Component** (Construct the frontend `VisualIntakeForm.tsx` using Shadcn primitives, linking directly to the server action), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 2.5a: UI Primitive & Config Setup (Shadcn init/primitives, UploadThing client helper, image config).
-  - [ ] 2.5b: Domain Hook & Logic (`useVisualIntakeForm` state/validation orchestration).
+  - [x] 2.5b: Domain Hook & Logic (`useVisualIntakeForm` state/validation orchestration).
   - [ ] 2.5c: View & Route (`VisualIntakeForm.tsx` composition + `/book/[artistId]` routing).
 
 ### 📦 Phase 3: Artist Decision Dashboard
