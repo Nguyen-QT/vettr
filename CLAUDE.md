@@ -124,7 +124,7 @@ src/
   - [x] 4.2.2: View & Route (`VisualIntakeForm.tsx` drops the "(optional)" label and marks email required; e2e spec update).
 
 - [ ] **4.3: Artist Business Hours & Operating Schedule Engine** (Define recurring weekly working hours, blackout days, and custom date overrides so the client slot picker only renders valid operating windows. No config for a given day defaults to fully open, matching today's behavior, until the artist explicitly restricts it), decomposed per the Mandatory Task Breakdown Rule:
-  - [ ] 4.3.1: Data Gateway (`ArtistWeeklyHours` and `ArtistScheduleOverride` Prisma models + migration).
+  - [x] 4.3.1: Data Gateway (`ArtistWeeklyHours` and `ArtistScheduleOverride` Prisma models + migration).
   - [ ] 4.3.2: Domain Service -- Read (`getOperatingWindows(artistId, date)` in scheduling: override-first, then weekly-hours-row, else default-open, with unit tests).
   - [ ] 4.3.3: Domain Service -- Read/Compose (`getAvailableSlots` updated to intersect operating windows with the existing booked-slot check, with unit tests).
   - [ ] 4.3.4: Domain Service -- Write (`setWeeklyHours`/`setScheduleOverride` upsert services with validation, with unit tests).
