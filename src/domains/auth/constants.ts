@@ -19,3 +19,7 @@ export const INVALID_CREDENTIALS_ERROR_MESSAGE = "Incorrect email or password.";
 // Structural floor only, enforced at signup/provisioning time -- login
 // itself never rejects on length (see INVALID_CREDENTIALS_ERROR_MESSAGE).
 export const MIN_PASSWORD_LENGTH = 8;
+
+// httpOnly session cookie name (CLAUDE.md 5.1.3) -- its value is a
+// Session row's id, the same opaque cuid loginArtist returns.
+export const SESSION_COOKIE_NAME = "vettr_session";
