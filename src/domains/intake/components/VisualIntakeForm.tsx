@@ -21,6 +21,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { COMPLEXITY_TIERS, OTHER_TAG_VALUE } from "@/domains/intake/constants";
 import { useVisualIntakeForm } from "@/domains/intake/hooks/useVisualIntakeForm";
+import type { TierReferenceImages } from "@/domains/intake/types";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
 import type { AvailableSlot } from "@/domains/scheduling/services/getAvailableSlots";
 import type { SlotTime } from "@/domains/scheduling/types";
@@ -28,6 +29,7 @@ import { DesignReferenceDropzone } from "@/lib/uploadthing-client";
 
 interface VisualIntakeFormProps {
   artistId: string;
+  tierReferenceImages: TierReferenceImages;
 }
 
 const BUDGET_SLIDER_MIN = 0;
@@ -44,7 +46,10 @@ function isTimeAvailable(
   return availableSlots.find((slot) => slot.time === time)?.available ?? true;
 }
 
-export function VisualIntakeForm({ artistId }: VisualIntakeFormProps) {
+export function VisualIntakeForm({
+  artistId,
+  tierReferenceImages,
+}: VisualIntakeFormProps) {
   const {
     form,
     isFreestyle,
@@ -80,6 +85,7 @@ export function VisualIntakeForm({ artistId }: VisualIntakeFormProps) {
   const tagFieldError = errors[activeTagField];
   const budgetError =
     errors.clientBudgetRange?.maxPrice ?? errors.clientBudgetRange?.minPrice;
+  const selectedTierReferenceImages = tierReferenceImages[watch("tier")];
 
   return (
     <form onSubmit={onSubmit}>
@@ -114,6 +120,25 @@ export function VisualIntakeForm({ artistId }: VisualIntakeFormProps) {
           />
           <FieldError errors={errors.tier && [errors.tier]} />
         </Field>
+
+        {selectedTierReferenceImages.length > 0 ? (
+          <Field>
+            <FieldDescription>Examples of {watch("tier")} work</FieldDescription>
+            <ul className="flex flex-wrap gap-2">
+              {selectedTierReferenceImages.map((url) => (
+                <li key={url}>
+                  <Image
+                    src={url}
+                    alt={`${watch("tier")} example`}
+                    width={96}
+                    height={96}
+                    className="rounded-md object-cover"
+                  />
+                </li>
+              ))}
+            </ul>
+          </Field>
+        ) : null}
 
         <Field>
           <FieldLabel htmlFor="requestedDate">Preferred date</FieldLabel>

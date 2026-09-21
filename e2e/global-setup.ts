@@ -60,6 +60,15 @@ export default async function globalSetup() {
     [artistId, "E2E Fixture Artist", "e2e_fixture_artist", "e2e-fixture-artist@example.com"]
   );
 
+  // Only TIER_2 has an example image -- lets a spec confirm the gallery
+  // shows for the form's default tier and stays empty for a tier with
+  // nothing configured (CLAUDE.md 4.6).
+  await client.query(
+    `INSERT INTO "TierReferenceImage" (id, "artistId", tier, "imageUrl", "createdAt")
+     VALUES ($1, $2, 'TIER_2', $3, now())`,
+    [randomUUID(), artistId, "https://utfs.io/f/e2e-fixture-tier2-reference.jpg"]
+  );
+
   await client.query(
     `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
      VALUES ($1, $2, $3, now()), ($4, $5, $6, now()), ($7, $8, $9, now()), ($10, $11, $12, now()), ($13, $14, $15, now())`,
