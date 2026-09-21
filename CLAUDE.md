@@ -100,7 +100,7 @@ src/
   - [ ] 4.1.10: Live Slot Availability (client's date/time picker reflects real availability instead of any date being pickable -- deliberately sequenced after 4.1.6-4.1.9 so the core approve/confirm mechanics ship first), decomposed per the Mandatory Task Breakdown Rule:
     - [x] 4.1.10.1: Domain Service (`getAvailableSlots(artistId, date)` in scheduling -- a fixed daily time is available if no `BOOKED` `TimeSlot` overlaps its `[time, time + MAX_SLOT_DURATION_MINUTES)` nominal window, with unit tests).
     - [x] 4.1.10.2: Controller/Action Boundary (`getAvailableSlotsAction`).
-    - [ ] 4.1.10.3: Domain Hook & Logic (`useVisualIntakeForm` fetches availability whenever the picked date changes).
+    - [x] 4.1.10.3: Domain Hook & Logic (`useVisualIntakeForm` fetches availability whenever the picked date changes).
     - [ ] 4.1.10.4: View & Route (disable already-booked time options in the intake form; e2e spec update).
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 - [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
