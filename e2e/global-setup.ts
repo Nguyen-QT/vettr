@@ -15,6 +15,7 @@ export interface E2eFixture {
   declineClientHandle: string;
   awaitingConfirmationClientHandle: string;
   freestylePendingClientHandle: string;
+  bookedSlotClientHandle: string;
   // Known date/time already BOOKED for this artist (4.1.10.4), so a spec
   // can pick this date and assert that exact time renders disabled.
   bookedSlotDate: string;
@@ -49,6 +50,7 @@ export default async function globalSetup() {
   const declineClientHandle = "e2e_client_decline";
   const awaitingConfirmationClientHandle = "e2e_client_awaiting";
   const freestylePendingClientHandle = "e2e_client_freestyle";
+  const bookedSlotClientHandle = "e2e_client_booked";
   const bookedSlotDate = "2099-06-15";
   const bookedSlotTime = "11:00";
 
@@ -72,7 +74,7 @@ export default async function globalSetup() {
       awaitingConfirmationClientHandle,
       "e2e-client-awaiting@example.com",
       bookedSlotClientId,
-      "e2e_client_booked",
+      bookedSlotClientHandle,
       "e2e-client-booked@example.com",
       freestylePendingClientId,
       freestylePendingClientHandle,
@@ -210,6 +212,7 @@ export default async function globalSetup() {
     declineClientHandle,
     awaitingConfirmationClientHandle,
     freestylePendingClientHandle,
+    bookedSlotClientHandle,
     bookedSlotDate,
     bookedSlotTime,
   };
