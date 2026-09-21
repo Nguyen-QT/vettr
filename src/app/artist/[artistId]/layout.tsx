@@ -1,14 +1,22 @@
+import Link from "next/link";
+
 import { Separator } from "@/components/ui/separator";
 
-export default function ArtistDashboardLayout({
+export default async function ArtistDashboardLayout({
+  params,
   children,
 }: LayoutProps<"/artist/[artistId]">) {
+  const { artistId } = await params;
+
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 bg-background">
         <div className="mx-auto flex w-full max-w-lg items-baseline justify-between px-4 py-3">
           <span className="text-base font-semibold">Vettr</span>
-          <span className="text-sm text-muted-foreground">Dashboard</span>
+          <nav className="flex gap-3 text-sm text-muted-foreground">
+            <Link href={`/artist/${artistId}`}>Requests</Link>
+            <Link href={`/artist/${artistId}/hours`}>Business hours</Link>
+          </nav>
         </div>
         <Separator />
       </header>

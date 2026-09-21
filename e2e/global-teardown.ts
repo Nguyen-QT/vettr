@@ -25,6 +25,17 @@ export default async function globalTeardown() {
   await client.query(`DELETE FROM "ClientProfile" WHERE id = ANY($1)`, [
     fixture.clientProfileIds,
   ]);
+  // ArtistWeeklyHours/ArtistScheduleOverride (CLAUDE.md 4.3) reference
+  // Artist with ON DELETE RESTRICT -- must clear these before the
+  // Artist delete below, or business-hours-settings.spec.ts's writes
+  // would leave every subsequent e2e run's teardown failing.
+  await client.query(`DELETE FROM "ArtistWeeklyHours" WHERE "artistId" = $1`, [
+    fixture.artistId,
+  ]);
+  await client.query(
+    `DELETE FROM "ArtistScheduleOverride" WHERE "artistId" = $1`,
+    [fixture.artistId]
+  );
   await client.query(`DELETE FROM "Artist" WHERE id = $1`, [fixture.artistId]);
 
   await client.end();
