@@ -129,7 +129,7 @@ src/
   - [x] 4.3.3: Domain Service -- Read/Compose (`getAvailableSlots` updated to intersect operating windows with the existing booked-slot check, with unit tests).
   - [x] 4.3.4: Domain Service -- Write (`setWeeklyHours`/`setScheduleOverride` upsert services with validation, with unit tests).
   - [x] 4.3.5: Controller/Action Boundary (server actions wrapping the read/write services for the settings UI).
-  - [ ] 4.3.6: Domain Hook & Logic (`useArtistScheduleSettings` orchestrating fetch/mutate state).
+  - [x] 4.3.6: Domain Hook & Logic (`useArtistScheduleSettings` orchestrating fetch/mutate state).
   - [ ] 4.3.7: View & Route (artist-facing "Business Hours" settings section on the dashboard -- weekly hours grid + blackout/override date management; e2e spec).
 
 - [ ] **4.4: Mandatory Estimated Price Validation on Review** (Enforce that artists input an explicit estimatedPrice alongside duration when reviewing/approving an intake request).
