@@ -14,6 +14,10 @@ export interface E2eFixture {
   approveClientHandle: string;
   declineClientHandle: string;
   awaitingConfirmationClientHandle: string;
+  // Known date/time already BOOKED for this artist (4.1.10.4), so a spec
+  // can pick this date and assert that exact time renders disabled.
+  bookedSlotDate: string;
+  bookedSlotTime: string;
 }
 
 // Seeds one throwaway Artist with three IntakeRequests -- two PENDING
@@ -32,12 +36,17 @@ export default async function globalSetup() {
   const approveClientId = randomUUID();
   const declineClientId = randomUUID();
   const awaitingConfirmationClientId = randomUUID();
+  const bookedSlotClientId = randomUUID();
   const approveRequestId = randomUUID();
   const declineRequestId = randomUUID();
   const awaitingConfirmationRequestId = randomUUID();
+  const bookedSlotRequestId = randomUUID();
+  const bookedSlotTimeSlotId = randomUUID();
   const approveClientHandle = "e2e_client_approve";
   const declineClientHandle = "e2e_client_decline";
   const awaitingConfirmationClientHandle = "e2e_client_awaiting";
+  const bookedSlotDate = "2099-06-15";
+  const bookedSlotTime = "11:00";
 
   await client.query(
     `INSERT INTO "Artist" (id, name, "instagramHandle", email, "updatedAt")
@@ -47,7 +56,7 @@ export default async function globalSetup() {
 
   await client.query(
     `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
-     VALUES ($1, $2, $3, now()), ($4, $5, $6, now()), ($7, $8, $9, now())`,
+     VALUES ($1, $2, $3, now()), ($4, $5, $6, now()), ($7, $8, $9, now()), ($10, $11, $12, now())`,
     [
       approveClientId,
       approveClientHandle,
@@ -58,6 +67,9 @@ export default async function globalSetup() {
       awaitingConfirmationClientId,
       awaitingConfirmationClientHandle,
       "e2e-client-awaiting@example.com",
+      bookedSlotClientId,
+      "e2e_client_booked",
+      "e2e-client-booked@example.com",
     ]
   );
 
@@ -100,15 +112,55 @@ export default async function globalSetup() {
     ]
   );
 
+  // Already APPROVED with a real BOOKED TimeSlot (4.1.10.4), so the
+  // client-intake-form spec can pick this exact date and assert that
+  // time renders disabled/unavailable.
+  const bookedSlotStartTime = new Date(`${bookedSlotDate}T${bookedSlotTime}:00.000Z`);
+  const bookedSlotEndTime = new Date(bookedSlotStartTime.getTime() + 60 * 60_000);
+
+  await client.query(
+    `INSERT INTO "IntakeRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+     VALUES
+       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+    [bookedSlotRequestId, bookedSlotClientId, artistId, bookedSlotStartTime]
+  );
+
+  await client.query(
+    `INSERT INTO "TimeSlot"
+       (id, "startTime", "endTime", status, "artistId", "intakeRequestId", "updatedAt")
+     VALUES
+       ($1, $2, $3, 'BOOKED', $4, $5, now())`,
+    [
+      bookedSlotTimeSlotId,
+      bookedSlotStartTime,
+      bookedSlotEndTime,
+      artistId,
+      bookedSlotRequestId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
     artistId,
-    clientProfileIds: [approveClientId, declineClientId, awaitingConfirmationClientId],
-    intakeRequestIds: [approveRequestId, declineRequestId, awaitingConfirmationRequestId],
+    clientProfileIds: [
+      approveClientId,
+      declineClientId,
+      awaitingConfirmationClientId,
+      bookedSlotClientId,
+    ],
+    intakeRequestIds: [
+      approveRequestId,
+      declineRequestId,
+      awaitingConfirmationRequestId,
+      bookedSlotRequestId,
+    ],
     approveClientHandle,
     declineClientHandle,
     awaitingConfirmationClientHandle,
+    bookedSlotDate,
+    bookedSlotTime,
   };
 
   await writeFile(FIXTURE_PATH, JSON.stringify(fixture, null, 2));
