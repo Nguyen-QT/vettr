@@ -15,6 +15,7 @@ export default async function ArtistDashboardLayout({
           <span className="text-base font-semibold">Vettr</span>
           <nav className="flex gap-3 text-sm text-muted-foreground">
             <Link href={`/artist/${artistId}`}>Requests</Link>
+            <Link href={`/artist/${artistId}/appointments`}>Upcoming</Link>
             <Link href={`/artist/${artistId}/hours`}>Business hours</Link>
           </nav>
         </div>
