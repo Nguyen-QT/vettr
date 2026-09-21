@@ -79,6 +79,7 @@ export default async function globalSetup() {
   const bookedSlotTimeSlotId = randomUUID();
   const clientLoginProfileId = randomUUID();
   const clientLoginRequestId = randomUUID();
+  const clientEditableRequestId = randomUUID();
   const approveClientHandle = "e2e_client_approve";
   const declineClientHandle = "e2e_client_decline";
   const awaitingConfirmationClientHandle = "e2e_client_awaiting";
@@ -280,6 +281,22 @@ export default async function globalSetup() {
     [clientLoginRequestId, clientLoginProfileId, artistId]
   );
 
+  // A second, separate PENDING booking for the same client (CLAUDE.md
+  // 5.4.4), distinguished by tier so the cancel and edit e2e specs
+  // never touch the same row.
+  await client.query(
+    `INSERT INTO "IntakeRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+     VALUES
+       ($1, 'PENDING', $2, $3, 'TIER_3', 150, 300, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+    [
+      clientEditableRequestId,
+      clientLoginProfileId,
+      artistId,
+      new Date("2099-09-01T11:00:00"),
+    ]
+  );
+
   await client.query(
     `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
      VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
@@ -310,6 +327,7 @@ export default async function globalSetup() {
       freestylePendingRequestId,
       bookedSlotRequestId,
       clientLoginRequestId,
+      clientEditableRequestId,
     ],
     approveClientHandle,
     declineClientHandle,

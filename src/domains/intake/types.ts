@@ -138,6 +138,7 @@ export interface ClientBookingSummary {
   minPrice: number;
   maxPrice: number;
   estimatedPrice: number | null;
+  clientNotes: string | null;
   requestedStartTime: Date | null;
   createdAt: Date;
 }
