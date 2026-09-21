@@ -143,7 +143,7 @@ src/
 
 - [ ] **4.6: Tiered Reference Gallery** (Show clients example reference images grouped by COMPLEXITY_TIERS to help them choose a tier while filling out the intake form. Per-artist -- clients are judging that specific artist's style/pricing, not a generic gallery. Read-only for clients; artist upload/management UI is a backlog item), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 4.6.1: Data Gateway (`TierReferenceImage` Prisma model: `artistId`, `tier`, `imageUrl` + migration).
-  - [ ] 4.6.2: Domain Service (`getTierReferenceImages(artistId)` in intake, grouped by tier; unit tests).
+  - [x] 4.6.2: Domain Service (`getTierReferenceImages(artistId)` in intake, grouped by tier; unit tests).
   - [ ] 4.6.3: View & Route (fetched server-side in `/book/[artistId]/page.tsx`, passed to `VisualIntakeForm`, showing example images for whichever tier is currently selected; e2e spec).
 
 ### 📦 Phase 5: Client Portal, Rescheduling & Lifecycle Management
