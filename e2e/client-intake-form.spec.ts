@@ -60,6 +60,24 @@ test.describe("client intake form -- requested slot", () => {
     await expect(page.getByText("Enter a valid email address.")).toBeVisible();
   });
 
+  test("shows the tier reference gallery for the default tier and hides it for a tier with no examples", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+
+    await page.goto(`/book/${fixture.artistId}`);
+    await page.waitForLoadState("networkidle");
+
+    // TIER_2 is the form's default and the only tier the fixture
+    // seeded an example image for.
+    await expect(page.getByText("Examples of TIER_2 work")).toBeVisible();
+
+    await page.getByRole("radio", { name: "TIER_3" }).click();
+
+    await expect(page.getByText("Examples of TIER_2 work")).not.toBeVisible();
+    await expect(page.getByText(/Examples of TIER_3 work/)).not.toBeVisible();
+  });
+
   test("disables an already-booked time once a booked date is picked", async ({
     page,
   }) => {

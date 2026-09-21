@@ -36,6 +36,10 @@ export default async function globalTeardown() {
     `DELETE FROM "ArtistScheduleOverride" WHERE "artistId" = $1`,
     [fixture.artistId]
   );
+  // Same ON DELETE RESTRICT reasoning as above (CLAUDE.md 4.6).
+  await client.query(`DELETE FROM "TierReferenceImage" WHERE "artistId" = $1`, [
+    fixture.artistId,
+  ]);
   await client.query(`DELETE FROM "Artist" WHERE id = $1`, [fixture.artistId]);
 
   await client.end();
