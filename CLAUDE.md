@@ -77,9 +77,9 @@ src/
 - [x] **2.3: Pure Business Logic Core** (Write `services/validateComplexity.ts` to inspect incoming fields, flag empty sets, and hook up unit tests).
 - [x] **2.4: React Server Action Layer** (Build `actions.ts` to intake user submissions, pipe to domain services, and save a PENDING record in Prisma).
 - [x] **2.5: Visual Intake Form Component** (Construct the frontend `VisualIntakeForm.tsx` using Shadcn primitives, linking directly to the server action), decomposed per the Mandatory Task Breakdown Rule:
-  - [x] 2.5a: UI Primitive & Config Setup (Shadcn init/primitives, UploadThing client helper, image config).
-  - [x] 2.5b: Domain Hook & Logic (`useVisualIntakeForm` state/validation orchestration).
-  - [x] 2.5c: View & Route (`VisualIntakeForm.tsx` composition + `/book/[artistId]` routing).
+  - [x] 2.5.1: UI Primitive & Config Setup (Shadcn init/primitives, UploadThing client helper, image config).
+  - [x] 2.5.2: Domain Hook & Logic (`useVisualIntakeForm` state/validation orchestration).
+  - [x] 2.5.3: View & Route (`VisualIntakeForm.tsx` composition + `/book/[artistId]` routing).
 
 ### 📦 Phase 3: Artist Decision Dashboard
 - [x] **3.1: Dashboard Layout Scaffold** (Build basic layout wrapper with authentic mobile-first rendering tailored for working artists).
@@ -88,20 +88,20 @@ src/
 
 ### 📦 Phase 4: Concurrency Rules & Financial Logic ◄ CURRENT FOCUS
 - [ ] **4.1: Reservation Lock-In Timers & Slot Confirmation UI** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently, then wire that confirmation into the artist dashboard. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now), decomposed per the Mandatory Task Breakdown Rule:
-  - [x] 4.1a: Scheduling Domain Scaffold (`constants.ts`/`types.ts`/`scheduling.schema.ts` + the `TimeSlot` overlap-exclusion constraint).
-  - [x] 4.1b: `confirmTimeSlot` Domain Service (concurrency-safe slot allocation, with unit tests covering race conditions and double-booking).
-  - [x] 4.1c: Server Action Boundary (`confirmTimeSlotAction`).
-  - [x] 4.1d: Data Gateway (`IntakeRequest.requestedStartTime`, `IntakeRequest.proposedDurationMinutes`, and a new `RequestStatus.AWAITING_SLOT_CONFIRMATION` value).
-  - [x] 4.1e: Intake Capture (client picks a date + one of the artist's fixed daily times (11:00/14:00/17:30) on the intake form; saved as `requestedStartTime`).
-  - [x] 4.1f: Review/Propose Domain Service (artist enters a duration; a single-slot fit atomically books + approves, a two-slot spillover stores the proposal and moves to `AWAITING_SLOT_CONFIRMATION` instead of booking, since that case needs off-platform confirmation with the client first).
-  - [x] 4.1g: Confirm-Proposed-Booking Domain Service (finalizes an `AWAITING_SLOT_CONFIRMATION` request once the artist has confirmed the double-slot booking with the client off-platform).
-  - [x] 4.1h: Controller/Action Boundary (server actions for the review step and the confirm-booking step).
-  - [x] 4.1i: Artist Dashboard UI (duration input on approve, the two outcome messages, and a "Confirm Booking" control for awaiting-confirmation requests).
-  - [ ] 4.1j: Live Slot Availability (client's date/time picker reflects real availability instead of any date being pickable -- deliberately sequenced after 4.1f-i so the core approve/confirm mechanics ship first), decomposed per the Mandatory Task Breakdown Rule:
-    - [x] 4.1j-a: Domain Service (`getAvailableSlots(artistId, date)` in scheduling -- a fixed daily time is available if no `BOOKED` `TimeSlot` overlaps its `[time, time + MAX_SLOT_DURATION_MINUTES)` nominal window, with unit tests).
-    - [x] 4.1j-b: Controller/Action Boundary (`getAvailableSlotsAction`).
-    - [ ] 4.1j-c: Domain Hook & Logic (`useVisualIntakeForm` fetches availability whenever the picked date changes).
-    - [ ] 4.1j-d: View & Route (disable already-booked time options in the intake form; e2e spec update).
+  - [x] 4.1.1: Scheduling Domain Scaffold (`constants.ts`/`types.ts`/`scheduling.schema.ts` + the `TimeSlot` overlap-exclusion constraint).
+  - [x] 4.1.2: `confirmTimeSlot` Domain Service (concurrency-safe slot allocation, with unit tests covering race conditions and double-booking).
+  - [x] 4.1.3: Server Action Boundary (`confirmTimeSlotAction`).
+  - [x] 4.1.4: Data Gateway (`IntakeRequest.requestedStartTime`, `IntakeRequest.proposedDurationMinutes`, and a new `RequestStatus.AWAITING_SLOT_CONFIRMATION` value).
+  - [x] 4.1.5: Intake Capture (client picks a date + one of the artist's fixed daily times (11:00/14:00/17:30) on the intake form; saved as `requestedStartTime`).
+  - [x] 4.1.6: Review/Propose Domain Service (artist enters a duration; a single-slot fit atomically books + approves, a two-slot spillover stores the proposal and moves to `AWAITING_SLOT_CONFIRMATION` instead of booking, since that case needs off-platform confirmation with the client first).
+  - [x] 4.1.7: Confirm-Proposed-Booking Domain Service (finalizes an `AWAITING_SLOT_CONFIRMATION` request once the artist has confirmed the double-slot booking with the client off-platform).
+  - [x] 4.1.8: Controller/Action Boundary (server actions for the review step and the confirm-booking step).
+  - [x] 4.1.9: Artist Dashboard UI (duration input on approve, the two outcome messages, and a "Confirm Booking" control for awaiting-confirmation requests).
+  - [ ] 4.1.10: Live Slot Availability (client's date/time picker reflects real availability instead of any date being pickable -- deliberately sequenced after 4.1.6-4.1.9 so the core approve/confirm mechanics ship first), decomposed per the Mandatory Task Breakdown Rule:
+    - [x] 4.1.10.1: Domain Service (`getAvailableSlots(artistId, date)` in scheduling -- a fixed daily time is available if no `BOOKED` `TimeSlot` overlaps its `[time, time + MAX_SLOT_DURATION_MINUTES)` nominal window, with unit tests).
+    - [x] 4.1.10.2: Controller/Action Boundary (`getAvailableSlotsAction`).
+    - [ ] 4.1.10.3: Domain Hook & Logic (`useVisualIntakeForm` fetches availability whenever the picked date changes).
+    - [ ] 4.1.10.4: View & Route (disable already-booked time options in the intake form; e2e spec update).
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 - [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
 
@@ -109,8 +109,9 @@ src/
 ## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
 - **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
 - **Atomic Functional Scope:** Claude must treat **every numbered bullet point** (e.g., `2.1`, `2.2`) as a single, isolated, conceptually complete Pull Request. Do not combine or cross-pollinate different numbered tasks into a single run.
-- **Vertical Feature Completion:** A numbered roadmap item (e.g. `4.1`) is one complete feature, backend through frontend — never split into separate top-level numbers for "backend now" and "frontend later." Backend and frontend layers are sibling lettered sub-tasks under that same number (`4.1a`, `4.1b`, ... `4.1d`), per the Mandatory Task Breakdown Rule below, so a feature can never ship backend-only with its UI merely tracked for someday. If a feature's UI surface isn't fully known when its backend letters are first scoped, still reserve and list the trailing UI letter(s) as unchecked placeholders in that same pass, immediately after the backend letters.
-- **Mandatory Task Breakdown Rule:** This is the standard decomposition pattern for every numbered roadmap item going forward, not just ones that look unusually large. Before writing code, Claude MUST propose lettered sub-tasks (`a`, `b`, `c`, ...) for each architectural layer the feature touches — Data Gateway, Domain Service, Controller/Action, UI Primitive & Config, Domain Hook & Logic, View & Route, in that order where applicable — and get the user's go-ahead on the breakdown first. A single PR must NEVER cross layer boundaries (e.g., adding UI primitives AND writing complex hooks AND setting up page routes in one run).
+- **Numbering Scheme:** Sub-tasks are dotted numeric, not lettered (e.g. `4.1.1`, `4.1.2`, ... never `4.1a`, `4.1b`). Nest as deep as the work actually needs — a sub-task that itself needs further layer decomposition gains its own numeric children (e.g. `4.1.10` decomposing into `4.1.10.1`-`4.1.10.4`, a "quad"/four-part number), rather than switching to letters at the next level down.
+- **Vertical Feature Completion:** A numbered roadmap item (e.g. `4.1`) is one complete feature, backend through frontend — never split into separate top-level numbers for "backend now" and "frontend later." Backend and frontend layers are sibling numbered sub-tasks under that same number (`4.1.1`, `4.1.2`, ...), per the Mandatory Task Breakdown Rule below, so a feature can never ship backend-only with its UI merely tracked for someday. If a feature's UI surface isn't fully known when its backend sub-tasks are first scoped, still reserve and list the trailing UI sub-task(s) as unchecked placeholders in that same pass, immediately after the backend ones.
+- **Mandatory Task Breakdown Rule:** This is the standard decomposition pattern for every numbered roadmap item going forward, not just ones that look unusually large. Before writing code, Claude MUST propose numbered sub-tasks (`.1`, `.2`, `.3`, ...) for each architectural layer the feature touches — Data Gateway, Domain Service, Controller/Action, UI Primitive & Config, Domain Hook & Logic, View & Route, in that order where applicable — and get the user's go-ahead on the breakdown first. A single PR must NEVER cross layer boundaries (e.g., adding UI primitives AND writing complex hooks AND setting up page routes in one run).
 - **Blast Radius Boundaries:** Data Gateway PRs (schema/migrations) must contain no application code, just Prisma models and/or raw SQL. Domain Service PRs must be pure business logic plus their unit tests, no Prisma calls beyond what the service itself needs. Controller/Action PRs must be thin `actions.ts` wrappers (validate, delegate, shape the result) with no business rules of their own. UI Primitive & Config PRs must be max setup files with zero business logic. Domain Hook & Logic PRs must focus purely on state management, validation, and domain services. View & Route PRs must focus purely on JSX composition and page routing.
 - **Zero Context Bleed:** Absolute ban on adding unrelated "quick styling updates", formatting changes, or side-fixes to files outside the direct functional requirement of the active sub-task.
 - **Review Interception:** Upon completing a single numbered sub-task, Claude must pause, execute `npm run test` to verify zero system regressions, present the target file diff map to the user, and request confirmation before starting the next item. For view/route-layer sub-tasks, this also means adding/updating the relevant `e2e/*.spec.ts` and explicitly telling the user to run `npm run test:e2e:ui` (see Manual E2E Verification Gate) as part of requesting their go-ahead.
