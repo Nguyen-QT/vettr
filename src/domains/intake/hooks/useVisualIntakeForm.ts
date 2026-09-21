@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { submitIntakeRequest } from "@/domains/intake/actions";
@@ -11,7 +11,9 @@ import {
   TIER_BASELINE_BUDGETS,
 } from "@/domains/intake/constants";
 import { clientIntakeInputSchema } from "@/domains/intake/intake.schema";
+import { getAvailableSlotsAction } from "@/domains/scheduling/actions";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
+import type { AvailableSlot } from "@/domains/scheduling/services/getAvailableSlots";
 
 interface UseVisualIntakeFormArgs {
   artistId: string;
@@ -43,6 +45,32 @@ export function useVisualIntakeForm({ artistId }: UseVisualIntakeFormArgs) {
   const [submittedRequestId, setSubmittedRequestId] = useState<string | null>(
     null
   );
+  const [availableSlots, setAvailableSlots] = useState<AvailableSlot[] | null>(
+    null
+  );
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
+
+  const requestedDate = form.watch("requestedDate");
+  // Guards against a stale response landing after the date has since
+  // changed again -- each effect run captures its own requestedDate
+  // closure and compares it against whichever run fired last.
+  const latestRequestedDateRef = useRef(requestedDate);
+
+  useEffect(() => {
+    latestRequestedDateRef.current = requestedDate;
+
+    if (!requestedDate) {
+      setAvailableSlots(null);
+      return;
+    }
+
+    setIsLoadingAvailability(true);
+    getAvailableSlotsAction({ artistId, date: requestedDate }).then((result) => {
+      if (latestRequestedDateRef.current !== requestedDate) return;
+      setIsLoadingAvailability(false);
+      setAvailableSlots(result.success ? result.slots : null);
+    });
+  }, [artistId, requestedDate]);
 
   const tier = form.watch("tier");
   const isFreestyle = tier === "FREESTYLE";
@@ -83,5 +111,7 @@ export function useVisualIntakeForm({ artistId }: UseVisualIntakeFormArgs) {
     isSubmitting,
     serverError,
     submittedRequestId,
+    availableSlots,
+    isLoadingAvailability,
   };
 }
