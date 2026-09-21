@@ -27,3 +27,24 @@ export interface ConfirmTimeSlotInput {
 export type ConfirmTimeSlotResult =
   | { success: true; timeSlotIds: string[] }
   | { success: false; error: string };
+
+// Write command (CLAUDE.md 4.3): upserts the artist's recurring weekly
+// hours for one day of week. An empty availableTimes array closes that
+// weekday entirely; never calling this for a given day is what leaves
+// it at getOperatingWindows' default-open fallback.
+export interface SetWeeklyHoursInput {
+  artistId: string;
+  dayOfWeek: number;
+  availableTimes: SlotTime[];
+}
+
+// Write command (CLAUDE.md 4.3): upserts a one-off override for a
+// specific date, taking precedence over ArtistWeeklyHours in
+// getOperatingWindows. An empty availableTimes array is a full
+// blackout for that date. date is "YYYY-MM-DD", the same convention
+// getAvailableSlots/getOperatingWindows already use.
+export interface SetScheduleOverrideInput {
+  artistId: string;
+  date: string;
+  availableTimes: SlotTime[];
+}
