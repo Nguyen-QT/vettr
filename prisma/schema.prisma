@@ -43,8 +43,43 @@ model Artist {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  intakeRequests IntakeRequest[]
-  timeSlots      TimeSlot[]
+  intakeRequests    IntakeRequest[]
+  timeSlots         TimeSlot[]
+  weeklyHours       ArtistWeeklyHours[]
+  scheduleOverrides ArtistScheduleOverride[]
+}
+
+// Recurring weekly availability (CLAUDE.md 4.3). No row for a given
+// artistId/dayOfWeek means that day defaults to fully open (all of
+// DAILY_SLOT_TIME_OPTIONS) -- getOperatingWindows is what actually
+// enforces the default-open fallback, not the schema.
+model ArtistWeeklyHours {
+  id             String   @id @default(cuid())
+  dayOfWeek      Int
+  availableTimes String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  artist   Artist @relation(fields: [artistId], references: [id])
+  artistId String
+
+  @@unique([artistId, dayOfWeek])
+}
+
+// One-off overrides for a specific date (CLAUDE.md 4.3), taking
+// precedence over ArtistWeeklyHours when present. An empty
+// availableTimes array is a full blackout for that date.
+model ArtistScheduleOverride {
+  id             String   @id @default(cuid())
+  date           DateTime @db.Date
+  availableTimes String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  artist   Artist @relation(fields: [artistId], references: [id])
+  artistId String
+
+  @@unique([artistId, date])
 }
 
 // Tracks cancellation history and the resulting precharge flag (CLAUDE.md
