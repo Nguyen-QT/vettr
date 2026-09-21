@@ -92,6 +92,31 @@ export const clientBudgetRangeSchema = z
     path: ["maxPrice"],
   });
 
+// Structural validity only for the client's self-service edit (5.4) --
+// see services/updatePendingIntakeRequest.ts for the ownership/status
+// guard and the availability re-check. Narrower than
+// clientIntakeInputSchema below: tier/tags/images aren't editable here.
+export const updatePendingIntakeRequestInputSchema = z
+  .object({
+    clientNotes: z.string().trim().max(1000).optional(),
+    clientBudgetRange: clientBudgetRangeSchema,
+    requestedDate: requestedDateSchema,
+    requestedTime: requestedTimeSchema,
+  })
+  .superRefine((data, ctx) => {
+    const requestedStartTime = combineRequestedDateAndTime(
+      data.requestedDate,
+      data.requestedTime
+    );
+    if (requestedStartTime.getTime() <= Date.now()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["requestedDate"],
+        message: "Choose a date and time in the future.",
+      });
+    }
+  });
+
 // Network firewall for client submissions. Structural validity only —
 // see src/domains/intake/services/validateComplexity.ts for the content
 // gatekeeper that judges an already-valid request's tags/notes.

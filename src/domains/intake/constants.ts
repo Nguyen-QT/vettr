@@ -49,3 +49,20 @@ export const TIER_BASELINE_BUDGETS: Record<ComplexityTier, ClientBudgetRange> = 
   TIER_4: { minPrice: 200, maxPrice: 400 },
   FREESTYLE: { minPrice: 50, maxPrice: 500 },
 };
+
+// Self-service cancellation (CLAUDE.md 5.4): an APPROVED request (slot
+// already booked) can only be self-cancelled outside this window.
+// PENDING/AWAITING_SLOT_CONFIRMATION requests have no locked slot yet,
+// so this doesn't apply to them. Full offense-counting/enforcePrecharge
+// is deferred to 5.6 -- this only blocks the cancel action itself.
+export const CANCELLATION_WINDOW_HOURS = 48;
+
+export const REQUEST_NOT_FOUND_ERROR_MESSAGE = "This request could not be found.";
+
+export const REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE =
+  "This request has already been cancelled, declined, or completed.";
+
+export const CANCELLATION_WINDOW_ERROR_MESSAGE = `This appointment is within ${CANCELLATION_WINDOW_HOURS} hours -- please contact the artist directly to cancel.`;
+
+export const REQUEST_NOT_EDITABLE_ERROR_MESSAGE =
+  "Only pending requests can be edited.";
