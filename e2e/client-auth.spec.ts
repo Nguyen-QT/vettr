@@ -24,7 +24,10 @@ test.describe("client signup, login, and dashboard", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page).toHaveURL("http://localhost:3000/client");
-    await expect(page.getByText("E2E Fixture Artist")).toBeVisible();
+    // Two bookings exist for this client now (5.4.4 added a second
+    // fixture row) -- .first() is enough to confirm the dashboard shows
+    // booking data at all, which is all this test cares about.
+    await expect(page.getByText("E2E Fixture Artist").first()).toBeVisible();
   });
 
   test("rejects an incorrect password", async ({ page }) => {

@@ -26,6 +26,7 @@ export async function getClientBookings(
     maxPrice: Number(request.maxPrice),
     estimatedPrice:
       request.estimatedPrice === null ? null : Number(request.estimatedPrice),
+    clientNotes: request.clientNotes,
     requestedStartTime: request.requestedStartTime,
     createdAt: request.createdAt,
   }));

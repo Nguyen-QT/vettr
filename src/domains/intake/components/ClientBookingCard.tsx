@@ -1,3 +1,4 @@
+import { ClientBookingActions } from "@/domains/intake/components/ClientBookingActions";
 import type { ClientBookingSummary } from "@/domains/intake/types";
 
 interface ClientBookingCardProps {
@@ -47,6 +48,8 @@ export function ClientBookingCard({ booking }: ClientBookingCardProps) {
           ? `Estimated: £${booking.estimatedPrice}`
           : `£${booking.minPrice} – £${booking.maxPrice}`}
       </p>
+
+      <ClientBookingActions booking={booking} />
     </article>
   );
 }
