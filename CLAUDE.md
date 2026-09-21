@@ -105,6 +105,14 @@ src/
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 - [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
 
+### 🗂️ Backlog (unscoped, no priority order)
+Captured for future scoping into numbered roadmap items — not yet broken down per the Mandatory Task Breakdown Rule, and not committed to a specific phase.
+- Client Dashboard: a client-facing view of their own bookings (confirmed, in review, awaiting slot confirmation, etc.).
+- Tiered Reference Gallery: show clients example reference images grouped by `COMPLEXITY_TIERS` to help them choose a tier while filling out the intake form.
+- Mandatory Estimated Price on Review: artist must provide an `estimatedPrice` as part of reviewing/approving a request (currently only duration is required).
+- Optional Client Max End Time: let clients optionally flag a hard end-time constraint (e.g. "must be done by X") on intake, for the artist to weigh when deciding duration/slot count.
+- Mandatory Email: require `email` on intake (currently optional) so booking confirmations can always be sent.
+
 
 ## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
 - **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
