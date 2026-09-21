@@ -29,3 +29,10 @@ export const confirmTimeSlotInputSchema = z
     message: "The selected time slot is in the past.",
     path: ["startTime"],
   });
+
+// Structural validity only — see services/getAvailableSlots.ts for the
+// availability read itself.
+export const getAvailableSlotsInputSchema = z.object({
+  artistId: z.string().min(1),
+  date: z.iso.date("Enter a valid date."),
+});
