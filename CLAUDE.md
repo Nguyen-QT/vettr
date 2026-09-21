@@ -161,7 +161,10 @@ src/
   - [x] 5.2.3: Route Protection (extends `src/proxy.ts` to also guard `/client/*`, requiring a valid, unexpired session with role CLIENT -- no URL param to match against, unlike the artist check, since client routes are session-derived).
   - [x] 5.2.4: View & Route (client signup page, client login page, client dashboard listing bookings across all artists, logout control; e2e spec).
 
-- [ ] **5.3: Landing Page & Artist Discovery Directory** (Root `/` becomes a real landing page for a signed-out visitor, offering three explicit paths -- "I want to book an artist" (→ an artist directory page, then that artist's existing `/book/[artistId]` hub), "I have an existing or past booking" (→ `/client/login`), "I'm an artist" (→ `/artist/login`). A signed-in visitor hitting `/` skips the choice entirely and is redirected straight to `/client` or `/artist/[artistId]`. Preserves direct `/book/[artistId]` links (e.g. an artist's Instagram bio link) bypassing the directory entirely -- it's a fallback for organic traffic landing on the bare domain, not the only way in. Needs a small schema addition first: `Artist` currently only has `name`/`instagramHandle`/`email`, nothing to show on a directory card (photo/niche/location) -- scoped in detail, including that addition, when this is picked up. Sequenced right after 5.2 since the directory's "returning client"/"artist" paths both route into 5.1/5.2's login pages).
+- [ ] **5.3: Landing Page & Artist Discovery Directory** (Root `/` becomes a real landing page for a signed-out visitor, offering three explicit paths -- "I want to book an artist" (→ an artist directory page, then that artist's existing `/book/[artistId]` hub), "I have an existing or past booking" (→ `/client/login`), "I'm an artist" (→ `/artist/login`). A signed-in visitor hitting `/` skips the choice entirely and is redirected straight to `/client` or `/artist/[artistId]`. Preserves direct `/book/[artistId]` links (e.g. an artist's Instagram bio link) bypassing the directory entirely -- it's a fallback for organic traffic landing on the bare domain, not the only way in), decomposed per the Mandatory Task Breakdown Rule:
+  - [x] 5.3.1: Data Gateway (`Artist` gains `avatarUrl`/`bio`/`location`, all nullable + migration -- read-only for clients, artist-facing management is a backlog item, seeded via Prisma Studio for now, same as `TierReferenceImage`).
+  - [ ] 5.3.2: Domain Service (`getArtistDirectory()` in a new `directory` domain -- a distinct bounded context from `intake`/`scheduling`/`auth`, this is public artist-browsing, not booking/vetting logic; unit tests).
+  - [ ] 5.3.3: View & Route (root `/` becomes the three-option landing page, auto-redirecting an already-authenticated visitor via `getCurrentSession()`; new `/artists` directory page + `ArtistDirectoryCard`, linking into the existing `/book/[artistId]`; e2e spec).
 
 - [ ] **5.4: Self-Service Booking Modification & Cancellation** (Allow clients to update pending request details or cancel pending/confirmed requests within policy windows via the Client Dashboard).
 
@@ -189,6 +192,8 @@ Captured for future scoping into numbered roadmap items — not yet broken down 
 - Placement & Canvas Metadata: capture body location / nail set context fields in intake schemas (e.g., "Left Forearm", "Full Set - Natural Nails").
 
 - Tier Reference Gallery Management UI: artist-facing upload/reorder/remove for their own `TierReferenceImage` rows (4.6). Images are seeded via Prisma Studio in the meantime.
+
+- Artist Profile Management UI: artist-facing editing for their own `avatarUrl`/`bio`/`location` directory fields (5.3). Seeded via Prisma Studio in the meantime.
 
 - In-App Client/Artist Chat: on-platform messaging tied to a specific `IntakeRequest`, so review/follow-up conversation doesn't have to happen off-platform over Instagram DM. Part of why client auth (5.2) is password-based rather than magic-link -- chat needs frequent, low-friction re-entry. Likely still wants email notifications for new messages, possibly with a scoped link straight into the thread.
 
