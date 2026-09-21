@@ -111,3 +111,9 @@ export interface UpcomingAppointmentSummary {
   startTime: Date;
   endTime: Date;
 }
+
+// One artist's own example images, grouped by tier (CLAUDE.md 4.6),
+// for the client-facing intake form. Every tier is always present as
+// a key, even with an empty array, so the view never has to guess
+// whether a tier was omitted vs. genuinely has no images yet.
+export type TierReferenceImages = Record<ComplexityTier, string[]>;
