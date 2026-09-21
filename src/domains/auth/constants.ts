@@ -23,3 +23,8 @@ export const MIN_PASSWORD_LENGTH = 8;
 // httpOnly session cookie name (CLAUDE.md 5.1.3) -- its value is a
 // Session row's id, the same opaque cuid loginArtist returns.
 export const SESSION_COOKIE_NAME = "vettr_session";
+
+// Shared by the route-protection proxy (5.1.4, redirect target for an
+// unauthenticated/mismatched request) and logoutAction (5.1.3/5.1.5,
+// where a signed-out artist lands).
+export const ARTIST_LOGIN_PATH = "/artist/login";

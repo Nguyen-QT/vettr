@@ -40,6 +40,12 @@ export default async function globalTeardown() {
   await client.query(`DELETE FROM "TierReferenceImage" WHERE "artistId" = $1`, [
     fixture.artistId,
   ]);
+  // Account.artistId is ON DELETE SET NULL (CLAUDE.md 5.1.1), so it
+  // won't clean itself up when Artist is deleted below -- Session
+  // cascades from Account automatically.
+  await client.query(`DELETE FROM "Account" WHERE "artistId" = $1`, [
+    fixture.artistId,
+  ]);
   await client.query(`DELETE FROM "Artist" WHERE id = $1`, [fixture.artistId]);
 
   await client.end();

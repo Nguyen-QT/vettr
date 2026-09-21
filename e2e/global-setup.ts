@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID, scryptSync } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -6,6 +6,16 @@ import { config } from "dotenv";
 import { Client } from "pg";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
+
+// Mirrors src/domains/auth/services/hashPassword.ts's "saltHex:hashHex"
+// format and params, duplicated rather than imported -- globalSetup
+// runs outside Next's runtime, same reasoning as the raw pg usage
+// below rather than the generated Prisma client.
+function hashPasswordForFixture(password: string): string {
+  const salt = randomBytes(16);
+  const derivedKey = scryptSync(password, salt, 64);
+  return `${salt.toString("hex")}:${derivedKey.toString("hex")}`;
+}
 
 export interface E2eFixture {
   artistId: string;
@@ -20,6 +30,16 @@ export interface E2eFixture {
   // can pick this date and assert that exact time renders disabled.
   bookedSlotDate: string;
   bookedSlotTime: string;
+  // Real credentials for the artist login spec (5.1.5) to exercise the
+  // actual loginArtist check against.
+  artistLoginEmail: string;
+  artistLoginPassword: string;
+  // A separately pre-created, already-valid Session id (not tied to a
+  // real login) -- specs that aren't testing login itself set this
+  // directly as the session cookie via page.context().addCookies, so
+  // they don't all have to re-drive the login UI just to reach a
+  // protected route.
+  authenticatedSessionId: string;
 }
 
 // Seeds one throwaway Artist with three IntakeRequests -- two PENDING
@@ -199,6 +219,33 @@ export default async function globalSetup() {
     ]
   );
 
+  // Account/Session fixtures for route-protection specs (CLAUDE.md
+  // 5.1.4/5.1.5) -- one real login-capable Account for this artist,
+  // plus a second already-valid Session so other specs can skip the
+  // login UI and jump straight to a protected route.
+  const artistAccountId = randomUUID();
+  const artistLoginEmail = "e2e-artist-login@example.com";
+  const artistLoginPassword = "e2e-test-password-123";
+  const authenticatedSessionId = randomUUID();
+  const sessionExpiresAt = new Date("2099-01-01T00:00:00.000Z");
+
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "artistId", "updatedAt")
+     VALUES ($1, $2, $3, 'ARTIST', $4, now())`,
+    [
+      artistAccountId,
+      artistLoginEmail,
+      hashPasswordForFixture(artistLoginPassword),
+      artistId,
+    ]
+  );
+
+  await client.query(
+    `INSERT INTO "Session" (id, "expiresAt", "accountId")
+     VALUES ($1, $2, $3)`,
+    [authenticatedSessionId, sessionExpiresAt, artistAccountId]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -224,6 +271,9 @@ export default async function globalSetup() {
     bookedSlotClientHandle,
     bookedSlotDate,
     bookedSlotTime,
+    artistLoginEmail,
+    artistLoginPassword,
+    authenticatedSessionId,
   };
 
   await writeFile(FIXTURE_PATH, JSON.stringify(fixture, null, 2));
