@@ -47,4 +47,27 @@ test.describe("client intake form -- requested slot", () => {
       page.getByText("Choose a date and time in the future.")
     ).toBeVisible();
   });
+
+  test("disables an already-booked time once a booked date is picked", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+
+    await page.goto(`/book/${fixture.artistId}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel("Preferred date").fill(fixture.bookedSlotDate);
+
+    const bookedTimeRadio = page.getByRole("radio", {
+      name: new RegExp(`^${fixture.bookedSlotTime}`),
+    });
+    await expect(bookedTimeRadio).toBeDisabled();
+    await expect(page.getByText(`${fixture.bookedSlotTime} (unavailable)`)).toBeVisible();
+
+    // A different time on the same date stays selectable.
+    const otherTime = fixture.bookedSlotTime === "11:00" ? "14:00" : "11:00";
+    await expect(
+      page.getByRole("radio", { name: new RegExp(`^${otherTime}`) })
+    ).toBeEnabled();
+  });
 });

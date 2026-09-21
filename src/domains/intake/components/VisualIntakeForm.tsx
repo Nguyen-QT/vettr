@@ -22,6 +22,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { COMPLEXITY_TIERS, OTHER_TAG_VALUE } from "@/domains/intake/constants";
 import { useVisualIntakeForm } from "@/domains/intake/hooks/useVisualIntakeForm";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
+import type { AvailableSlot } from "@/domains/scheduling/services/getAvailableSlots";
+import type { SlotTime } from "@/domains/scheduling/types";
 import { DesignReferenceDropzone } from "@/lib/uploadthing-client";
 
 interface VisualIntakeFormProps {
@@ -31,6 +33,16 @@ interface VisualIntakeFormProps {
 const BUDGET_SLIDER_MIN = 0;
 const BUDGET_SLIDER_MAX = 1000;
 const BUDGET_STEP = 5;
+
+// No date picked yet, or the availability fetch hasn't resolved -- don't
+// block the user on missing data, only on a confirmed unavailable time.
+function isTimeAvailable(
+  availableSlots: AvailableSlot[] | null,
+  time: SlotTime
+): boolean {
+  if (!availableSlots) return true;
+  return availableSlots.find((slot) => slot.time === time)?.available ?? true;
+}
 
 export function VisualIntakeForm({ artistId }: VisualIntakeFormProps) {
   const {
@@ -43,6 +55,8 @@ export function VisualIntakeForm({ artistId }: VisualIntakeFormProps) {
     isSubmitting,
     serverError,
     submittedRequestId,
+    availableSlots,
+    isLoadingAvailability,
   } = useVisualIntakeForm({ artistId });
 
   const {
@@ -118,17 +132,32 @@ export function VisualIntakeForm({ artistId }: VisualIntakeFormProps) {
             name="requestedTime"
             render={({ field }) => (
               <RadioGroup value={field.value} onValueChange={field.onChange}>
-                {DAILY_SLOT_TIME_OPTIONS.map((time) => (
-                  <FieldLabel key={time} htmlFor={`requestedTime-${time}`}>
-                    <Field orientation="horizontal">
-                      <RadioGroupItem value={time} id={`requestedTime-${time}`} />
-                      <FieldContent>{time}</FieldContent>
-                    </Field>
-                  </FieldLabel>
-                ))}
+                {DAILY_SLOT_TIME_OPTIONS.map((time) => {
+                  const available = isTimeAvailable(availableSlots, time);
+                  return (
+                    <FieldLabel key={time} htmlFor={`requestedTime-${time}`}>
+                      <Field orientation="horizontal">
+                        <RadioGroupItem
+                          value={time}
+                          id={`requestedTime-${time}`}
+                          disabled={isLoadingAvailability || !available}
+                        />
+                        <FieldContent>
+                          {time}
+                          {!isLoadingAvailability && !available
+                            ? " (unavailable)"
+                            : null}
+                        </FieldContent>
+                      </Field>
+                    </FieldLabel>
+                  );
+                })}
               </RadioGroup>
             )}
           />
+          {isLoadingAvailability ? (
+            <FieldDescription>Checking availability…</FieldDescription>
+          ) : null}
           <FieldError errors={errors.requestedTime && [errors.requestedTime]} />
         </Field>
 
