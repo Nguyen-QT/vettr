@@ -1,12 +1,15 @@
 "use server";
 
+import { getCurrentSession } from "@/domains/auth/actions";
 import { prisma } from "@/lib/prisma";
 
 import {
   clientIntakeInputSchema,
   combineRequestedDateAndTime,
   reviewIntakeRequestInputSchema,
+  updatePendingIntakeRequestInputSchema,
 } from "./intake.schema";
+import { cancelIntakeRequest } from "./services/cancelIntakeRequest";
 import {
   confirmProposedBooking,
   type ConfirmProposedBookingResult,
@@ -16,7 +19,22 @@ import {
   reviewIntakeRequest,
   type ReviewIntakeRequestResult,
 } from "./services/reviewIntakeRequest";
+import { updatePendingIntakeRequest } from "./services/updatePendingIntakeRequest";
 import { validateComplexity } from "./services/validateComplexity";
+import type {
+  CancelIntakeRequestResult,
+  UpdatePendingIntakeRequestResult,
+} from "./types";
+
+const NOT_SIGNED_IN_ERROR_MESSAGE = "You must be signed in as a client to do that.";
+
+async function requireClientProfileId(): Promise<string | null> {
+  const session = await getCurrentSession();
+  if (!session || session.role !== "CLIENT" || !session.clientProfileId) {
+    return null;
+  }
+  return session.clientProfileId;
+}
 
 export type SubmitIntakeRequestResult =
   | { success: true; intakeRequestId: string }
@@ -147,6 +165,49 @@ export async function confirmProposedBookingAction(
   intakeRequestId: string
 ): Promise<ConfirmProposedBookingResult> {
   return confirmProposedBooking(intakeRequestId);
+}
+
+// Controller/Action boundary (CLAUDE.md 5.4.2): derives clientProfileId
+// from the trusted session rather than trusting client-supplied input
+// -- a client could otherwise pass any id and attempt to cancel someone
+// else's booking. cancelIntakeRequest itself still re-checks ownership,
+// but this is the layer responsible for supplying a trustworthy id.
+export async function cancelIntakeRequestAction(
+  intakeRequestId: string
+): Promise<CancelIntakeRequestResult> {
+  const clientProfileId = await requireClientProfileId();
+  if (!clientProfileId) {
+    return { success: false, error: NOT_SIGNED_IN_ERROR_MESSAGE };
+  }
+
+  return cancelIntakeRequest({ intakeRequestId, clientProfileId });
+}
+
+// Controller/Action boundary (CLAUDE.md 5.4.2): same session-derived
+// clientProfileId as cancelIntakeRequestAction above, plus structural
+// validation of the editable fields before delegating.
+export async function updatePendingIntakeRequestAction(
+  intakeRequestId: string,
+  input: unknown
+): Promise<UpdatePendingIntakeRequestResult> {
+  const clientProfileId = await requireClientProfileId();
+  if (!clientProfileId) {
+    return { success: false, error: NOT_SIGNED_IN_ERROR_MESSAGE };
+  }
+
+  const parsed = updatePendingIntakeRequestInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid request.",
+    };
+  }
+
+  return updatePendingIntakeRequest({
+    intakeRequestId,
+    clientProfileId,
+    ...parsed.data,
+  });
 }
 
 async function setIntakeRequestStatus(
