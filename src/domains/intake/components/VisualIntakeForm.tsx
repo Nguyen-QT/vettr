@@ -254,7 +254,7 @@ export function VisualIntakeForm({ artistId }: VisualIntakeFormProps) {
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="email">Email (optional)</FieldLabel>
+          <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input id="email" type="email" {...register("email")} />
           <FieldError errors={errors.email && [errors.email]} />
         </Field>

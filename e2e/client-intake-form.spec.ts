@@ -48,6 +48,18 @@ test.describe("client intake form -- requested slot", () => {
     ).toBeVisible();
   });
 
+  test("requires an email address on submit", async ({ page }) => {
+    const fixture = await readFixture();
+
+    await page.goto(`/book/${fixture.artistId}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel("Preferred date").fill("2099-01-01");
+    await page.getByRole("button", { name: "Submit request" }).click();
+
+    await expect(page.getByText("Enter a valid email address.")).toBeVisible();
+  });
+
   test("disables an already-booked time once a booked date is picked", async ({
     page,
   }) => {
