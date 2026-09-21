@@ -1,9 +1,10 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { loginInputSchema } from "./auth.schema";
-import { SESSION_COOKIE_NAME } from "./constants";
+import { ARTIST_LOGIN_PATH, SESSION_COOKIE_NAME } from "./constants";
 import { deleteSession } from "./services/deleteSession";
 import { loginArtist } from "./services/loginArtist";
 
@@ -47,7 +48,9 @@ export async function loginAction(input: unknown): Promise<LoginActionResult> {
 
 // Controller/Action boundary (CLAUDE.md 5.1.3): clears the session
 // cookie and revokes the underlying Session row, so a copy of the old
-// cookie value (if one leaked) can't still be used.
+// cookie value (if one leaked) can't still be used. Bound directly to
+// the dashboard layout's logout <form> (5.1.5), so it redirects itself
+// rather than returning a result for a client hook to act on.
 export async function logoutAction(): Promise<void> {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -57,4 +60,5 @@ export async function logoutAction(): Promise<void> {
   }
 
   cookieStore.delete(SESSION_COOKIE_NAME);
+  redirect(ARTIST_LOGIN_PATH);
 }
