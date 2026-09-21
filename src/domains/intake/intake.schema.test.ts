@@ -108,6 +108,7 @@ describe("clientIntakeInputSchema", () => {
     tier: "TIER_2" as const,
     clientBudgetRange: { minPrice: 50, maxPrice: 100 },
     designTags: ["fine-line-detail" as const],
+    email: "client@example.com",
     requestedDate: "2027-01-01",
     requestedTime: "11:00" as const,
   };
@@ -118,6 +119,7 @@ describe("clientIntakeInputSchema", () => {
     tier: "FREESTYLE" as const,
     clientBudgetRange: { minPrice: 50, maxPrice: 500 },
     aestheticTags: ["watercolor-blend" as const],
+    email: "client@example.com",
     requestedDate: "2027-01-01",
     requestedTime: "11:00" as const,
   };
@@ -132,10 +134,9 @@ describe("clientIntakeInputSchema", () => {
     );
   });
 
-  it("accepts optional email, phone, and clientNotes", () => {
+  it("accepts optional phone and clientNotes", () => {
     const result = clientIntakeInputSchema.safeParse({
       ...validPayload,
-      email: "client@example.com",
       phone: "+1 555 0100",
       clientNotes: "Prefers weekday afternoons.",
     });
@@ -147,6 +148,12 @@ describe("clientIntakeInputSchema", () => {
       ...validPayload,
       email: "not-an-email",
     });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a missing email", () => {
+    const { email: _email, ...payloadWithoutEmail } = validPayload;
+    const result = clientIntakeInputSchema.safeParse(payloadWithoutEmail);
     expect(result.success).toBe(false);
   });
 

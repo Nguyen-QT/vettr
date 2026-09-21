@@ -39,6 +39,7 @@ describe("reviewIntakeRequest", () => {
       data: {
         id: clientId,
         instagramHandle: `test_client_${clientId.slice(0, 8)}`,
+        email: `test_client_${clientId.slice(0, 8)}@example.com`,
       },
     });
     const request = await prisma.intakeRequest.create({

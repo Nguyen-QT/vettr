@@ -48,7 +48,7 @@ export interface ClientIntakeInput {
   clientBudgetRange: ClientBudgetRange;
   designTags?: DesignTag[];
   aestheticTags?: AestheticTag[];
-  email?: string;
+  email: string;
   phone?: string;
   clientNotes?: string;
   // Combined into IntakeRequest.requestedStartTime on submission
