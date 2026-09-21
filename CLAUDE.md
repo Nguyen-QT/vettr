@@ -132,7 +132,10 @@ src/
   - [x] 4.3.6: Domain Hook & Logic (`useArtistScheduleSettings` orchestrating fetch/mutate state).
   - [x] 4.3.7: View & Route (artist-facing "Business Hours" settings section on the dashboard -- weekly hours grid + blackout/override date management; e2e spec).
 
-- [ ] **4.4: Mandatory Estimated Price Validation on Review** (Enforce that artists input an explicit estimatedPrice alongside duration when reviewing/approving an intake request).
+- [ ] **4.4: Mandatory Estimated Price Validation on Review** (Enforce that artists input an explicit estimatedPrice alongside duration when reviewing/approving an intake request. No new migration needed -- estimatedPrice already exists on IntakeRequest as a nullable Decimal; enforcement is at the application layer since rows stay null until reviewed), decomposed per the Mandatory Task Breakdown Rule:
+  - [ ] 4.4.1: Domain Service + required Controller/Action passthrough (`reviewIntakeRequestInputSchema` gains `estimatedPrice` validation; `reviewIntakeRequest.ts` persists it on both the immediate-approve and awaiting-confirmation paths; bundled with the one-line `actions.ts` call-site update since the input type tightening forces it to type-check, same coupling as 4.2.1; unit tests).
+  - [ ] 4.4.2: Domain Hook & Logic (`useRequestActions.review()` signature extended to accept `estimatedPrice`).
+  - [ ] 4.4.3: View & Route (`RequestActions.tsx` adds an estimated-price input alongside duration; e2e spec update).
 
 - [ ] **4.5: Tiered Reference Gallery** (Show clients example reference images grouped by COMPLEXITY_TIERS to help them choose a tier while filling out the intake form).
 
