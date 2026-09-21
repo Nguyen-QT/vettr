@@ -87,7 +87,7 @@ src/
 - [x] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
 
 ### 📦 Phase 4: Concurrency Rules & Financial Logic ◄ CURRENT FOCUS
-- [ ] **4.1: Reservation Lock-In Timers & Slot Confirmation UI** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently, then wire that confirmation into the artist dashboard. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now), decomposed per the Mandatory Task Breakdown Rule:
+- [x] **4.1: Reservation Lock-In Timers & Slot Confirmation UI** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently, then wire that confirmation into the artist dashboard. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 4.1.1: Scheduling Domain Scaffold (`constants.ts`/`types.ts`/`scheduling.schema.ts` + the `TimeSlot` overlap-exclusion constraint).
   - [x] 4.1.2: `confirmTimeSlot` Domain Service (concurrency-safe slot allocation, with unit tests covering race conditions and double-booking).
   - [x] 4.1.3: Server Action Boundary (`confirmTimeSlotAction`).
@@ -97,11 +97,11 @@ src/
   - [x] 4.1.7: Confirm-Proposed-Booking Domain Service (finalizes an `AWAITING_SLOT_CONFIRMATION` request once the artist has confirmed the double-slot booking with the client off-platform).
   - [x] 4.1.8: Controller/Action Boundary (server actions for the review step and the confirm-booking step).
   - [x] 4.1.9: Artist Dashboard UI (duration input on approve, the two outcome messages, and a "Confirm Booking" control for awaiting-confirmation requests).
-  - [ ] 4.1.10: Live Slot Availability (client's date/time picker reflects real availability instead of any date being pickable -- deliberately sequenced after 4.1.6-4.1.9 so the core approve/confirm mechanics ship first), decomposed per the Mandatory Task Breakdown Rule:
+  - [x] 4.1.10: Live Slot Availability (client's date/time picker reflects real availability instead of any date being pickable -- deliberately sequenced after 4.1.6-4.1.9 so the core approve/confirm mechanics ship first), decomposed per the Mandatory Task Breakdown Rule:
     - [x] 4.1.10.1: Domain Service (`getAvailableSlots(artistId, date)` in scheduling -- a fixed daily time is available if no `BOOKED` `TimeSlot` overlaps its `[time, time + MAX_SLOT_DURATION_MINUTES)` nominal window, with unit tests).
     - [x] 4.1.10.2: Controller/Action Boundary (`getAvailableSlotsAction`).
     - [x] 4.1.10.3: Domain Hook & Logic (`useVisualIntakeForm` fetches availability whenever the picked date changes).
-    - [ ] 4.1.10.4: View & Route (disable already-booked time options in the intake form; e2e spec update).
+    - [x] 4.1.10.4: View & Route (disable already-booked time options in the intake form; e2e spec update).
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 - [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
 
