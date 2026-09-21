@@ -127,7 +127,7 @@ src/
   - [x] 4.3.1: Data Gateway (`ArtistWeeklyHours` and `ArtistScheduleOverride` Prisma models + migration).
   - [x] 4.3.2: Domain Service -- Read (`getOperatingWindows(artistId, date)` in scheduling: override-first, then weekly-hours-row, else default-open, with unit tests).
   - [x] 4.3.3: Domain Service -- Read/Compose (`getAvailableSlots` updated to intersect operating windows with the existing booked-slot check, with unit tests).
-  - [ ] 4.3.4: Domain Service -- Write (`setWeeklyHours`/`setScheduleOverride` upsert services with validation, with unit tests).
+  - [x] 4.3.4: Domain Service -- Write (`setWeeklyHours`/`setScheduleOverride` upsert services with validation, with unit tests).
   - [ ] 4.3.5: Controller/Action Boundary (server actions wrapping the read/write services for the settings UI).
   - [ ] 4.3.6: Domain Hook & Logic (`useArtistScheduleSettings` orchestrating fetch/mutate state).
   - [ ] 4.3.7: View & Route (artist-facing "Business Hours" settings section on the dashboard -- weekly hours grid + blackout/override date management; e2e spec).
