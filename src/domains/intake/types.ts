@@ -112,6 +112,36 @@ export interface UpcomingAppointmentSummary {
   endTime: Date;
 }
 
+// Mirrors Prisma's RequestStatus enum. Unlike ActionableRequestStatus
+// above (the artist-dashboard subset), the client dashboard shows every
+// status a booking can be in, including ones the artist view never
+// needs to render (DECLINED, CANCELLED, COMPLETED).
+export type RequestStatus =
+  | "PENDING"
+  | "AWAITING_SLOT_CONFIRMATION"
+  | "APPROVED"
+  | "DECLINED"
+  | "CANCELLED"
+  | "COMPLETED";
+
+// Read-shaped projection of an IntakeRequest for the client dashboard
+// (CLAUDE.md 5.2) -- every booking a ClientProfile has across every
+// artist, not scoped to one artist the way the dashboard/appointments
+// views above are. Identifies the artist by name/handle rather than id
+// alone, since this is a client-facing read.
+export interface ClientBookingSummary {
+  id: string;
+  status: RequestStatus;
+  artistName: string;
+  artistInstagramHandle: string;
+  tier: ComplexityTier;
+  minPrice: number;
+  maxPrice: number;
+  estimatedPrice: number | null;
+  requestedStartTime: Date | null;
+  createdAt: Date;
+}
+
 // One artist's own example images, grouped by tier (CLAUDE.md 4.6),
 // for the client-facing intake form. Every tier is always present as
 // a key, even with an empty array, so the view never has to guess

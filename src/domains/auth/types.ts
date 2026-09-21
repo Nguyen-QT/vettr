@@ -15,6 +15,12 @@ export type LoginResult =
   | { success: true; sessionId: string; expiresAt: Date; artistId: string }
   | { success: false; error: string };
 
+// signupClient/loginClient share this shape (CLAUDE.md 5.2) -- both
+// end in an authenticated session for a specific ClientProfile.
+export type ClientAuthResult =
+  | { success: true; sessionId: string; expiresAt: Date; clientProfileId: string }
+  | { success: false; error: string };
+
 export interface SessionWithAccount {
   sessionId: string;
   expiresAt: Date;
