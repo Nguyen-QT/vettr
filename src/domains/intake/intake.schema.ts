@@ -102,7 +102,7 @@ export const clientIntakeInputSchema = z
     clientBudgetRange: clientBudgetRangeSchema,
     designTags: z.array(designTagSchema).optional(),
     aestheticTags: z.array(aestheticTagSchema).optional(),
-    email: z.email().optional(),
+    email: z.email("Enter a valid email address."),
     phone: z.string().trim().min(1).optional(),
     clientNotes: z.string().trim().max(1000).optional(),
     requestedDate: requestedDateSchema,

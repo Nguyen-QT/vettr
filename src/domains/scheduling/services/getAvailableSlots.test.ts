@@ -27,6 +27,7 @@ describe("getAvailableSlots", () => {
       data: {
         id: clientId,
         instagramHandle: `test_client_${clientId.slice(0, 8)}`,
+        email: `test_client_${clientId.slice(0, 8)}@example.com`,
       },
     });
     const request = await prisma.intakeRequest.create({
@@ -122,6 +123,7 @@ describe("getAvailableSlots", () => {
       data: {
         id: otherClientId,
         instagramHandle: `test_client_${otherClientId.slice(0, 8)}`,
+        email: `test_client_${otherClientId.slice(0, 8)}@example.com`,
       },
     });
     const otherRequest = await prisma.intakeRequest.create({

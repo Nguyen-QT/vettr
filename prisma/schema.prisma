@@ -53,7 +53,7 @@ model Artist {
 model ClientProfile {
   id                String   @id @default(cuid())
   instagramHandle   String   @unique
-  email             String?
+  email             String
   phone             String?
   cancellationCount Int      @default(0)
   enforcePrecharge  Boolean  @default(false)
