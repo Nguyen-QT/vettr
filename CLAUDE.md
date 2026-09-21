@@ -151,7 +151,7 @@ src/
 - [ ] **5.1: Artist Authentication & Route Protection** (Password login for the artist, and middleware protecting `/artist/[artistId]/*` so a session must be an ARTIST account whose linked `artistId` matches the URL. Artist accounts stay manually provisioned for now -- no signup UI; there's a single artist and Account rows are created the same way Artist rows already are, via Prisma Studio/a script), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 5.1.1: Data Gateway (`Account`, `Session`, `AccountRole` enum + migration).
   - [x] 5.1.2: Domain Service (password hashing/verification, session create/lookup/delete, `loginArtist(email, password)`; unit tests).
-  - [ ] 5.1.3: Controller/Action (`loginAction`/`logoutAction`; sets/clears the session cookie).
+  - [x] 5.1.3: Controller/Action (`loginAction`/`logoutAction`; sets/clears the session cookie).
   - [ ] 5.1.4: Route Protection Middleware (`middleware.ts` guarding `/artist/[artistId]/*`; redirects unauthenticated or artistId-mismatched requests to login).
   - [ ] 5.1.5: View & Route (artist login page; logout control in the dashboard layout; e2e spec).
 
