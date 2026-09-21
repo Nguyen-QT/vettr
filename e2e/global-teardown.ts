@@ -22,6 +22,13 @@ export default async function globalTeardown() {
   await client.query(`DELETE FROM "IntakeRequest" WHERE id = ANY($1)`, [
     fixture.intakeRequestIds,
   ]);
+  // Account.clientProfileId is ON DELETE SET NULL (CLAUDE.md 5.1.1),
+  // same reasoning as the artist Account cleanup below -- must clear
+  // any client Account (e.g. one created by the signup spec, 5.2.4)
+  // before the ClientProfile delete, or it'd be left orphaned.
+  await client.query(`DELETE FROM "Account" WHERE "clientProfileId" = ANY($1)`, [
+    fixture.clientProfileIds,
+  ]);
   await client.query(`DELETE FROM "ClientProfile" WHERE id = ANY($1)`, [
     fixture.clientProfileIds,
   ]);

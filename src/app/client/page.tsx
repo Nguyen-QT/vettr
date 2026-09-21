@@ -1,0 +1,48 @@
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { getCurrentSession, logoutAction } from "@/domains/auth/actions";
+import { ClientBookingCard } from "@/domains/intake/components/ClientBookingCard";
+import { getClientBookings } from "@/domains/intake/services/getClientBookings";
+
+// Session-derived (CLAUDE.md 5.2): no clientProfileId URL param -- the
+// route-protection proxy already guarantees a valid CLIENT session
+// reached here, getCurrentSession just reads which one.
+export default async function ClientDashboardPage() {
+  const session = await getCurrentSession();
+  const bookings = session?.clientProfileId
+    ? await getClientBookings(session.clientProfileId)
+    : [];
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <header className="sticky top-0 z-10 bg-background">
+        <div className="mx-auto flex w-full max-w-lg items-baseline justify-between px-4 py-3">
+          <span className="text-base font-semibold">Vettr</span>
+          <form action={logoutAction}>
+            <Button type="submit" variant="link" className="h-auto p-0 text-sm">
+              Log out
+            </Button>
+          </form>
+        </div>
+        <Separator />
+      </header>
+      <main className="mx-auto w-full max-w-lg flex-1 px-4 py-4 pb-[env(safe-area-inset-bottom)]">
+        <h1 className="mb-3 text-lg font-semibold">Your bookings</h1>
+        {bookings.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-center">
+            <p className="text-sm font-medium">No bookings yet</p>
+            <p className="text-sm text-muted-foreground">
+              Requests you submit will show up here.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {bookings.map((booking) => (
+              <ClientBookingCard key={booking.id} booking={booking} />
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
