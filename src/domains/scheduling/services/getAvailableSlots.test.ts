@@ -44,6 +44,8 @@ describe("getAvailableSlots", () => {
 
   afterEach(async () => {
     await prisma.intakeRequest.deleteMany({ where: { artistId } });
+    await prisma.artistScheduleOverride.deleteMany({ where: { artistId } });
+    await prisma.artistWeeklyHours.deleteMany({ where: { artistId } });
     await prisma.artist.delete({ where: { id: artistId } });
   });
 
@@ -95,6 +97,32 @@ describe("getAvailableSlots", () => {
       { time: "14:00", available: false },
       { time: "17:30", available: true },
     ]);
+  });
+
+  it("marks a time unavailable when it's outside the artist's operating windows, even if not booked", async () => {
+    const date = "2027-02-07";
+    await prisma.artistScheduleOverride.create({
+      data: { artistId, date: new Date(`${date}T00:00:00`), availableTimes: ["11:00"] },
+    });
+
+    const result = await getAvailableSlots(artistId, date);
+
+    expect(result).toEqual([
+      { time: "11:00", available: true },
+      { time: "14:00", available: false },
+      { time: "17:30", available: false },
+    ]);
+  });
+
+  it("marks every time unavailable on a blackout date, even if not booked", async () => {
+    const date = "2027-02-08";
+    await prisma.artistScheduleOverride.create({
+      data: { artistId, date: new Date(`${date}T00:00:00`), availableTimes: [] },
+    });
+
+    const result = await getAvailableSlots(artistId, date);
+
+    expect(result.every((slot) => !slot.available)).toBe(true);
   });
 
   it("does not let a booking on a different date affect availability", async () => {
