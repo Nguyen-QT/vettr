@@ -1,0 +1,57 @@
+import { prisma } from "@/lib/prisma";
+
+import { DAILY_SLOT_TIME_OPTIONS, MAX_SLOT_DURATION_MINUTES } from "../constants";
+import type { SlotTime } from "../types";
+
+export interface AvailableSlot {
+  time: SlotTime;
+  available: boolean;
+}
+
+function slotWindow(date: string, time: SlotTime): { start: Date; end: Date } {
+  const start = new Date(`${date}T${time}:00`);
+  const end = new Date(start.getTime() + MAX_SLOT_DURATION_MINUTES * 60_000);
+  return { start, end };
+}
+
+function rangesOverlap(
+  aStart: Date,
+  aEnd: Date,
+  bStart: Date,
+  bEnd: Date
+): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+// Read query (CLAUDE.md 4.1j): a fixed daily time is available if no
+// already-BOOKED TimeSlot for this artist overlaps its nominal
+// [time, time + MAX_SLOT_DURATION_MINUTES) window. Duration isn't known
+// yet at intake time -- this is the same nominal per-slot length
+// confirmTimeSlot itself books for a single-slot request, so a time is
+// only ever marked available if a normal one-slot booking there would
+// actually succeed.
+export async function getAvailableSlots(
+  artistId: string,
+  date: string
+): Promise<AvailableSlot[]> {
+  const dayStart = new Date(`${date}T00:00:00`);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60_000);
+
+  const bookedSlots = await prisma.timeSlot.findMany({
+    where: {
+      artistId,
+      status: "BOOKED",
+      startTime: { lt: dayEnd },
+      endTime: { gt: dayStart },
+    },
+    select: { startTime: true, endTime: true },
+  });
+
+  return DAILY_SLOT_TIME_OPTIONS.map((time) => {
+    const window = slotWindow(date, time);
+    const available = !bookedSlots.some((slot) =>
+      rangesOverlap(window.start, window.end, slot.startTime, slot.endTime)
+    );
+    return { time, available };
+  });
+}

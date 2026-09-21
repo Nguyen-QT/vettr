@@ -19,12 +19,9 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  COMPLEXITY_TIERS,
-  DAILY_SLOT_TIME_OPTIONS,
-  OTHER_TAG_VALUE,
-} from "@/domains/intake/constants";
+import { COMPLEXITY_TIERS, OTHER_TAG_VALUE } from "@/domains/intake/constants";
 import { useVisualIntakeForm } from "@/domains/intake/hooks/useVisualIntakeForm";
+import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
 import { DesignReferenceDropzone } from "@/lib/uploadthing-client";
 
 interface VisualIntakeFormProps {

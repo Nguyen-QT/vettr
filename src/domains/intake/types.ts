@@ -4,6 +4,12 @@
 // enforces it at runtime. Kept structurally in sync with constants.ts's
 // runtime arrays and intake.schema.ts's Zod schemas by hand; they are not
 // derived from one another.
+//
+// SlotTime is the one exception to "standalone" above: it's imported
+// from scheduling rather than redefined, since scheduling is the
+// lower-level domain that owns it (intake depends on scheduling, not
+// the other way around) and both domains need the exact same set.
+import type { SlotTime } from "@/domains/scheduling/types";
 
 export type ComplexityTier = "TIER_2" | "TIER_3" | "TIER_4" | "FREESTYLE";
 
@@ -31,10 +37,6 @@ export interface ClientBudgetRange {
   minPrice: number;
   maxPrice: number;
 }
-
-// One of the artist's fixed daily times (CLAUDE.md 4.1e), e.g. 11:00,
-// 14:00, 17:30. Placeholder set -- tune to the actual daily schedule.
-export type SlotTime = "11:00" | "14:00" | "17:30";
 
 // Client-supplied fields only. Artist-controlled state (estimatedPrice,
 // depositPaid, enforcePrecharge, cancellationCount) is set elsewhere and
