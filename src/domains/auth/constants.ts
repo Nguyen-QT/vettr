@@ -36,7 +36,9 @@ export const ACCOUNT_ALREADY_EXISTS_ERROR_MESSAGE =
 // Session row's id, the same opaque cuid loginArtist returns.
 export const SESSION_COOKIE_NAME = "vettr_session";
 
-// Shared by the route-protection proxy (5.1.4, redirect target for an
-// unauthenticated/mismatched request) and logoutAction (5.1.3/5.1.5,
-// where a signed-out artist lands).
+// Shared by the route-protection proxy (5.1.4/5.2.3, redirect target
+// for an unauthenticated/mismatched request) and logoutAction, which
+// picks between the two based on the session's own role (CLAUDE.md
+// 5.2.2) rather than hardcoding one.
 export const ARTIST_LOGIN_PATH = "/artist/login";
+export const CLIENT_LOGIN_PATH = "/client/login";
