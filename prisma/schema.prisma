@@ -43,10 +43,11 @@ model Artist {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  intakeRequests    IntakeRequest[]
-  timeSlots         TimeSlot[]
-  weeklyHours       ArtistWeeklyHours[]
-  scheduleOverrides ArtistScheduleOverride[]
+  intakeRequests      IntakeRequest[]
+  timeSlots           TimeSlot[]
+  weeklyHours         ArtistWeeklyHours[]
+  scheduleOverrides   ArtistScheduleOverride[]
+  tierReferenceImages TierReferenceImage[]
 }
 
 // Recurring weekly availability (CLAUDE.md 4.3). No row for a given
@@ -80,6 +81,24 @@ model ArtistScheduleOverride {
   artistId String
 
   @@unique([artistId, date])
+}
+
+// One artist's own past-work example images, grouped by tier (CLAUDE.md
+// 4.6), shown to clients on the intake form to help them judge which
+// tier fits their idea -- per-artist rather than a shared/generic
+// gallery, since clients are judging this specific artist's style and
+// pricing. Read-only for clients; artist upload/management is a
+// backlog item, so rows are seeded via Prisma Studio for now.
+model TierReferenceImage {
+  id        String         @id @default(cuid())
+  tier      ComplexityTier
+  imageUrl  String
+  createdAt DateTime       @default(now())
+
+  artist   Artist @relation(fields: [artistId], references: [id])
+  artistId String
+
+  @@index([artistId, tier])
 }
 
 // Tracks cancellation history and the resulting precharge flag (CLAUDE.md
