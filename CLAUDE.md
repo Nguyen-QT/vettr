@@ -123,14 +123,14 @@ src/
   - [x] 4.2.1: Data Gateway & Domain Service (`ClientProfile.email` migrated to required; `intake.schema.ts`/`types.ts` tightened to match -- bundled into one PR since the Prisma-generated and Zod-inferred types must tighten together for `actions.ts` to type-check).
   - [x] 4.2.2: View & Route (`VisualIntakeForm.tsx` drops the "(optional)" label and marks email required; e2e spec update).
 
-- [ ] **4.3: Artist Business Hours & Operating Schedule Engine** (Define recurring weekly working hours, blackout days, and custom date overrides so the client slot picker only renders valid operating windows. No config for a given day defaults to fully open, matching today's behavior, until the artist explicitly restricts it), decomposed per the Mandatory Task Breakdown Rule:
+- [x] **4.3: Artist Business Hours & Operating Schedule Engine** (Define recurring weekly working hours, blackout days, and custom date overrides so the client slot picker only renders valid operating windows. No config for a given day defaults to fully open, matching today's behavior, until the artist explicitly restricts it), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 4.3.1: Data Gateway (`ArtistWeeklyHours` and `ArtistScheduleOverride` Prisma models + migration).
   - [x] 4.3.2: Domain Service -- Read (`getOperatingWindows(artistId, date)` in scheduling: override-first, then weekly-hours-row, else default-open, with unit tests).
   - [x] 4.3.3: Domain Service -- Read/Compose (`getAvailableSlots` updated to intersect operating windows with the existing booked-slot check, with unit tests).
   - [x] 4.3.4: Domain Service -- Write (`setWeeklyHours`/`setScheduleOverride` upsert services with validation, with unit tests).
   - [x] 4.3.5: Controller/Action Boundary (server actions wrapping the read/write services for the settings UI).
   - [x] 4.3.6: Domain Hook & Logic (`useArtistScheduleSettings` orchestrating fetch/mutate state).
-  - [ ] 4.3.7: View & Route (artist-facing "Business Hours" settings section on the dashboard -- weekly hours grid + blackout/override date management; e2e spec).
+  - [x] 4.3.7: View & Route (artist-facing "Business Hours" settings section on the dashboard -- weekly hours grid + blackout/override date management; e2e spec).
 
 - [ ] **4.4: Mandatory Estimated Price Validation on Review** (Enforce that artists input an explicit estimatedPrice alongside duration when reviewing/approving an intake request).
 
