@@ -87,3 +87,27 @@ export interface PendingIntakeRequestSummary {
   requestedStartTime: Date | null;
   createdAt: Date;
 }
+
+// Read-shaped projection of an APPROVED IntakeRequest with a future
+// booking, for the artist's upcoming-appointments view (CLAUDE.md 4.5).
+// startTime/endTime span all of the request's booked TimeSlot rows
+// (two, adjacent, for a duration that overflowed one slot) rather than
+// exposing the individual rows -- the artist just needs the overall
+// appointment window here.
+export interface UpcomingAppointmentSummary {
+  id: string;
+  clientInstagramHandle: string;
+  clientEmail: string;
+  clientPhone: string | null;
+  tier: ComplexityTier;
+  // Nullable at the DB level only -- every request that reaches
+  // APPROVED via reviewIntakeRequest/confirmProposedBooking (CLAUDE.md
+  // 4.4) always has one set by the time it gets here.
+  estimatedPrice: number | null;
+  designTags: string[];
+  aestheticTags: string[];
+  clientNotes: string | null;
+  designReferenceImageUrls: string[];
+  startTime: Date;
+  endTime: Date;
+}
