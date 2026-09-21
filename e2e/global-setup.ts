@@ -14,6 +14,7 @@ export interface E2eFixture {
   approveClientHandle: string;
   declineClientHandle: string;
   awaitingConfirmationClientHandle: string;
+  freestylePendingClientHandle: string;
   // Known date/time already BOOKED for this artist (4.1.10.4), so a spec
   // can pick this date and assert that exact time renders disabled.
   bookedSlotDate: string;
@@ -36,15 +37,18 @@ export default async function globalSetup() {
   const approveClientId = randomUUID();
   const declineClientId = randomUUID();
   const awaitingConfirmationClientId = randomUUID();
+  const freestylePendingClientId = randomUUID();
   const bookedSlotClientId = randomUUID();
   const approveRequestId = randomUUID();
   const declineRequestId = randomUUID();
   const awaitingConfirmationRequestId = randomUUID();
+  const freestylePendingRequestId = randomUUID();
   const bookedSlotRequestId = randomUUID();
   const bookedSlotTimeSlotId = randomUUID();
   const approveClientHandle = "e2e_client_approve";
   const declineClientHandle = "e2e_client_decline";
   const awaitingConfirmationClientHandle = "e2e_client_awaiting";
+  const freestylePendingClientHandle = "e2e_client_freestyle";
   const bookedSlotDate = "2099-06-15";
   const bookedSlotTime = "11:00";
 
@@ -56,7 +60,7 @@ export default async function globalSetup() {
 
   await client.query(
     `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
-     VALUES ($1, $2, $3, now()), ($4, $5, $6, now()), ($7, $8, $9, now()), ($10, $11, $12, now())`,
+     VALUES ($1, $2, $3, now()), ($4, $5, $6, now()), ($7, $8, $9, now()), ($10, $11, $12, now()), ($13, $14, $15, now())`,
     [
       approveClientId,
       approveClientHandle,
@@ -70,6 +74,9 @@ export default async function globalSetup() {
       bookedSlotClientId,
       "e2e_client_booked",
       "e2e-client-booked@example.com",
+      freestylePendingClientId,
+      freestylePendingClientHandle,
+      "e2e-client-freestyle@example.com",
     ]
   );
 
@@ -114,6 +121,25 @@ export default async function globalSetup() {
       randomUUID(),
       "https://utfs.io/f/e2e-fixture-decline-reference.jpg",
       declineRequestId,
+    ]
+  );
+
+  // A separate PENDING FREESTYLE request (the awaiting-confirmation one
+  // below is FREESTYLE too, but never renders the duration/price form --
+  // it's already past that step) so a spec can assert the estimated
+  // price input defaults sensibly for FREESTYLE on the review form.
+  const freestylePendingStartTime = new Date("2099-01-03T11:00:00.000Z");
+
+  await client.query(
+    `INSERT INTO "IntakeRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+     VALUES
+       ($1, 'PENDING', $2, $3, 'FREESTYLE', 50, 500, ARRAY[]::text[], ARRAY['watercolor-blend']::text[], $4, now())`,
+    [
+      freestylePendingRequestId,
+      freestylePendingClientId,
+      artistId,
+      freestylePendingStartTime,
     ]
   );
 
@@ -170,17 +196,20 @@ export default async function globalSetup() {
       approveClientId,
       declineClientId,
       awaitingConfirmationClientId,
+      freestylePendingClientId,
       bookedSlotClientId,
     ],
     intakeRequestIds: [
       approveRequestId,
       declineRequestId,
       awaitingConfirmationRequestId,
+      freestylePendingRequestId,
       bookedSlotRequestId,
     ],
     approveClientHandle,
     declineClientHandle,
     awaitingConfirmationClientHandle,
+    freestylePendingClientHandle,
     bookedSlotDate,
     bookedSlotTime,
   };

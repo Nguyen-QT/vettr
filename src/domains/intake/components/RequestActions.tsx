@@ -5,26 +5,44 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { TIER_BASELINE_BUDGETS } from "@/domains/intake/constants";
 import {
   MAX_TOTAL_SERVICE_DURATION_MINUTES,
   MIN_SLOT_DURATION_MINUTES,
 } from "@/domains/scheduling/constants";
 import { useRequestActions } from "@/domains/intake/hooks/useRequestActions";
-import type { ActionableRequestStatus } from "@/domains/intake/types";
+import type { ActionableRequestStatus, ComplexityTier } from "@/domains/intake/types";
 
 interface RequestActionsProps {
   intakeRequestId: string;
   status: ActionableRequestStatus;
+  tier: ComplexityTier;
+}
+
+// A FREESTYLE client's own budget is often an overestimate of what the
+// artist will actually charge -- they may simplify or add complexity
+// to the design once they've seen the reference images. TIER_2's
+// baseline minimum is a reasonable low starting point for the artist
+// to adjust from, rather than defaulting to 0.
+function defaultEstimatedPrice(tier: ComplexityTier): number {
+  return tier === "FREESTYLE" ? TIER_BASELINE_BUDGETS.TIER_2.minPrice : 0;
 }
 
 // Pure view (CLAUDE.md): renders whatever useRequestActions reports, makes
 // no decisions of its own beyond which control set the request's status
 // calls for — the hook owns all review/confirm/decline state.
-export function RequestActions({ intakeRequestId, status }: RequestActionsProps) {
+export function RequestActions({
+  intakeRequestId,
+  status,
+  tier,
+}: RequestActionsProps) {
   const { review, confirmBooking, decline, isPending, responseMessage, error } =
     useRequestActions(intakeRequestId);
   const [copied, setCopied] = useState(false);
   const [durationMinutes, setDurationMinutes] = useState(MIN_SLOT_DURATION_MINUTES);
+  const [estimatedPrice, setEstimatedPrice] = useState(() =>
+    defaultEstimatedPrice(tier)
+  );
 
   async function handleCopy() {
     if (!responseMessage) return;
@@ -83,11 +101,24 @@ export function RequestActions({ intakeRequestId, status }: RequestActionsProps)
           onChange={(event) => setDurationMinutes(Number(event.target.value))}
         />
       </Field>
+      <Field>
+        <FieldLabel htmlFor={`estimated-price-${intakeRequestId}`}>
+          Estimated price (£)
+        </FieldLabel>
+        <Input
+          id={`estimated-price-${intakeRequestId}`}
+          type="number"
+          min={0}
+          step="0.01"
+          value={estimatedPrice}
+          onChange={(event) => setEstimatedPrice(Number(event.target.value))}
+        />
+      </Field>
       <div className="flex gap-2">
         <Button
           type="button"
           disabled={isPending}
-          onClick={() => review(durationMinutes)}
+          onClick={() => review(durationMinutes, estimatedPrice)}
         >
           Approve
         </Button>

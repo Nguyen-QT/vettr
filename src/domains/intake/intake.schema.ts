@@ -28,10 +28,10 @@ export function combineRequestedDateAndTime(
   return new Date(`${requestedDate}T${requestedTime}:00`);
 }
 
-// Structural validity only for the artist's review step (4.1h) -- see
-// services/reviewIntakeRequest.ts for the domain logic that decides what
-// happens with a valid duration. Shares scheduling's bounds constants
-// rather than redefining them.
+// Structural validity only for the artist's review step (4.1h/4.4) --
+// see services/reviewIntakeRequest.ts for the domain logic that
+// decides what happens with a valid duration/price. Shares
+// scheduling's bounds constants rather than redefining them.
 export const reviewIntakeRequestInputSchema = z.object({
   durationMinutes: z
     .number()
@@ -44,6 +44,7 @@ export const reviewIntakeRequestInputSchema = z.object({
       MAX_TOTAL_SERVICE_DURATION_MINUTES,
       `The service duration cannot exceed ${MAX_TOTAL_SERVICE_DURATION_MINUTES} minutes.`
     ),
+  estimatedPrice: z.number().positive("Enter an estimated price."),
 });
 
 export const instagramHandleSchema = z

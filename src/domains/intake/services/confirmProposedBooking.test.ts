@@ -57,6 +57,7 @@ describe("confirmProposedBooking", () => {
     const proposal = await reviewIntakeRequest({
       intakeRequestId,
       durationMinutes: 300, // spills into a second slot
+      estimatedPrice: 400,
     });
     expect(proposal.success).toBe(true);
     if (!proposal.success) return;
@@ -103,6 +104,7 @@ describe("confirmProposedBooking", () => {
     const proposal = await reviewIntakeRequest({
       intakeRequestId,
       durationMinutes: 300,
+      estimatedPrice: 400,
     });
     expect(proposal.success).toBe(true);
 
@@ -113,6 +115,7 @@ describe("confirmProposedBooking", () => {
     const otherBooking = await reviewIntakeRequest({
       intakeRequestId: otherRequestId,
       durationMinutes: 60,
+      estimatedPrice: 100,
     });
     expect(otherBooking.success).toBe(true);
 

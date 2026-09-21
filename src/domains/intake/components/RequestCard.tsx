@@ -77,7 +77,11 @@ export function RequestCard({ request }: RequestCardProps) {
       ) : null}
 
       <Separator />
-      <RequestActions intakeRequestId={request.id} status={request.status} />
+      <RequestActions
+        intakeRequestId={request.id}
+        status={request.status}
+        tier={request.tier}
+      />
     </article>
   );
 }

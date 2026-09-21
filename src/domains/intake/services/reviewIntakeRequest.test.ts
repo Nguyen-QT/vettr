@@ -63,6 +63,7 @@ describe("reviewIntakeRequest", () => {
     const result = await reviewIntakeRequest({
       intakeRequestId,
       durationMinutes: 90,
+      estimatedPrice: 150,
     });
 
     expect(result.success).toBe(true);
@@ -73,6 +74,7 @@ describe("reviewIntakeRequest", () => {
       where: { id: intakeRequestId },
     });
     expect(request.status).toBe("APPROVED");
+    expect(request.estimatedPrice?.toNumber()).toBe(150);
 
     const slots = await prisma.timeSlot.findMany({
       where: { intakeRequestId },
@@ -89,6 +91,7 @@ describe("reviewIntakeRequest", () => {
     const result = await reviewIntakeRequest({
       intakeRequestId,
       durationMinutes: 300, // exceeds the 180-minute per-slot max
+      estimatedPrice: 400,
     });
 
     expect(result.success).toBe(true);
@@ -100,6 +103,7 @@ describe("reviewIntakeRequest", () => {
     });
     expect(request.status).toBe("AWAITING_SLOT_CONFIRMATION");
     expect(request.proposedDurationMinutes).toBe(300);
+    expect(request.estimatedPrice?.toNumber()).toBe(400);
 
     // No allocation yet -- that's confirmProposedBooking's job (4.1g).
     const slots = await prisma.timeSlot.findMany({
@@ -112,6 +116,7 @@ describe("reviewIntakeRequest", () => {
     const result = await reviewIntakeRequest({
       intakeRequestId: randomUUID(),
       durationMinutes: 60,
+      estimatedPrice: 100,
     });
 
     expect(result.success).toBe(false);
@@ -123,6 +128,7 @@ describe("reviewIntakeRequest", () => {
     const result = await reviewIntakeRequest({
       intakeRequestId,
       durationMinutes: 60,
+      estimatedPrice: 100,
     });
 
     expect(result.success).toBe(false);
@@ -135,6 +141,7 @@ describe("reviewIntakeRequest", () => {
     await reviewIntakeRequest({
       intakeRequestId: bookedRequestId,
       durationMinutes: 60,
+      estimatedPrice: 100,
     });
 
     const conflictingRequestId = await createIntakeRequest(
@@ -143,6 +150,7 @@ describe("reviewIntakeRequest", () => {
     const result = await reviewIntakeRequest({
       intakeRequestId: conflictingRequestId,
       durationMinutes: 60,
+      estimatedPrice: 100,
     });
 
     expect(result.success).toBe(false);
