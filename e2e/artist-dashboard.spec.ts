@@ -21,6 +21,7 @@ test.describe("artist dashboard approve/decline", () => {
 
     await expect(card.getByText("e2e-client-approve@example.com")).toBeVisible();
 
+    await card.getByLabel("Estimated price (£)").fill("150");
     await card.getByRole("button", { name: "Approve" }).click();
 
     await expect(card.getByText(/approved/i)).toBeVisible();
@@ -41,6 +42,19 @@ test.describe("artist dashboard approve/decline", () => {
     await expect(
       card.getByRole("button", { name: /Copy message/ })
     ).toBeVisible();
+  });
+
+  test("defaults the estimated price to TIER_2's minimum for a FREESTYLE request", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+
+    await page.goto(`/artist/${fixture.artistId}`);
+    const card = page.locator("article", {
+      hasText: fixture.freestylePendingClientHandle,
+    });
+
+    await expect(card.getByLabel("Estimated price (£)")).toHaveValue("50");
   });
 
   test("confirming a proposed double-slot booking shows the approval message", async ({

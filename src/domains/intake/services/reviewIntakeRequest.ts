@@ -11,6 +11,7 @@ import { generateResponseMessage } from "./generateResponseMessage";
 export interface ReviewIntakeRequestInput {
   intakeRequestId: string;
   durationMinutes: number;
+  estimatedPrice: number;
 }
 
 export type ReviewIntakeRequestResult =
@@ -55,6 +56,7 @@ export async function reviewIntakeRequest(
       data: {
         status: "AWAITING_SLOT_CONFIRMATION",
         proposedDurationMinutes: input.durationMinutes,
+        estimatedPrice: input.estimatedPrice,
       },
     });
 
@@ -75,7 +77,7 @@ export async function reviewIntakeRequest(
       });
       await tx.intakeRequest.update({
         where: { id: request.id },
-        data: { status: "APPROVED" },
+        data: { status: "APPROVED", estimatedPrice: input.estimatedPrice },
       });
     });
   } catch (error) {

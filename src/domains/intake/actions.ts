@@ -128,13 +128,14 @@ export async function reviewIntakeRequestAction(
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid duration.",
+      error: parsed.error.issues[0]?.message ?? "Invalid duration or price.",
     };
   }
 
   return reviewIntakeRequest({
     intakeRequestId,
     durationMinutes: parsed.data.durationMinutes,
+    estimatedPrice: parsed.data.estimatedPrice,
   });
 }
 

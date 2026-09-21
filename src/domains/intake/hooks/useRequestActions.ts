@@ -21,11 +21,12 @@ export function useRequestActions(intakeRequestId: string) {
   const [responseMessage, setResponseMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function review(durationMinutes: number) {
+  function review(durationMinutes: number, estimatedPrice: number) {
     setError(null);
     startTransition(async () => {
       const result = await reviewIntakeRequestAction(intakeRequestId, {
         durationMinutes,
+        estimatedPrice,
       });
       if (!result.success) {
         setError(result.error);
