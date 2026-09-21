@@ -7,11 +7,11 @@ import { useForm } from "react-hook-form";
 import { submitIntakeRequest } from "@/domains/intake/actions";
 import {
   AESTHETIC_TAG_OPTIONS,
-  DAILY_SLOT_TIME_OPTIONS,
   DESIGN_TAG_OPTIONS,
   TIER_BASELINE_BUDGETS,
 } from "@/domains/intake/constants";
 import { clientIntakeInputSchema } from "@/domains/intake/intake.schema";
+import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
 
 interface UseVisualIntakeFormArgs {
   artistId: string;

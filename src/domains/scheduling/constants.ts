@@ -1,3 +1,10 @@
+// Placeholder set -- tune to the artist's actual daily schedule. Kept
+// structurally in sync with types.ts's SlotTime union by hand. Moved
+// here from intake in 4.1j since getAvailableSlots needs it too, and
+// scheduling is the lower-level domain (intake depends on it, not
+// vice versa).
+export const DAILY_SLOT_TIME_OPTIONS = ["11:00", "14:00", "17:30"] as const;
+
 // Placeholder bounds — tune to the actual booking model. Length of a
 // single bookable TimeSlot row, not the total service duration.
 export const MIN_SLOT_DURATION_MINUTES = 60;

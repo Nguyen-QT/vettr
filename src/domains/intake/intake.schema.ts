@@ -1,21 +1,21 @@
 import { z } from "zod";
 
 import {
+  DAILY_SLOT_TIME_OPTIONS,
   MAX_TOTAL_SERVICE_DURATION_MINUTES,
   MIN_SLOT_DURATION_MINUTES,
 } from "@/domains/scheduling/constants";
+import type { SlotTime } from "@/domains/scheduling/types";
 
 import {
   AESTHETIC_TAG_OPTIONS,
   COMPLEXITY_TIERS,
-  DAILY_SLOT_TIME_OPTIONS,
   DESIGN_TAG_OPTIONS,
   INSTAGRAM_HANDLE_REGEX,
   MAX_DESIGN_REFERENCE_IMAGES,
   MIN_DESIGN_REFERENCE_IMAGES,
   OTHER_TAG_VALUE,
 } from "./constants";
-import type { SlotTime } from "./types";
 
 // Combines the form's separate date/time-of-day fields into the single
 // Date IntakeRequest.requestedStartTime actually stores. Local-time
