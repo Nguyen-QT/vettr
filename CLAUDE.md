@@ -141,10 +141,10 @@ src/
   - [x] 4.5.1: Domain Service (`getUpcomingAppointments(artistId)` in intake -- `APPROVED` requests with a future-dated `TimeSlot`, joined with client/design references/estimatedPrice; unit tests).
   - [x] 4.5.2: View & Route (new `/artist/[artistId]/appointments` page + a read-only `AppointmentCard`; nav link; e2e spec).
 
-- [ ] **4.6: Tiered Reference Gallery** (Show clients example reference images grouped by COMPLEXITY_TIERS to help them choose a tier while filling out the intake form. Per-artist -- clients are judging that specific artist's style/pricing, not a generic gallery. Read-only for clients; artist upload/management UI is a backlog item), decomposed per the Mandatory Task Breakdown Rule:
+- [x] **4.6: Tiered Reference Gallery** (Show clients example reference images grouped by COMPLEXITY_TIERS to help them choose a tier while filling out the intake form. Per-artist -- clients are judging that specific artist's style/pricing, not a generic gallery. Read-only for clients; artist upload/management UI is a backlog item), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 4.6.1: Data Gateway (`TierReferenceImage` Prisma model: `artistId`, `tier`, `imageUrl` + migration).
   - [x] 4.6.2: Domain Service (`getTierReferenceImages(artistId)` in intake, grouped by tier; unit tests).
-  - [ ] 4.6.3: View & Route (fetched server-side in `/book/[artistId]/page.tsx`, passed to `VisualIntakeForm`, showing example images for whichever tier is currently selected; e2e spec).
+  - [x] 4.6.3: View & Route (fetched server-side in `/book/[artistId]/page.tsx`, passed to `VisualIntakeForm`, showing example images for whichever tier is currently selected; e2e spec).
 
 ### 📦 Phase 5: Client Portal, Rescheduling & Lifecycle Management
 - [ ] **5.1: Client Dashboard & Booking Status Lookup** (Build a token/magic-link authenticated client dashboard for viewing booking statuses, request details, and slot confirmation states).
