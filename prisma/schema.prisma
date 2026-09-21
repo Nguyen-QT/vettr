@@ -35,6 +35,45 @@ enum ComplexityTier {
   FREESTYLE
 }
 
+enum AccountRole {
+  ARTIST
+  CLIENT
+}
+
+// Shared login identity for both roles (CLAUDE.md 5.1/5.2) -- one auth
+// codepath regardless of whether the account is an artist or a client.
+// Exactly one of artistId/clientProfileId is set, matching role; that
+// pairing is an application-level rule (see the auth domain service),
+// not something this schema itself enforces.
+model Account {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  role         AccountRole
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  artist   Artist? @relation(fields: [artistId], references: [id])
+  artistId String? @unique
+
+  clientProfile   ClientProfile? @relation(fields: [clientProfileId], references: [id])
+  clientProfileId String?        @unique
+
+  sessions Session[]
+}
+
+// DB-backed so a session can actually be revoked (logout, or a future
+// "sign out everywhere") rather than just expiring client-side, unlike
+// a bare signed JWT.
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+}
+
 model Artist {
   id              String   @id @default(cuid())
   name            String
@@ -43,6 +82,7 @@ model Artist {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  account             Account?
   intakeRequests      IntakeRequest[]
   timeSlots           TimeSlot[]
   weeklyHours         ArtistWeeklyHours[]
@@ -114,6 +154,7 @@ model ClientProfile {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  account        Account?
   intakeRequests IntakeRequest[]
 }
 
