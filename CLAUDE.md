@@ -137,7 +137,11 @@ src/
   - [ ] 4.4.2: Domain Hook & Logic (`useRequestActions.review()` signature extended to accept `estimatedPrice`).
   - [ ] 4.4.3: View & Route (`RequestActions.tsx` adds an estimated-price input alongside duration; e2e spec update).
 
-- [ ] **4.5: Tiered Reference Gallery** (Show clients example reference images grouped by COMPLEXITY_TIERS to help them choose a tier while filling out the intake form).
+- [ ] **4.5: Artist Upcoming Appointments Dashboard** (A new read-only view of `APPROVED` requests with a future-dated `TimeSlot`, so an approved request doesn't just vanish from the artist's view on the next reload -- it moves to an upcoming-appointments view instead. No new schema needed), decomposed per the Mandatory Task Breakdown Rule:
+  - [ ] 4.5.1: Domain Service (`getUpcomingAppointments(artistId)` in intake -- `APPROVED` requests with a future-dated `TimeSlot`, joined with client/design references/estimatedPrice; unit tests).
+  - [ ] 4.5.2: View & Route (new `/artist/[artistId]/appointments` page + a read-only `AppointmentCard`; nav link; e2e spec).
+
+- [ ] **4.6: Tiered Reference Gallery** (Show clients example reference images grouped by COMPLEXITY_TIERS to help them choose a tier while filling out the intake form).
 
 ### 📦 Phase 5: Client Portal, Rescheduling & Lifecycle Management
 - [ ] **5.1: Client Dashboard & Booking Status Lookup** (Build a token/magic-link authenticated client dashboard for viewing booking statuses, request details, and slot confirmation states).
