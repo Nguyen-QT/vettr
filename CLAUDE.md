@@ -120,7 +120,7 @@ src/
     - [x] **4.1.10.4: View & Route** (disable already-booked time options in the intake form; e2e spec update).
 
 - [ ] **4.2: Mandatory Email Capture & Validation** (Enforce required email address input in client intake schemas, forms, and backend handlers to ensure deliverability of booking confirmation and magic link tokens), decomposed per the Mandatory Task Breakdown Rule:
-  - [ ] 4.2.1: Data Gateway & Domain Service (`ClientProfile.email` migrated to required; `intake.schema.ts`/`types.ts` tightened to match -- bundled into one PR since the Prisma-generated and Zod-inferred types must tighten together for `actions.ts` to type-check).
+  - [x] 4.2.1: Data Gateway & Domain Service (`ClientProfile.email` migrated to required; `intake.schema.ts`/`types.ts` tightened to match -- bundled into one PR since the Prisma-generated and Zod-inferred types must tighten together for `actions.ts` to type-check).
   - [ ] 4.2.2: View & Route (`VisualIntakeForm.tsx` drops the "(optional)" label and marks email required; e2e spec update).
 
 - [ ] **4.3: Artist Business Hours & Operating Schedule Engine** (Define recurring weekly working hours, blackout days, and custom date overrides so the client slot picker only renders valid operating windows).
