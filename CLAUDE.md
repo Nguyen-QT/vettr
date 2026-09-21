@@ -99,7 +99,7 @@ src/
   - [x] 4.1i: Artist Dashboard UI (duration input on approve, the two outcome messages, and a "Confirm Booking" control for awaiting-confirmation requests).
   - [ ] 4.1j: Live Slot Availability (client's date/time picker reflects real availability instead of any date being pickable -- deliberately sequenced after 4.1f-i so the core approve/confirm mechanics ship first), decomposed per the Mandatory Task Breakdown Rule:
     - [x] 4.1j-a: Domain Service (`getAvailableSlots(artistId, date)` in scheduling -- a fixed daily time is available if no `BOOKED` `TimeSlot` overlaps its `[time, time + MAX_SLOT_DURATION_MINUTES)` nominal window, with unit tests).
-    - [ ] 4.1j-b: Controller/Action Boundary (`getAvailableSlotsAction`).
+    - [x] 4.1j-b: Controller/Action Boundary (`getAvailableSlotsAction`).
     - [ ] 4.1j-c: Domain Hook & Logic (`useVisualIntakeForm` fetches availability whenever the picked date changes).
     - [ ] 4.1j-d: View & Route (disable already-booked time options in the intake form; e2e spec update).
 - [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
