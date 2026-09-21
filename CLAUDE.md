@@ -147,7 +147,11 @@ src/
   - [x] 4.6.3: View & Route (fetched server-side in `/book/[artistId]/page.tsx`, passed to `VisualIntakeForm`, showing example images for whichever tier is currently selected; e2e spec).
 
 ### 📦 Phase 5: Client Portal, Rescheduling & Lifecycle Management
-- [ ] **5.1: Client Dashboard & Booking Status Lookup** (Build a token/magic-link authenticated client dashboard for viewing booking statuses, request details, and slot confirmation states).
+- [ ] **5.1: Client Dashboard & Booking Status Lookup** (Build a token/magic-link authenticated client dashboard for viewing booking statuses, request details, and slot confirmation states. Scoped as a per-request access token -- one shareable link per submitted request, shown on the confirmation screen -- rather than a full client account system, since there's no email-sending infrastructure yet to deliver a link out-of-band), decomposed per the Mandatory Task Breakdown Rule:
+  - [ ] 5.1.1: Data Gateway (`IntakeRequest.accessToken` unique field + migration).
+  - [ ] 5.1.2: Domain Service (`getIntakeRequestStatus(accessToken)` in intake -- status, tier, images, tags, notes, estimated price, and appointment time once `APPROVED`, for a valid token, or `null`; unit tests).
+  - [ ] 5.1.3: Controller/Action (`submitIntakeRequest`'s result extended to include `accessToken`).
+  - [ ] 5.1.4: View & Route (new public `/status/[accessToken]` page; `VisualIntakeForm`'s post-submit confirmation screen shows/links the URL; e2e spec).
 
 - [ ] **5.2: Self-Service Booking Modification & Cancellation** (Allow clients to update pending request details or cancel pending/confirmed requests within policy windows via the Client Dashboard).
 
