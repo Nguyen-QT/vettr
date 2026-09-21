@@ -14,6 +14,7 @@ import { getSessionWithAccount } from "./services/getSessionWithAccount";
 import { loginArtist } from "./services/loginArtist";
 import { loginClient } from "./services/loginClient";
 import { signupClient } from "./services/signupClient";
+import type { SessionWithAccount } from "./types";
 
 // Never includes the raw sessionId -- that only ever lives in the
 // httpOnly cookie set below, not in anything sent back to client code.
@@ -127,4 +128,16 @@ export async function logoutAction(): Promise<void> {
 
   cookieStore.delete(SESSION_COOKIE_NAME);
   redirect(session?.role === "CLIENT" ? CLIENT_LOGIN_PATH : ARTIST_LOGIN_PATH);
+}
+
+// Controller/Action boundary (CLAUDE.md 5.2.4): reads the session
+// cookie server-side for a page/layout to use -- the client dashboard
+// is session-derived (/client, no clientProfileId URL param), so this
+// is how it finds out which client is asking. The route-protection
+// proxy already guarantees a valid CLIENT session reached this far;
+// this just hands that session's details to the page itself.
+export async function getCurrentSession(): Promise<SessionWithAccount | null> {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  return sessionId ? getSessionWithAccount(sessionId) : null;
 }

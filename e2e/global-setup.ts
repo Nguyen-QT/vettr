@@ -40,6 +40,17 @@ export interface E2eFixture {
   // they don't all have to re-drive the login UI just to reach a
   // protected route.
   authenticatedSessionId: string;
+  // Real credentials for a pre-provisioned client Account (CLAUDE.md
+  // 5.2.4), mirroring artistLoginEmail/Password above -- this
+  // ClientProfile has its own booking so the login spec can assert the
+  // dashboard shows it.
+  clientLoginEmail: string;
+  clientLoginPassword: string;
+  // An existing ClientProfile's email with no Account linked yet, for
+  // the signup spec to exercise the real signupClient check against --
+  // reuses freestylePendingClientId, which nothing else ever links an
+  // Account to.
+  clientSignupEmail: string;
 }
 
 // Seeds one throwaway Artist with three IntakeRequests -- two PENDING
@@ -66,6 +77,8 @@ export default async function globalSetup() {
   const freestylePendingRequestId = randomUUID();
   const bookedSlotRequestId = randomUUID();
   const bookedSlotTimeSlotId = randomUUID();
+  const clientLoginProfileId = randomUUID();
+  const clientLoginRequestId = randomUUID();
   const approveClientHandle = "e2e_client_approve";
   const declineClientHandle = "e2e_client_decline";
   const awaitingConfirmationClientHandle = "e2e_client_awaiting";
@@ -246,6 +259,38 @@ export default async function globalSetup() {
     [authenticatedSessionId, sessionExpiresAt, artistAccountId]
   );
 
+  // A dedicated ClientProfile + Account for the client login spec
+  // (5.2.4), with its own booking so the dashboard has something to
+  // show once logged in.
+  const clientLoginEmail = "e2e-client-login@example.com";
+  const clientLoginPassword = "e2e-test-password-123";
+  const clientSignupEmail = "e2e-client-freestyle@example.com";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [clientLoginProfileId, "e2e_client_login", clientLoginEmail]
+  );
+
+  await client.query(
+    `INSERT INTO "IntakeRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "updatedAt")
+     VALUES
+       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], now())`,
+    [clientLoginRequestId, clientLoginProfileId, artistId]
+  );
+
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
+     VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
+    [
+      randomUUID(),
+      clientLoginEmail,
+      hashPasswordForFixture(clientLoginPassword),
+      clientLoginProfileId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -256,6 +301,7 @@ export default async function globalSetup() {
       awaitingConfirmationClientId,
       freestylePendingClientId,
       bookedSlotClientId,
+      clientLoginProfileId,
     ],
     intakeRequestIds: [
       approveRequestId,
@@ -263,6 +309,7 @@ export default async function globalSetup() {
       awaitingConfirmationRequestId,
       freestylePendingRequestId,
       bookedSlotRequestId,
+      clientLoginRequestId,
     ],
     approveClientHandle,
     declineClientHandle,
@@ -274,6 +321,9 @@ export default async function globalSetup() {
     artistLoginEmail,
     artistLoginPassword,
     authenticatedSessionId,
+    clientLoginEmail,
+    clientLoginPassword,
+    clientSignupEmail,
   };
 
   await writeFile(FIXTURE_PATH, JSON.stringify(fixture, null, 2));
