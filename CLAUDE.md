@@ -69,13 +69,18 @@ src/
 
 ### 📦 Phase 1: Database Foundation & Domain Mapping
 - [x] 1.1: Initialize PostgreSQL schema via Prisma.
+
 - [x] 1.2: Setup core entity relationships (`Artist`, `ClientProfile`, `IntakeRequest`, `TimeSlot`).
 
 ### 📦 Phase 2: Core Intake Engine & Visual Guardrails
 - [x] **2.1: Client Input Validation Layers** (Build Zod schemas for validation, including strict Instagram handle regex and image string array boundaries).
+
 - [x] **2.2: UploadThing Backend Integration** (Configure the UploadThing backend API route handlers and initial server endpoint configurations).
+
 - [x] **2.3: Pure Business Logic Core** (Write `services/validateComplexity.ts` to inspect incoming fields, flag empty sets, and hook up unit tests).
+
 - [x] **2.4: React Server Action Layer** (Build `actions.ts` to intake user submissions, pipe to domain services, and save a PENDING record in Prisma).
+
 - [x] **2.5: Visual Intake Form Component** (Construct the frontend `VisualIntakeForm.tsx` using Shadcn primitives, linking directly to the server action), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 2.5.1: UI Primitive & Config Setup (Shadcn init/primitives, UploadThing client helper, image config).
   - [x] 2.5.2: Domain Hook & Logic (`useVisualIntakeForm` state/validation orchestration).
@@ -83,36 +88,72 @@ src/
 
 ### 📦 Phase 3: Artist Decision Dashboard
 - [x] **3.1: Dashboard Layout Scaffold** (Build basic layout wrapper with authentic mobile-first rendering tailored for working artists).
+
 - [x] **3.2: Interactive Review Cards** (Build component that accepts intake data and renders 1-click Instagram deep links and reference images).
+
 - [x] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
 
 ### 📦 Phase 4: Concurrency Rules & Financial Logic ◄ CURRENT FOCUS
 - [x] **4.1: Reservation Lock-In Timers & Slot Confirmation UI** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently, then wire that confirmation into the artist dashboard. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now), decomposed per the Mandatory Task Breakdown Rule:
-  - [x] 4.1.1: Scheduling Domain Scaffold (`constants.ts`/`types.ts`/`scheduling.schema.ts` + the `TimeSlot` overlap-exclusion constraint).
-  - [x] 4.1.2: `confirmTimeSlot` Domain Service (concurrency-safe slot allocation, with unit tests covering race conditions and double-booking).
-  - [x] 4.1.3: Server Action Boundary (`confirmTimeSlotAction`).
-  - [x] 4.1.4: Data Gateway (`IntakeRequest.requestedStartTime`, `IntakeRequest.proposedDurationMinutes`, and a new `RequestStatus.AWAITING_SLOT_CONFIRMATION` value).
-  - [x] 4.1.5: Intake Capture (client picks a date + one of the artist's fixed daily times (11:00/14:00/17:30) on the intake form; saved as `requestedStartTime`).
-  - [x] 4.1.6: Review/Propose Domain Service (artist enters a duration; a single-slot fit atomically books + approves, a two-slot spillover stores the proposal and moves to `AWAITING_SLOT_CONFIRMATION` instead of booking, since that case needs off-platform confirmation with the client first).
-  - [x] 4.1.7: Confirm-Proposed-Booking Domain Service (finalizes an `AWAITING_SLOT_CONFIRMATION` request once the artist has confirmed the double-slot booking with the client off-platform).
-  - [x] 4.1.8: Controller/Action Boundary (server actions for the review step and the confirm-booking step).
-  - [x] 4.1.9: Artist Dashboard UI (duration input on approve, the two outcome messages, and a "Confirm Booking" control for awaiting-confirmation requests).
-  - [x] 4.1.10: Live Slot Availability (client's date/time picker reflects real availability instead of any date being pickable -- deliberately sequenced after 4.1.6-4.1.9 so the core approve/confirm mechanics ship first), decomposed per the Mandatory Task Breakdown Rule:
-    - [x] 4.1.10.1: Domain Service (`getAvailableSlots(artistId, date)` in scheduling -- a fixed daily time is available if no `BOOKED` `TimeSlot` overlaps its `[time, time + MAX_SLOT_DURATION_MINUTES)` nominal window, with unit tests).
-    - [x] 4.1.10.2: Controller/Action Boundary (`getAvailableSlotsAction`).
-    - [x] 4.1.10.3: Domain Hook & Logic (`useVisualIntakeForm` fetches availability whenever the picked date changes).
-    - [x] 4.1.10.4: View & Route (disable already-booked time options in the intake form; e2e spec update).
-- [ ] **4.2: Day-of Bill Modifiers** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
-- [ ] **4.3: Upfront Cancellation Precharge Engine** (Build middleware check that references `ClientProfile` cancellation offenses and forces a 50% upfront deposit route).
+  - [x] **4.1.1: Scheduling Domain Scaffold** (`constants.ts`/`types.ts`/`scheduling.schema.ts` + the `TimeSlot` overlap-exclusion constraint).
+  
+  - [x] **4.1.2: `confirmTimeSlot` Domain Service** (concurrency-safe slot allocation, with unit tests covering race conditions and double-booking).
+
+  - [x] **4.1.3: Server Action Boundary** (`confirmTimeSlotAction`).
+
+  - [x] **4.1.4: Data Gateway** (`IntakeRequest.requestedStartTime`, `IntakeRequest.proposedDurationMinutes`, and a new `RequestStatus.AWAITING_SLOT_CONFIRMATION` value).
+  
+  - [x] **4.1.5: Intake Capture** (client picks a date + one of the artist's fixed daily times (11:00/14:00/17:30) on the intake form; saved as `requestedStartTime`).
+  
+  - [x] **4.1.6: Review/Propose Domain Service** (artist enters a duration; a single-slot fit atomically books + approves, a two-slot spillover stores the proposal and moves to `AWAITING_SLOT_CONFIRMATION` instead of booking, since that case needs off-platform confirmation with the client first).
+  
+  - [x] **4.1.7: Confirm-Proposed-Booking Domain Service** (finalizes an `AWAITING_SLOT_CONFIRMATION` request once the artist has confirmed the double-slot booking with the client off-platform).
+  
+  - [x] **4.1.8: Controller/Action Boundary** (server actions for the review step and the confirm-booking step).
+  
+  - [x] **4.1.9: Artist Dashboard UI** (duration input on approve, the two outcome messages, and a "Confirm Booking" control for awaiting-confirmation requests).
+  
+  - [x] **4.1.10: Live Slot Availability** (client's date/time picker reflects real availability instead of any date being pickable -- deliberately sequenced after 4.1.6-4.1.9 so the core approve/confirm mechanics ship first), decomposed per the Mandatory Task Breakdown Rule:
+    - [x] **4.1.10.1: Domain Service** (`getAvailableSlots(artistId, date)` in scheduling -- a fixed daily time is available if no `BOOKED` `TimeSlot` overlaps its `[time, time + MAX_SLOT_DURATION_MINUTES)` nominal window, with unit tests).
+    - [x] **4.1.10.2: Controller/Action Boundary** (`getAvailableSlotsAction`).
+    - [x] **4.1.10.3: Domain Hook & Logic** (`useVisualIntakeForm` fetches availability whenever the picked date changes).
+    - [x] **4.1.10.4: View & Route** (disable already-booked time options in the intake form; e2e spec update).
+
+- [ ] **4.2: Mandatory Email Capture & Validation** (Enforce required email address input in client intake schemas, forms, and backend handlers to ensure deliverability of booking confirmation and magic link tokens).
+
+- [ ] **4.3: Artist Business Hours & Operating Schedule Engine** (Define recurring weekly working hours, blackout days, and custom date overrides so the client slot picker only renders valid operating windows).
+
+- [ ] **4.4: Mandatory Estimated Price Validation on Review** (Enforce that artists input an explicit estimatedPrice alongside duration when reviewing/approving an intake request).
+
+- [ ] **4.5: Tiered Reference Gallery** (Show clients example reference images grouped by COMPLEXITY_TIERS to help them choose a tier while filling out the intake form).
+
+### 📦 Phase 5: Client Portal, Rescheduling & Lifecycle Management
+- [ ] **5.1: Client Dashboard & Booking Status Lookup** (Build a token/magic-link authenticated client dashboard for viewing booking statuses, request details, and slot confirmation states).
+
+- [ ] **5.2: Self-Service Booking Modification & Cancellation** (Allow clients to update pending request details or cancel pending/confirmed requests within policy windows via the Client Dashboard).
+
+- [ ] **5.3: Rescheduling & Slot Shift Engine** (Build domain logic allowing artists or clients to propose alternative time slots, update allocations, and handle confirmation workflows).
+
+- [ ] **5.4: Cancellation & No-Show Lifecycle Management** (Implement status transitions for COMPLETED, CANCELLED_BY_CLIENT, CANCELLED_BY_ARTIST, and NO_SHOW, updating ClientProfile cancellation offenses).
+
+### 📦 Phase 6: Financial Engine, Payments & Policy Enforcement
+- [ ] **6.1: Deposit Payment Gateway Integration** (Integrate Stripe PaymentIntents/Checkout to collect required deposits upon request approval or slot lock-in).
+
+- [ ] **6.2: Deposit Forfeiture & Refund Rules Engine** (Build business logic for automatic deposit retention vs. refund calculations based on cancellation timing and policies).
+
+- [ ] **6.3: Upfront Cancellation Precharge Engine** (Build middleware check referencing ClientProfile cancellation offenses to force a 50% upfront deposit route for flagged clients).
+
+- [ ] **6.4: Day-of Bill Modifiers & Final Checkout** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 
 ### 🗂️ Backlog (unscoped, no priority order)
 Captured for future scoping into numbered roadmap items — not yet broken down per the Mandatory Task Breakdown Rule, and not committed to a specific phase.
-- Client Dashboard: a client-facing view of their own bookings (confirmed, in review, awaiting slot confirmation, etc.).
-- Tiered Reference Gallery: show clients example reference images grouped by `COMPLEXITY_TIERS` to help them choose a tier while filling out the intake form.
-- Mandatory Estimated Price on Review: artist must provide an `estimatedPrice` as part of reviewing/approving a request (currently only duration is required).
-- Optional Client Max End Time: let clients optionally flag a hard end-time constraint (e.g. "must be done by X") on intake, for the artist to weigh when deciding duration/slot count.
-- Mandatory Email: require `email` on intake (currently optional) so booking confirmations can always be sent.
+- Optional Client Max End Time: let clients optionally flag a hard end-time constraint (e.g., "must be done by X") on intake, for the artist to weigh when deciding duration/slot count.
 
+- Artist Custom Response Templates: quick-copy text blocks or automated emails for approval, decline, or off-platform follow-up notifications.
+
+- Reference Image Annotations: allow clients to tag specific reference images with notes during intake (e.g., "Use color from Image 1, but shape from Image 2").
+
+- Placement & Canvas Metadata: capture body location / nail set context fields in intake schemas (e.g., "Left Forearm", "Full Set - Natural Nails").
 
 ## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
 - **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
