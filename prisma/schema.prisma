@@ -82,6 +82,14 @@ model Artist {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Public directory card fields (CLAUDE.md 5.3) -- nullable since an
+  // artist without these set simply doesn't show them on their card.
+  // Read-only for clients; artist-facing management is a backlog item,
+  // same as TierReferenceImage -- seeded via Prisma Studio for now.
+  avatarUrl String?
+  bio       String?
+  location  String?
+
   account             Account?
   intakeRequests      IntakeRequest[]
   timeSlots           TimeSlot[]
