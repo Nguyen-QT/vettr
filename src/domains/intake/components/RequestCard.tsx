@@ -11,6 +11,11 @@ interface RequestCardProps {
 // Pure view (CLAUDE.md): renders whatever summary it's handed, makes no
 // decisions and fetches nothing. Approve/Decline state lives in
 // RequestActions' own hook, not here.
+const REQUESTED_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
 export function RequestCard({ request }: RequestCardProps) {
   const instagramUrl = `https://instagram.com/${request.clientInstagramHandle}`;
   const tags = [...request.designTags, ...request.aestheticTags];
@@ -28,6 +33,17 @@ export function RequestCard({ request }: RequestCardProps) {
         </a>
         <span className="text-sm text-muted-foreground">{request.tier}</span>
       </div>
+
+      <p className="text-sm text-muted-foreground">
+        {request.clientEmail}
+        {request.clientPhone ? ` · ${request.clientPhone}` : ""}
+      </p>
+
+      {request.requestedStartTime ? (
+        <p className="text-sm text-muted-foreground">
+          Requested: {REQUESTED_TIME_FORMAT.format(request.requestedStartTime)}
+        </p>
+      ) : null}
 
       {request.designReferenceImageUrls.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
