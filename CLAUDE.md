@@ -93,7 +93,7 @@ src/
 
 - [x] **3.3: Action Mutators (Approve/Decline)** (Write server actions to toggle intake request enums and generate automatic response message copies).
 
-### 📦 Phase 4: Concurrency Rules & Financial Logic ◄ CURRENT FOCUS
+### 📦 Phase 4: Concurrency Rules & Financial Logic
 - [x] **4.1: Reservation Lock-In Timers & Slot Confirmation UI** (Design database state checks to ensure a time slot isn't allocated to two approved clients concurrently, then wire that confirmation into the artist dashboard. Service duration is an artist decision made at approval time, not a client input; a duration that overflows the requested slot consumes and locks the next adjacent slot too, capped at two consecutive slots for now), decomposed per the Mandatory Task Breakdown Rule:
   - [x] **4.1.1: Scheduling Domain Scaffold** (`constants.ts`/`types.ts`/`scheduling.schema.ts` + the `TimeSlot` overlap-exclusion constraint).
   
@@ -146,21 +146,25 @@ src/
   - [x] 4.6.2: Domain Service (`getTierReferenceImages(artistId)` in intake, grouped by tier; unit tests).
   - [x] 4.6.3: View & Route (fetched server-side in `/book/[artistId]/page.tsx`, passed to `VisualIntakeForm`, showing example images for whichever tier is currently selected; e2e spec).
 
-### 📦 Phase 5: Client Portal, Rescheduling & Lifecycle Management
-- [ ] **5.1: Client Dashboard & Booking Status Lookup** (Build a token/magic-link authenticated client dashboard for viewing booking statuses, request details, and slot confirmation states. Scoped as a per-request access token -- one shareable link per submitted request, shown on the confirmation screen -- rather than a full client account system, since there's no email-sending infrastructure yet to deliver a link out-of-band), decomposed per the Mandatory Task Breakdown Rule:
-  - [ ] 5.1.1: Data Gateway (`IntakeRequest.accessToken` unique field + migration).
-  - [ ] 5.1.2: Domain Service (`getIntakeRequestStatus(accessToken)` in intake -- status, tier, images, tags, notes, estimated price, and appointment time once `APPROVED`, for a valid token, or `null`; unit tests).
-  - [ ] 5.1.3: Controller/Action (`submitIntakeRequest`'s result extended to include `accessToken`).
-  - [ ] 5.1.4: View & Route (new public `/status/[accessToken]` page; `VisualIntakeForm`'s post-submit confirmation screen shows/links the URL; e2e spec).
+### 📦 Phase 5: Authentication & Access Control ◄ CURRENT FOCUS
+> Both Artist and Client are real accounts that log in -- not just a client-facing feature. The artist dashboard has had **no access control at all** since Phase 3: any URL with a guessable/known `artistId` currently works. Hand-rolled (password hashing + DB-backed sessions + middleware), not a library like Auth.js/NextAuth -- Auth.js's Credentials provider isn't meant for real password auth (the maintainers point OAuth/magic-link users at it instead), and its provider/adapter/callback model doesn't map onto this project's `constants.ts`/`types.ts`/`[domain].schema.ts` + domain-service pattern the way a plain domain service does. A shared `Account` (`email`, `passwordHash`, `role: ARTIST | CLIENT`, linked to exactly one of `Artist`/`ClientProfile`) + `Session` model covers both roles with one auth codepath.
+- [ ] **5.1: Artist Authentication & Route Protection** (Password login for the artist, and middleware protecting `/artist/[artistId]/*` so a session must be an ARTIST account whose linked `artistId` matches the URL. Artist accounts stay manually provisioned for now -- no signup UI; there's a single artist and Account rows are created the same way Artist rows already are, via Prisma Studio/a script), decomposed per the Mandatory Task Breakdown Rule:
+  - [ ] 5.1.1: Data Gateway (`Account`, `Session`, `AccountRole` enum + migration).
+  - [ ] 5.1.2: Domain Service (password hashing/verification, session create/lookup/delete, `loginArtist(email, password)`; unit tests).
+  - [ ] 5.1.3: Controller/Action (`loginAction`/`logoutAction`; sets/clears the session cookie).
+  - [ ] 5.1.4: Route Protection Middleware (`middleware.ts` guarding `/artist/[artistId]/*`; redirects unauthenticated or artistId-mismatched requests to login).
+  - [ ] 5.1.5: View & Route (artist login page; logout control in the dashboard layout; e2e spec).
 
-- [ ] **5.2: Self-Service Booking Modification & Cancellation** (Allow clients to update pending request details or cancel pending/confirmed requests within policy windows via the Client Dashboard).
+- [ ] **5.2: Client Accounts & Booking Linkage** (Self-service client signup/login, completely decoupled from booking submission -- `submitIntakeRequest` stays guest-capable exactly as it works today. At signup, look up or create the client's `ClientProfile` by matching the email entered, and link it to the new `Account`; their dashboard then lists every `IntakeRequest` for that `ClientProfile.id`. Known limitation, deferred rather than solved now: a guest booking made under a different Instagram handle than the one later used to sign up won't auto-link, since `ClientProfile` upsert is still keyed on `instagramHandle`, not email). Detailed layer sub-tasks scoped when this is picked up, reusing the `Account`/`Session` primitives from 5.1.
 
-- [ ] **5.3: Rescheduling & Slot Shift Engine** (Build domain logic allowing artists or clients to propose alternative time slots, update allocations, and handle confirmation workflows).
+- [ ] **5.3: Self-Service Booking Modification & Cancellation** (Allow clients to update pending request details or cancel pending/confirmed requests within policy windows via the Client Dashboard).
 
-- [ ] **5.4: Cancellation & No-Show Lifecycle Management** (Implement status transitions for COMPLETED, CANCELLED_BY_CLIENT, CANCELLED_BY_ARTIST, and NO_SHOW, updating ClientProfile cancellation offenses).
+- [ ] **5.4: Rescheduling & Slot Shift Engine** (Build domain logic allowing artists or clients to propose alternative time slots, update allocations, and handle confirmation workflows).
+
+- [ ] **5.5: Cancellation & No-Show Lifecycle Management** (Implement status transitions for COMPLETED, CANCELLED_BY_CLIENT, CANCELLED_BY_ARTIST, and NO_SHOW, updating ClientProfile cancellation offenses).
 
 ### 📦 Phase 6: Financial Engine, Payments & Policy Enforcement
-- [ ] **6.1: Deposit Payment Gateway Integration** (Integrate Stripe PaymentIntents/Checkout to collect required deposits upon request approval or slot lock-in).
+- [ ] **6.1: Deposit Payment Gateway Integration** (Integrate Stripe PaymentIntents/Checkout to collect required deposits upon request approval or slot lock-in -- likely also where an artist's own paid subscription to use the platform gets wired up).
 
 - [ ] **6.2: Deposit Forfeiture & Refund Rules Engine** (Build business logic for automatic deposit retention vs. refund calculations based on cancellation timing and policies).
 
