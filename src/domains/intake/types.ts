@@ -172,6 +172,20 @@ export type UpdatePendingIntakeRequestResult =
   | { success: true }
   | { success: false; error: string };
 
+// Write command (CLAUDE.md 5.5): artist-initiated reschedule of an
+// already-APPROVED booking. No clientProfileId -- this is an artist
+// action, ownership-checked against the artist's own session at the
+// Controller/Action layer instead (see intake/actions.ts).
+export interface RescheduleApprovedBookingInput {
+  intakeRequestId: string;
+  newStartTime: Date;
+  durationMinutes: number;
+}
+
+export type RescheduleApprovedBookingResult =
+  | { success: true }
+  | { success: false; error: string };
+
 // One artist's own example images, grouped by tier (CLAUDE.md 4.6),
 // for the client-facing intake form. Every tier is always present as
 // a key, even with an empty array, so the view never has to guess
