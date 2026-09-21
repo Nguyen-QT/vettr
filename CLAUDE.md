@@ -15,6 +15,12 @@ This project strictly enforces **Domain-Driven Design (DDD)**, **Clean Architect
 - **Data Encapsulation:** Enforce structural boundaries using the pattern: `Data Gateway (Prisma) -> Domain Service (Business Logic) -> Controller/Action -> View`.
 - **Mandatory File-Splitting (Single Responsibility):** Every domain that requires runtime input validation must decompose into three decoupled files at its root: `constants.ts` (domain arrays, baselines, and boundaries), `types.ts` (pure, standalone TypeScript entity contracts — never derived via Zod's `z.infer`), and `[domain].schema.ts` (Zod runtime validation only, importing from the other two). This is a mandatory technical step for every current and future domain (`intake`, `scheduling`, `billing`), not just intake.
 
+### 🎨 Brand System & Semantic Styling Guardrails
+- **Editorial & Curation Aesthetic:** Vettr's visual identity is minimal, high-contrast, and editorial. Design choices must keep focus on client reference media and artist portfolios.
+- **Strict Semantic Token Rule:** Never hardcode explicit Tailwind color utilities (e.g. `bg-black`, `text-gray-900`, `border-slate-200`, `bg-blue-600`). ALL styling must strictly consume semantic CSS variables and Tailwind token classes (`bg-background`, `text-foreground`, `bg-card`, `text-muted-foreground`, `bg-primary`, `border-border`, `bg-accent`).
+- **Dark/Light Mode Native Support:** Components must dynamically adapt to dark and light modes via CSS root/dark tokens defined in `globals.css` without requiring custom state hooks or conditional inline classes.
+- **Micro-Polish Deferral:** Component styling during roadmap tasks should stick strictly to semantic tokens and clean Shadcn UI layout structures. Fine-grained micro-animations, glassmorphism overlays, and marketing polish will be executed in a dedicated design pass post-Phase 6.
+
 ## 🧪 Automated Testing Guardrails
 - **Mandatory Coverage:** Every core domain service (especially booking logic, slot allocations, and billing multipliers) must have accompanying unit tests.
 - **Edge-Case Matrix:** Tests must explicitly cover race conditions, double-booking attempts, invalid timezone bounds, and past cancellation tracking.
