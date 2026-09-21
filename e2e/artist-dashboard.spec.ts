@@ -19,6 +19,8 @@ test.describe("artist dashboard approve/decline", () => {
     await page.goto(`/artist/${fixture.artistId}`);
     const card = page.locator("article", { hasText: fixture.approveClientHandle });
 
+    await expect(card.getByText("e2e-client-approve@example.com")).toBeVisible();
+
     await card.getByRole("button", { name: "Approve" }).click();
 
     await expect(card.getByText(/approved/i)).toBeVisible();

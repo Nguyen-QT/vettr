@@ -79,12 +79,16 @@ export default async function globalSetup() {
   const requestedStartTime = new Date("2099-01-01T11:00:00.000Z");
   const awaitingConfirmationStartTime = new Date("2099-01-02T11:00:00.000Z");
 
+  // Non-empty designTags/clientNotes here (unlike the other fixture
+  // requests below) so the dashboard spec/manual UI Mode review can
+  // actually see the tags/notes/image rendering paths, not just the
+  // fields that happen to always be present (handle/email/budget).
   await client.query(
     `INSERT INTO "IntakeRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "clientNotes", "requestedStartTime", "updatedAt")
      VALUES
-       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $6, now()),
-       ($4, 'PENDING', $5, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $6, now())`,
+       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY['fine-line-detail']::text[], ARRAY[]::text[], 'Prefers weekday afternoons.', $6, now()),
+       ($4, 'PENDING', $5, $3, 'TIER_2', 100, 200, ARRAY['geometric-pattern']::text[], ARRAY[]::text[], 'Open to size adjustments.', $6, now())`,
     [
       approveRequestId,
       approveClientId,
@@ -92,6 +96,24 @@ export default async function globalSetup() {
       declineRequestId,
       declineClientId,
       requestedStartTime,
+    ]
+  );
+
+  // Fake but well-formed UploadThing-style URLs -- next.config.ts's
+  // remotePatterns allow the host so <Image> won't error, even though
+  // the file itself 404s (fine for checking the layout renders).
+  await client.query(
+    `INSERT INTO "DesignReference" (id, "imageUrl", "intakeRequestId", "createdAt")
+     VALUES
+       ($1, $2, $3, now()),
+       ($4, $5, $6, now())`,
+    [
+      randomUUID(),
+      "https://utfs.io/f/e2e-fixture-approve-reference.jpg",
+      approveRequestId,
+      randomUUID(),
+      "https://utfs.io/f/e2e-fixture-decline-reference.jpg",
+      declineRequestId,
     ]
   );
 

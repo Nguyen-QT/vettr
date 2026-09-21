@@ -72,6 +72,8 @@ export interface PendingIntakeRequestSummary {
   id: string;
   status: ActionableRequestStatus;
   clientInstagramHandle: string;
+  clientEmail: string;
+  clientPhone: string | null;
   tier: ComplexityTier;
   minPrice: number;
   maxPrice: number;
@@ -79,5 +81,9 @@ export interface PendingIntakeRequestSummary {
   aestheticTags: string[];
   clientNotes: string | null;
   designReferenceImageUrls: string[];
+  // The client's chosen candidate slot (CLAUDE.md 4.1e) -- nullable at
+  // the DB level only for rows that predate that capture; every row
+  // created through the current intake form always has one.
+  requestedStartTime: Date | null;
   createdAt: Date;
 }

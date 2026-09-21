@@ -25,6 +25,8 @@ export async function getPendingIntakeRequests(
     id: request.id,
     status: request.status as "PENDING" | "AWAITING_SLOT_CONFIRMATION",
     clientInstagramHandle: request.client.instagramHandle,
+    clientEmail: request.client.email,
+    clientPhone: request.client.phone,
     tier: request.tier,
     minPrice: Number(request.minPrice),
     maxPrice: Number(request.maxPrice),
@@ -34,6 +36,7 @@ export async function getPendingIntakeRequests(
     designReferenceImageUrls: request.designReferences.map(
       (reference) => reference.imageUrl
     ),
+    requestedStartTime: request.requestedStartTime,
     createdAt: request.createdAt,
   }));
 }
