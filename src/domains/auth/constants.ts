@@ -20,6 +20,18 @@ export const INVALID_CREDENTIALS_ERROR_MESSAGE = "Incorrect email or password.";
 // itself never rejects on length (see INVALID_CREDENTIALS_ERROR_MESSAGE).
 export const MIN_PASSWORD_LENGTH = 8;
 
+// signupClient (CLAUDE.md 5.2) only links an *existing* ClientProfile
+// found by email -- it never creates one. A client who's never booked
+// has nothing to link an account to yet.
+export const NO_BOOKING_FOUND_ERROR_MESSAGE =
+  "We couldn't find a booking under that email. Submit a booking request first, then create your account.";
+
+// Surfaced when the ClientProfile a signup would link to already has
+// an Account -- points them at login instead of a confusing duplicate
+// email error at the database level.
+export const ACCOUNT_ALREADY_EXISTS_ERROR_MESSAGE =
+  "An account already exists for this email. Try logging in instead.";
+
 // httpOnly session cookie name (CLAUDE.md 5.1.3) -- its value is a
 // Session row's id, the same opaque cuid loginArtist returns.
 export const SESSION_COOKIE_NAME = "vettr_session";
