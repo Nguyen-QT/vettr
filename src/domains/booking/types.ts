@@ -184,6 +184,11 @@ export interface BookingRequestDepositView {
   tier: ComplexityTier;
   status: RequestStatus;
   depositPaid: boolean;
+  // Added for refundDeposit (CLAUDE.md 7.3.3) -- stripePaymentIntentId
+  // is what the refund is issued against; depositRefunded guards its
+  // idempotency the same way depositPaid guards confirmDepositPayment's.
+  stripePaymentIntentId: string | null;
+  depositRefunded: boolean;
 }
 
 // Write command (CLAUDE.md 5.4): self-service cancellation from the

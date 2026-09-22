@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/prisma";
 
-import { getBookingRequestByPaymentIntentId } from "./getBookingRequestByPaymentIntentId";
+import { recordDepositRefund } from "./recordDepositRefund";
 
 // Hits the real local Postgres database, same as the other booking
 // service tests.
-describe("getBookingRequestByPaymentIntentId", () => {
+describe("recordDepositRefund", () => {
   let artistId: string;
   let clientId: string;
 
@@ -18,7 +18,7 @@ describe("getBookingRequestByPaymentIntentId", () => {
     await prisma.artist.create({
       data: {
         id: artistId,
-        name: "Deposit View Test Artist",
+        name: "Record Refund Test Artist",
         instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
         email: `${artistId}@example.com`,
       },
@@ -38,37 +38,26 @@ describe("getBookingRequestByPaymentIntentId", () => {
     await prisma.artist.delete({ where: { id: artistId } });
   });
 
-  it("returns the narrow view for the request matching the PaymentIntent id", async () => {
+  it("flips depositRefunded to true and persists the Stripe refund id", async () => {
     const request = await prisma.bookingRequest.create({
       data: {
         clientId,
         artistId,
-        tier: "TIER_3",
+        tier: "TIER_2",
         minPrice: 100,
         maxPrice: 200,
-        status: "APPROVED",
-        depositPaid: false,
-        stripePaymentIntentId: "pi_lookup_123",
+        status: "CANCELLED_BY_CLIENT",
+        depositPaid: true,
+        stripePaymentIntentId: "pi_refund_123",
       },
     });
 
-    const result = await getBookingRequestByPaymentIntentId("pi_lookup_123");
+    await recordDepositRefund(request.id, "re_refund_123");
 
-    expect(result).toEqual({
-      id: request.id,
-      clientId,
-      artistId,
-      tier: "TIER_3",
-      status: "APPROVED",
-      depositPaid: false,
-      stripePaymentIntentId: "pi_lookup_123",
-      depositRefunded: false,
+    const updated = await prisma.bookingRequest.findUnique({
+      where: { id: request.id },
     });
-  });
-
-  it("returns null for a PaymentIntent id that matches no request", async () => {
-    const result = await getBookingRequestByPaymentIntentId("pi_unknown");
-
-    expect(result).toBeNull();
+    expect(updated?.depositRefunded).toBe(true);
+    expect(updated?.stripeRefundId).toBe("re_refund_123");
   });
 });
