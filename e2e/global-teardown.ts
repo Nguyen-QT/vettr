@@ -47,6 +47,10 @@ export default async function globalTeardown() {
   await client.query(`DELETE FROM "TierReferenceImage" WHERE "artistId" = $1`, [
     fixture.artistId,
   ]);
+  // Same ON DELETE RESTRICT reasoning as above (CLAUDE.md 7.1.1).
+  await client.query(`DELETE FROM "ArtistDepositSetting" WHERE "artistId" = $1`, [
+    fixture.artistId,
+  ]);
   // Account.artistId is ON DELETE SET NULL (CLAUDE.md 5.1.1), so it
   // won't clean itself up when Artist is deleted below -- Session
   // cascades from Account automatically.

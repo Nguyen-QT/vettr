@@ -2,18 +2,28 @@ import Link from "next/link";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { getPayableDeposits } from "@/domains/billing/services/getPayableDeposits";
 import { getCurrentSession, logoutAction } from "@/domains/auth/actions";
 import { ClientBookingCard } from "@/domains/intake/components/ClientBookingCard";
+import { getApprovedUnpaidRequestSummaries } from "@/domains/intake/services/getApprovedUnpaidRequestSummaries";
 import { getClientBookings } from "@/domains/intake/services/getClientBookings";
 
 // Session-derived (CLAUDE.md 5.2): no clientProfileId URL param -- the
 // route-protection proxy already guarantees a valid CLIENT session
-// reached here, getCurrentSession just reads which one.
+// reached here, getCurrentSession just reads which one. Composes
+// intake's and billing's independent reads itself (CLAUDE.md's Domain
+// Boundary Isolation rule) rather than either domain querying the
+// other's table directly.
 export default async function ClientDashboardPage() {
   const session = await getCurrentSession();
   const bookings = session?.clientProfileId
     ? await getClientBookings(session.clientProfileId)
     : [];
+  const payableDeposits = session?.clientProfileId
+    ? await getPayableDeposits(
+        await getApprovedUnpaidRequestSummaries(session.clientProfileId)
+      )
+    : {};
 
   return (
     <div className="flex min-h-full flex-col">
@@ -46,7 +56,11 @@ export default async function ClientDashboardPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {bookings.map((booking) => (
-              <ClientBookingCard key={booking.id} booking={booking} />
+              <ClientBookingCard
+                key={booking.id}
+                booking={booking}
+                depositAmount={payableDeposits[booking.id] ?? null}
+              />
             ))}
           </div>
         )}
