@@ -1,4 +1,6 @@
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getCurrentSession, logoutAction } from "@/domains/auth/actions";
 import { ClientBookingCard } from "@/domains/intake/components/ClientBookingCard";
@@ -27,6 +29,12 @@ export default async function ClientDashboardPage() {
         <Separator />
       </header>
       <main className="mx-auto w-full max-w-lg flex-1 px-4 py-4 pb-[env(safe-area-inset-bottom)]">
+        <Link
+          href="/artists"
+          className={buttonVariants({ variant: "outline", className: "mb-4 w-full" })}
+        >
+          Find an artist
+        </Link>
         <h1 className="mb-3 text-lg font-semibold">Your bookings</h1>
         {bookings.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-center">
