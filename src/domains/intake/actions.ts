@@ -11,12 +11,15 @@ import {
   reviewIntakeRequestInputSchema,
   updatePendingIntakeRequestInputSchema,
 } from "./intake.schema";
+import { cancelApprovedBookingAsArtist } from "./services/cancelApprovedBookingAsArtist";
 import { cancelIntakeRequest } from "./services/cancelIntakeRequest";
 import {
   confirmProposedBooking,
   type ConfirmProposedBookingResult,
 } from "./services/confirmProposedBooking";
 import { generateResponseMessage } from "./services/generateResponseMessage";
+import { markAppointmentCompleted } from "./services/markAppointmentCompleted";
+import { markAppointmentNoShow } from "./services/markAppointmentNoShow";
 import { rescheduleApprovedBooking } from "./services/rescheduleApprovedBooking";
 import {
   reviewIntakeRequest,
@@ -25,7 +28,10 @@ import {
 import { updatePendingIntakeRequest } from "./services/updatePendingIntakeRequest";
 import { validateComplexity } from "./services/validateComplexity";
 import type {
+  CancelApprovedBookingAsArtistResult,
   CancelIntakeRequestResult,
+  MarkAppointmentCompletedResult,
+  MarkAppointmentNoShowResult,
   RescheduleApprovedBookingResult,
   UpdatePendingIntakeRequestResult,
 } from "./types";
@@ -48,6 +54,22 @@ async function requireArtistId(): Promise<string | null> {
     return null;
   }
   return session.artistId;
+}
+
+// Shared by every artist-side mutating action below (reschedule, cancel,
+// no-show, complete): confirms the request actually belongs to the
+// signed-in artist before delegating, reported the same as a missing
+// request on mismatch -- same posture as the client-side ownership
+// checks (5.4.2).
+async function requireOwnedRequest(
+  intakeRequestId: string,
+  artistId: string
+): Promise<boolean> {
+  const existing = await prisma.intakeRequest.findUnique({
+    where: { id: intakeRequestId },
+    select: { artistId: true },
+  });
+  return existing !== null && existing.artistId === artistId;
 }
 
 export type SubmitIntakeRequestResult =
@@ -240,11 +262,7 @@ export async function rescheduleApprovedBookingAction(
     return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
   }
 
-  const existing = await prisma.intakeRequest.findUnique({
-    where: { id: intakeRequestId },
-    select: { artistId: true },
-  });
-  if (!existing || existing.artistId !== artistId) {
+  if (!(await requireOwnedRequest(intakeRequestId, artistId))) {
     return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
   }
 
@@ -264,6 +282,60 @@ export async function rescheduleApprovedBookingAction(
     ),
     durationMinutes: parsed.data.durationMinutes,
   });
+}
+
+// Controller/Action boundary (CLAUDE.md 5.6.3): artist-side cancellation
+// of an already-APPROVED booking. Same ownership-check posture as
+// rescheduleApprovedBookingAction above.
+export async function cancelApprovedBookingAsArtistAction(
+  intakeRequestId: string
+): Promise<CancelApprovedBookingAsArtistResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  if (!(await requireOwnedRequest(intakeRequestId, artistId))) {
+    return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
+  }
+
+  return cancelApprovedBookingAsArtist({ intakeRequestId });
+}
+
+// Controller/Action boundary (CLAUDE.md 5.6.3): marks a past-due
+// APPROVED appointment as a no-show. Same ownership-check posture as
+// above.
+export async function markAppointmentNoShowAction(
+  intakeRequestId: string
+): Promise<MarkAppointmentNoShowResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  if (!(await requireOwnedRequest(intakeRequestId, artistId))) {
+    return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
+  }
+
+  return markAppointmentNoShow({ intakeRequestId });
+}
+
+// Controller/Action boundary (CLAUDE.md 5.6.3): marks a past-due
+// APPROVED appointment as completed. Same ownership-check posture as
+// above.
+export async function markAppointmentCompletedAction(
+  intakeRequestId: string
+): Promise<MarkAppointmentCompletedResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  if (!(await requireOwnedRequest(intakeRequestId, artistId))) {
+    return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
+  }
+
+  return markAppointmentCompleted({ intakeRequestId });
 }
 
 async function setIntakeRequestStatus(
