@@ -233,6 +233,13 @@ model IntakeRequest {
 
   clientNotes String?
 
+  // Optional, purely advisory (CLAUDE.md 6.3) -- a client-flagged "must
+  // be finished by" time for the artist to weigh when deciding
+  // duration/slot count during review. Never auto-enforced or
+  // blocking, matching "No Auto-Booking": the artist always has final
+  // say over the actual duration and slot allocation.
+  clientMaxEndTime DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
