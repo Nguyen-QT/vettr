@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/lib/prisma";
 
@@ -12,11 +12,28 @@ import {
 import type { RequestStatus } from "../types";
 import { cancelBookingRequest } from "./cancelBookingRequest";
 
+const createRefundMock = vi.fn();
+
+// vi.mock calls are hoisted above imports by vitest's transform, so
+// this replaces the real Stripe client before refundDeposit (called
+// from cancelBookingRequest) ever sees it. Everything else -- the
+// cancellation itself, recordDepositRefund -- still hits the real
+// local Postgres, exercising the actual cross-domain call into
+// billing's refundDeposit (CLAUDE.md 7.3.4).
+vi.mock("@/lib/stripe", () => ({
+  stripe: {
+    refunds: {
+      create: (...args: unknown[]) => createRefundMock(...args),
+    },
+  },
+}));
+
 describe("cancelBookingRequest", () => {
   let artistId: string;
   let clientId: string;
 
   beforeEach(async () => {
+    createRefundMock.mockReset();
     artistId = randomUUID();
     clientId = randomUUID();
     await prisma.artist.create({
@@ -45,7 +62,8 @@ describe("cancelBookingRequest", () => {
 
   async function createRequest(
     status: RequestStatus,
-    timeSlots: { startTime: Date; endTime: Date }[] = []
+    timeSlots: { startTime: Date; endTime: Date }[] = [],
+    depositOverrides: { depositPaid?: boolean; stripePaymentIntentId?: string } = {}
   ): Promise<string> {
     const request = await prisma.bookingRequest.create({
       data: {
@@ -55,6 +73,8 @@ describe("cancelBookingRequest", () => {
         minPrice: 100,
         maxPrice: 200,
         status,
+        depositPaid: depositOverrides.depositPaid ?? false,
+        stripePaymentIntentId: depositOverrides.stripePaymentIntentId,
       },
     });
     for (const slot of timeSlots) {
@@ -114,6 +134,41 @@ describe("cancelBookingRequest", () => {
     });
     expect(updated?.status).toBe("CANCELLED_BY_CLIENT");
     expect(updated?.timeSlots[0]?.status).toBe("RELEASED");
+  });
+
+  it("refunds a paid deposit in full when cancelling an APPROVED request outside the window", async () => {
+    const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+    const requestId = await createRequest(
+      "APPROVED",
+      [{ startTime: farFuture, endTime: new Date(farFuture.getTime() + 60 * 60_000) }],
+      { depositPaid: true, stripePaymentIntentId: "pi_cancel_refund" }
+    );
+    createRefundMock.mockResolvedValue({ id: "re_cancel_refund" });
+
+    const result = await cancelBookingRequest({
+      bookingRequestId: requestId,
+      clientProfileId: clientId,
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(createRefundMock).toHaveBeenCalledWith({
+      payment_intent: "pi_cancel_refund",
+    });
+    const updated = await prisma.bookingRequest.findUnique({
+      where: { id: requestId },
+    });
+    expect(updated?.depositRefunded).toBe(true);
+  });
+
+  it("does not attempt a refund when the deposit was never paid", async () => {
+    const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+    const requestId = await createRequest("APPROVED", [
+      { startTime: farFuture, endTime: new Date(farFuture.getTime() + 60 * 60_000) },
+    ]);
+
+    await cancelBookingRequest({ bookingRequestId: requestId, clientProfileId: clientId });
+
+    expect(createRefundMock).not.toHaveBeenCalled();
   });
 
   it("applies a cancellation strike and flags the client for an APPROVED cancellation", async () => {

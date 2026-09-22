@@ -1,3 +1,4 @@
+import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 import { prisma } from "@/lib/prisma";
 
@@ -36,6 +37,20 @@ export async function cancelApprovedBookingAsArtist(
       data: { status: "CANCELLED_BY_ARTIST" },
     });
   });
+
+  // Refunds in full, unconditionally on timing -- an artist-initiated
+  // cancellation is never the client's fault (CLAUDE.md 7.3). Deliberately
+  // outside the transaction and logged-not-thrown-on-failure, same
+  // reasoning as cancelBookingRequest's identical refund step.
+  if (request.depositPaid) {
+    const refundResult = await refundDeposit(request.id);
+    if (!refundResult.success) {
+      console.error(
+        `Deposit refund failed for artist-cancelled booking request ${request.id}:`,
+        refundResult.error
+      );
+    }
+  }
 
   return { success: true };
 }
