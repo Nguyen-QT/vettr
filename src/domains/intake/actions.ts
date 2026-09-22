@@ -195,6 +195,12 @@ export async function submitIntakeRequest(
         data.requestedDate,
         data.requestedTime
       ),
+      // Purely advisory (CLAUDE.md 6.3) -- combined the same way as
+      // requestedStartTime above, just with the client's own
+      // "must be finished by" time instead of a fixed slot option.
+      clientMaxEndTime: data.clientMaxEndTime
+        ? new Date(`${data.requestedDate}T${data.clientMaxEndTime}:00`)
+        : null,
       designReferences: {
         create: data.designReferenceImageUrls.map((imageUrl) => ({
           imageUrl,

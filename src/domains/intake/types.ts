@@ -65,6 +65,11 @@ export interface ClientIntakeInput {
   // that's how the form actually collects them.
   requestedDate: string;
   requestedTime: SlotTime;
+  // Optional, purely advisory (CLAUDE.md 6.3) -- an HH:MM time-of-day
+  // string, not constrained to requestedTime's fixed slot options.
+  // Combined with requestedDate into IntakeRequest.clientMaxEndTime on
+  // submission, same spirit as requestedStartTime above.
+  clientMaxEndTime?: string;
 }
 
 // Requests the artist dashboard shows because they need action:
@@ -94,6 +99,8 @@ export interface PendingIntakeRequestSummary {
   // the DB level only for rows that predate that capture; every row
   // created through the current intake form always has one.
   requestedStartTime: Date | null;
+  // Optional, purely advisory (CLAUDE.md 6.3) -- see ClientIntakeInput.
+  clientMaxEndTime: Date | null;
   createdAt: Date;
 }
 

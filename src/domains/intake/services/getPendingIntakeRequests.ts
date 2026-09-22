@@ -37,6 +37,7 @@ export async function getPendingIntakeRequests(
       (reference) => reference.imageUrl
     ),
     requestedStartTime: request.requestedStartTime,
+    clientMaxEndTime: request.clientMaxEndTime,
     createdAt: request.createdAt,
   }));
 }

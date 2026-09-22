@@ -326,4 +326,34 @@ describe("clientIntakeInputSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts an omitted clientMaxEndTime", () => {
+    expect(clientIntakeInputSchema.safeParse(validPayload).success).toBe(true);
+  });
+
+  it("accepts a clientMaxEndTime after the requested start time", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      requestedTime: "11:00" as const,
+      clientMaxEndTime: "14:00",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a clientMaxEndTime at or before the requested start time", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      requestedTime: "14:00" as const,
+      clientMaxEndTime: "11:00",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a malformed clientMaxEndTime", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      clientMaxEndTime: "not-a-time",
+    });
+    expect(result.success).toBe(false);
+  });
 });
