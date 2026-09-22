@@ -47,7 +47,9 @@ describe("getBookingRequestForDeposit", () => {
         minPrice: 100,
         maxPrice: 200,
         status: "APPROVED",
-        depositPaid: false,
+        depositPaid: true,
+        stripePaymentIntentId: "pi_view_123",
+        depositRefunded: false,
       },
     });
 
@@ -59,7 +61,9 @@ describe("getBookingRequestForDeposit", () => {
       artistId,
       tier: "TIER_2",
       status: "APPROVED",
-      depositPaid: false,
+      depositPaid: true,
+      stripePaymentIntentId: "pi_view_123",
+      depositRefunded: false,
     });
   });
 

@@ -21,6 +21,8 @@ export async function getBookingRequestByPaymentIntentId(
       tier: true,
       status: true,
       depositPaid: true,
+      stripePaymentIntentId: true,
+      depositRefunded: true,
     },
   });
 }

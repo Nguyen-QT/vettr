@@ -17,6 +17,8 @@ export async function getBookingRequestForDeposit(
       tier: true,
       status: true,
       depositPaid: true,
+      stripePaymentIntentId: true,
+      depositRefunded: true,
     },
   });
 }
