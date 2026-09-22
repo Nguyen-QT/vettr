@@ -7,6 +7,12 @@ import type { UpcomingAppointmentSummary } from "../types";
 // read-only summary the upcoming-appointments view renders. Purely a
 // query + mapping, same spirit as getPendingIntakeRequests -- no
 // business rules here.
+//
+// Filters to BOOKED TimeSlots specifically, not just "any TimeSlot
+// row" -- since rescheduleApprovedBooking (5.5.1) started leaving a
+// RELEASED row behind on an otherwise-still-APPROVED request, an
+// unfiltered read would span from the old (released) slot's start to
+// the new (booked) slot's end, a bogus mixed range.
 export async function getUpcomingAppointments(
   artistId: string
 ): Promise<UpcomingAppointmentSummary[]> {
@@ -14,9 +20,13 @@ export async function getUpcomingAppointments(
     where: {
       artistId,
       status: "APPROVED",
-      timeSlots: { some: { startTime: { gte: new Date() } } },
+      timeSlots: { some: { status: "BOOKED", startTime: { gte: new Date() } } },
     },
-    include: { client: true, designReferences: true, timeSlots: true },
+    include: {
+      client: true,
+      designReferences: true,
+      timeSlots: { where: { status: "BOOKED" } },
+    },
   });
 
   return requests

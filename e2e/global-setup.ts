@@ -26,6 +26,9 @@ export interface E2eFixture {
   awaitingConfirmationClientHandle: string;
   freestylePendingClientHandle: string;
   bookedSlotClientHandle: string;
+  // A separate APPROVED booking dedicated to the reschedule spec
+  // (5.5.4), untouched by any other spec.
+  rescheduleTestClientHandle: string;
   // Known date/time already BOOKED for this artist (4.1.10.4), so a spec
   // can pick this date and assert that exact time renders disabled.
   bookedSlotDate: string;
@@ -77,6 +80,10 @@ export default async function globalSetup() {
   const freestylePendingRequestId = randomUUID();
   const bookedSlotRequestId = randomUUID();
   const bookedSlotTimeSlotId = randomUUID();
+  const rescheduleTestClientId = randomUUID();
+  const rescheduleTestRequestId = randomUUID();
+  const rescheduleTestTimeSlotId = randomUUID();
+  const rescheduleTestClientHandle = "e2e_client_reschedule";
   const clientLoginProfileId = randomUUID();
   const clientLoginRequestId = randomUUID();
   const clientEditableRequestId = randomUUID();
@@ -122,6 +129,16 @@ export default async function globalSetup() {
       freestylePendingClientId,
       freestylePendingClientHandle,
       "e2e-client-freestyle@example.com",
+    ]
+  );
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [
+      rescheduleTestClientId,
+      rescheduleTestClientHandle,
+      "e2e-client-reschedule@example.com",
     ]
   );
 
@@ -233,6 +250,42 @@ export default async function globalSetup() {
     ]
   );
 
+  // A dedicated APPROVED booking for the reschedule spec (CLAUDE.md
+  // 5.5.4), separate from bookedSlotRequestId above -- that fixture's
+  // exact date/time is asserted on by client-intake-form.spec.ts, so
+  // rescheduling it would break that spec.
+  const rescheduleTestStartTime = new Date("2099-07-01T11:00:00");
+  const rescheduleTestEndTime = new Date(
+    rescheduleTestStartTime.getTime() + 60 * 60_000
+  );
+
+  await client.query(
+    `INSERT INTO "IntakeRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+     VALUES
+       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+    [
+      rescheduleTestRequestId,
+      rescheduleTestClientId,
+      artistId,
+      rescheduleTestStartTime,
+    ]
+  );
+
+  await client.query(
+    `INSERT INTO "TimeSlot"
+       (id, "startTime", "endTime", status, "artistId", "intakeRequestId", "updatedAt")
+     VALUES
+       ($1, $2, $3, 'BOOKED', $4, $5, now())`,
+    [
+      rescheduleTestTimeSlotId,
+      rescheduleTestStartTime,
+      rescheduleTestEndTime,
+      artistId,
+      rescheduleTestRequestId,
+    ]
+  );
+
   // Account/Session fixtures for route-protection specs (CLAUDE.md
   // 5.1.4/5.1.5) -- one real login-capable Account for this artist,
   // plus a second already-valid Session so other specs can skip the
@@ -318,6 +371,7 @@ export default async function globalSetup() {
       awaitingConfirmationClientId,
       freestylePendingClientId,
       bookedSlotClientId,
+      rescheduleTestClientId,
       clientLoginProfileId,
     ],
     intakeRequestIds: [
@@ -326,6 +380,7 @@ export default async function globalSetup() {
       awaitingConfirmationRequestId,
       freestylePendingRequestId,
       bookedSlotRequestId,
+      rescheduleTestRequestId,
       clientLoginRequestId,
       clientEditableRequestId,
     ],
@@ -334,6 +389,7 @@ export default async function globalSetup() {
     awaitingConfirmationClientHandle,
     freestylePendingClientHandle,
     bookedSlotClientHandle,
+    rescheduleTestClientHandle,
     bookedSlotDate,
     bookedSlotTime,
     artistLoginEmail,
