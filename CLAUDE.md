@@ -197,7 +197,7 @@ src/
   - [x] 5.6.1: Data Gateway (`RequestStatus` migration: rename `CANCELLED` -> `CANCELLED_BY_CLIENT`, add `CANCELLED_BY_ARTIST` and `NO_SHOW`, via `ALTER TYPE ... RENAME VALUE` so existing rows carry their history forward. Bundled the minimal type-compat fixes needed to keep tsc/tests green, same coupling as 4.2.1).
   - [x] 5.6.2: Domain Service (`STRIKE_THRESHOLD` constant + shared `applyCancellationStrike` transaction helper; `cancelIntakeRequest` (5.4) updated to apply a strike only for an APPROVED cancellation; new `cancelApprovedBookingAsArtist` (artist-side cancel, never strikes), `markAppointmentNoShow` (past-due APPROVED only, strikes), `markAppointmentCompleted` (past-due APPROVED only, no strike); new `getPastDueAppointments` read -- APPROVED requests where every booked slot has already started, kept mutually exclusive with `getUpcomingAppointments`; unit tests).
   - [x] 5.6.3: Controller/Action (`cancelApprovedBookingAsArtistAction`, `markAppointmentNoShowAction`, `markAppointmentCompletedAction` in `intake/actions.ts`, ownership-checked via session `artistId`, same pattern as 5.5.2).
-  - [ ] 5.6.4: Domain Hook & Logic (a hook orchestrating Cancel/No-Show/Complete button state for the past-due list, alongside the existing `useRescheduleBooking`).
+  - [x] 5.6.4: Domain Hook & Logic (a hook orchestrating Cancel/No-Show/Complete button state for the past-due list, alongside the existing `useRescheduleBooking`).
   - [ ] 5.6.5: View & Route (a "Needs Resolution" section on the artist's appointments page, using `getPastDueAppointments`, with Cancel/No-Show/Complete controls; e2e spec).
 
 ### 📦 Phase 6: Financial Engine, Payments & Policy Enforcement
