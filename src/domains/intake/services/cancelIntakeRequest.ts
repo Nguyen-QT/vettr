@@ -1,3 +1,4 @@
+import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 import { prisma } from "@/lib/prisma";
 
 import {
@@ -51,10 +52,7 @@ export async function cancelIntakeRequest(
   const wasApproved = request.status === "APPROVED";
 
   await prisma.$transaction(async (tx) => {
-    await tx.timeSlot.updateMany({
-      where: { intakeRequestId: request.id, status: "BOOKED" },
-      data: { status: "RELEASED" },
-    });
+    await releaseBookedTimeSlots(tx, request.id);
     await tx.intakeRequest.update({
       where: { id: request.id },
       data: { status: "CANCELLED_BY_CLIENT" },

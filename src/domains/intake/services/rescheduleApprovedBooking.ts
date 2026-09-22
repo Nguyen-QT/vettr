@@ -3,6 +3,7 @@ import {
   createBookedTimeSlots,
   isSlotConflict,
 } from "@/domains/scheduling/services/confirmTimeSlot";
+import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 import { prisma } from "@/lib/prisma";
 
 import { REQUEST_NOT_FOUND_ERROR_MESSAGE } from "../constants";
@@ -41,10 +42,7 @@ export async function rescheduleApprovedBooking(
 
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.timeSlot.updateMany({
-        where: { intakeRequestId: request.id, status: "BOOKED" },
-        data: { status: "RELEASED" },
-      });
+      await releaseBookedTimeSlots(tx, request.id);
 
       await createBookedTimeSlots(tx, {
         intakeRequestId: request.id,
