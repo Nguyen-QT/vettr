@@ -1,8 +1,13 @@
+import { DepositPaymentCard } from "@/domains/billing/components/DepositPaymentCard";
 import { ClientBookingActions } from "@/domains/intake/components/ClientBookingActions";
 import type { ClientBookingSummary } from "@/domains/intake/types";
 
 interface ClientBookingCardProps {
   booking: ClientBookingSummary;
+  // Non-null only for an APPROVED, unpaid booking whose artist has
+  // configured a deposit for its tier (CLAUDE.md 7.1.8's
+  // getPayableDeposits) -- the page composes this itself.
+  depositAmount: number | null;
 }
 
 const REQUESTED_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
@@ -25,7 +30,7 @@ const STATUS_LABELS: Record<ClientBookingSummary["status"], string> = {
 // the client dashboard -- spans every artist the client has booked
 // with, so the artist's own name/handle is shown per card rather than
 // assumed from page context.
-export function ClientBookingCard({ booking }: ClientBookingCardProps) {
+export function ClientBookingCard({ booking, depositAmount }: ClientBookingCardProps) {
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-border p-4">
       <div className="flex items-center justify-between">
@@ -50,6 +55,13 @@ export function ClientBookingCard({ booking }: ClientBookingCardProps) {
           ? `Estimated: £${booking.estimatedPrice}`
           : `£${booking.minPrice} – £${booking.maxPrice}`}
       </p>
+
+      {depositAmount !== null ? (
+        <DepositPaymentCard
+          intakeRequestId={booking.id}
+          depositAmount={depositAmount}
+        />
+      ) : null}
 
       <ClientBookingActions booking={booking} />
     </article>

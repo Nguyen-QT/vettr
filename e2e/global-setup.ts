@@ -103,6 +103,10 @@ export default async function globalSetup() {
   const clientLoginProfileId = randomUUID();
   const clientLoginRequestId = randomUUID();
   const clientEditableRequestId = randomUUID();
+  // A third booking for the same login-capable client (CLAUDE.md 7.1.9)
+  // -- APPROVED, unpaid, TIER_4 so it never overlaps the TIER_2/TIER_3
+  // bookings the cancel/edit specs already touch on this same profile.
+  const depositRequestId = randomUUID();
   const maxEndTimeClientId = randomUUID();
   const maxEndTimeRequestId = randomUUID();
   const maxEndTimeClientHandle = "e2e_client_maxendtime";
@@ -127,6 +131,16 @@ export default async function globalSetup() {
     `INSERT INTO "TierReferenceImage" (id, "artistId", tier, "imageUrl", "createdAt")
      VALUES ($1, $2, 'TIER_2', $3, now())`,
     [randomUUID(), artistId, "https://utfs.io/f/e2e-fixture-tier2-reference.jpg"]
+  );
+
+  // Only TIER_4 has a configured deposit amount (CLAUDE.md 7.1.9) --
+  // lets a spec confirm the "Pay deposit" card shows for the one
+  // eligible booking and stays absent for every other tier's APPROVED
+  // bookings on this same artist.
+  await client.query(
+    `INSERT INTO "ArtistDepositSetting" (id, "artistId", tier, "depositAmount", "updatedAt")
+     VALUES ($1, $2, 'TIER_4', 40, now())`,
+    [randomUUID(), artistId]
   );
 
   await client.query(
@@ -496,6 +510,18 @@ export default async function globalSetup() {
     ]
   );
 
+  // A third booking for the same client, APPROVED/TIER_4/unpaid, so the
+  // deposit payment spec (CLAUDE.md 7.1.9) can log in as the same
+  // already-provisioned clientLoginEmail account rather than needing
+  // its own Account/Session.
+  await client.query(
+    `INSERT INTO "IntakeRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "updatedAt")
+     VALUES
+       ($1, 'APPROVED', $2, $3, 'TIER_4', 200, 400, ARRAY[]::text[], ARRAY[]::text[], now())`,
+    [depositRequestId, clientLoginProfileId, artistId]
+  );
+
   await client.query(
     `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
      VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
@@ -565,6 +591,7 @@ export default async function globalSetup() {
       rescheduleTestRequestId,
       clientLoginRequestId,
       clientEditableRequestId,
+      depositRequestId,
       ...pastDueRequestIds,
       cancelUpcomingRequestId,
       maxEndTimeRequestId,

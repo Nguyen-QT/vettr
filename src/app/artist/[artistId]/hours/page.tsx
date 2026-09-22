@@ -1,3 +1,5 @@
+import { Separator } from "@/components/ui/separator";
+import { DepositAmountsSettings } from "@/domains/billing/components/DepositAmountsSettings";
 import { BusinessHoursSettings } from "@/domains/scheduling/components/BusinessHoursSettings";
 
 interface ArtistHoursPageProps {
@@ -7,5 +9,11 @@ interface ArtistHoursPageProps {
 export default async function ArtistHoursPage({ params }: ArtistHoursPageProps) {
   const { artistId } = await params;
 
-  return <BusinessHoursSettings artistId={artistId} />;
+  return (
+    <div className="flex flex-col gap-8">
+      <BusinessHoursSettings artistId={artistId} />
+      <Separator />
+      <DepositAmountsSettings />
+    </div>
+  );
 }
