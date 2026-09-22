@@ -11,29 +11,38 @@ import {
   TIER_BASELINE_BUDGETS,
 } from "@/domains/intake/constants";
 import { clientIntakeInputSchema } from "@/domains/intake/intake.schema";
+import type { ClientProfileContactDetails } from "@/domains/intake/types";
 import { getAvailableSlotsAction } from "@/domains/scheduling/actions";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
 import type { AvailableSlot } from "@/domains/scheduling/services/getAvailableSlots";
 
 interface UseVisualIntakeFormArgs {
   artistId: string;
+  // A signed-in client's known contact details (CLAUDE.md 6.1), for
+  // prefilling the form instead of asking them to retype what's
+  // already on file. Undefined for a signed-out/guest visitor, same
+  // as today.
+  initialClientDetails?: ClientProfileContactDetails;
 }
 
 // Data orchestration (CLAUDE.md): the component below only renders
 // whatever this hook decides is the active tag category/options and
 // submission state — it makes no decisions of its own.
-export function useVisualIntakeForm({ artistId }: UseVisualIntakeFormArgs) {
+export function useVisualIntakeForm({
+  artistId,
+  initialClientDetails,
+}: UseVisualIntakeFormArgs) {
   const form = useForm({
     resolver: zodResolver(clientIntakeInputSchema),
     defaultValues: {
-      instagramHandle: "",
+      instagramHandle: initialClientDetails?.instagramHandle ?? "",
       designReferenceImageUrls: [] as string[],
       tier: "TIER_2" as const,
       clientBudgetRange: TIER_BASELINE_BUDGETS.TIER_2,
       designTags: [],
       aestheticTags: [],
-      email: "",
-      phone: "",
+      email: initialClientDetails?.email ?? "",
+      phone: initialClientDetails?.phone ?? "",
       clientNotes: "",
       requestedDate: "",
       requestedTime: DAILY_SLOT_TIME_OPTIONS[0],
