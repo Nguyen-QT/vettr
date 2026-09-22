@@ -116,12 +116,22 @@ export async function submitIntakeRequest(
 
   // A signed-in client's booking always attaches to their own
   // ClientProfile (CLAUDE.md 6.1) -- the intake form disables the
-  // contact fields in that case, but a disabled <input> can still be
-  // re-enabled client-side, so this ignores whatever instagramHandle/
-  // email/phone came in the request body entirely rather than trusting
-  // it to match/upsert a profile. A signed-out/guest submission (no
-  // session) keeps the original by-handle upsert.
+  // contact/onboarding fields in that case, but a disabled <input> can
+  // still be re-enabled client-side, so this ignores whatever
+  // instagramHandle/email/phone/firstName/lastName/dateOfBirth came in
+  // the request body entirely rather than trusting it to match/upsert
+  // a profile. A signed-out/guest submission (no session) keeps the
+  // original by-handle upsert.
   const sessionClientProfileId = await requireClientProfileId();
+  // Unlike requestedStartTime elsewhere in this file (a real time-of-day
+  // the "no timezone handling yet" placeholder scope applies to),
+  // dateOfBirth is a pure calendar date with no time-of-day meaning at
+  // all -- constructed at UTC midnight specifically so it round-trips
+  // through the @db.Date column correctly regardless of server
+  // timezone, since a local-time construction could shift it by a day
+  // depending on where this runs, and this field feeds a legal age
+  // check.
+  const dateOfBirth = new Date(`${data.dateOfBirth}T00:00:00.000Z`);
 
   let client;
   if (sessionClientProfileId) {
@@ -131,17 +141,42 @@ export async function submitIntakeRequest(
     if (!client) {
       return { success: false, error: "Your account could not be found." };
     }
+
+    // Fills in onboarding fields the client hasn't provided yet
+    // (CLAUDE.md 6.2) -- only ever fills a blank on the existing
+    // profile, never overwrites an already-set value.
+    const fillableFields: {
+      firstName?: string;
+      lastName?: string;
+      dateOfBirth?: Date;
+    } = {};
+    if (!client.firstName) fillableFields.firstName = data.firstName;
+    if (!client.lastName) fillableFields.lastName = data.lastName;
+    if (!client.dateOfBirth) fillableFields.dateOfBirth = dateOfBirth;
+
+    if (Object.keys(fillableFields).length > 0) {
+      client = await prisma.clientProfile.update({
+        where: { id: client.id },
+        data: fillableFields,
+      });
+    }
   } else {
     client = await prisma.clientProfile.upsert({
       where: { instagramHandle: data.instagramHandle },
       update: {
         email: data.email,
         phone: data.phone,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        dateOfBirth,
       },
       create: {
         instagramHandle: data.instagramHandle,
         email: data.email,
         phone: data.phone,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        dateOfBirth,
       },
     });
   }

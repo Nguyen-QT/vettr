@@ -68,6 +68,7 @@ export function VisualIntakeForm({
     isSubmitting,
     serverError,
     submittedRequestId,
+    lockedFields,
     availableSlots,
     isLoadingAvailability,
   } = useVisualIntakeForm({ artistId, initialClientDetails });
@@ -94,12 +95,6 @@ export function VisualIntakeForm({
   const budgetError =
     errors.clientBudgetRange?.maxPrice ?? errors.clientBudgetRange?.minPrice;
   const selectedTierReferenceImages = tierReferenceImages[watch("tier")];
-  // A signed-in client's contact details are known and locked -- the
-  // account they're already signed into is the source of truth, not
-  // whatever they type here. Submission-time enforcement of this lives
-  // server-side in submitIntakeRequest, since a disabled <input> alone
-  // can still be re-enabled client-side.
-  const hasKnownContactDetails = Boolean(initialClientDetails);
 
   return (
     <form onSubmit={onSubmit}>
@@ -109,7 +104,7 @@ export function VisualIntakeForm({
           <Input
             id="instagramHandle"
             placeholder="@yourhandle"
-            disabled={hasKnownContactDetails}
+            disabled={lockedFields.instagramHandle}
             {...register("instagramHandle")}
           />
           <FieldError errors={errors.instagramHandle && [errors.instagramHandle]} />
@@ -298,7 +293,7 @@ export function VisualIntakeForm({
           <Input
             id="email"
             type="email"
-            disabled={hasKnownContactDetails}
+            disabled={lockedFields.email}
             {...register("email")}
           />
           <FieldError errors={errors.email && [errors.email]} />
@@ -308,10 +303,41 @@ export function VisualIntakeForm({
           <FieldLabel htmlFor="phone">Phone (optional)</FieldLabel>
           <Input
             id="phone"
-            disabled={hasKnownContactDetails}
+            disabled={lockedFields.phone}
             {...register("phone")}
           />
           <FieldError errors={errors.phone && [errors.phone]} />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="firstName">First name</FieldLabel>
+          <Input
+            id="firstName"
+            disabled={lockedFields.firstName}
+            {...register("firstName")}
+          />
+          <FieldError errors={errors.firstName && [errors.firstName]} />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="lastName">Last name</FieldLabel>
+          <Input
+            id="lastName"
+            disabled={lockedFields.lastName}
+            {...register("lastName")}
+          />
+          <FieldError errors={errors.lastName && [errors.lastName]} />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="dateOfBirth">Date of birth</FieldLabel>
+          <Input
+            id="dateOfBirth"
+            type="date"
+            disabled={lockedFields.dateOfBirth}
+            {...register("dateOfBirth")}
+          />
+          <FieldError errors={errors.dateOfBirth && [errors.dateOfBirth]} />
         </Field>
 
         <Field>

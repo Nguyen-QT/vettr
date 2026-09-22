@@ -109,6 +109,9 @@ describe("clientIntakeInputSchema", () => {
     clientBudgetRange: { minPrice: 50, maxPrice: 100 },
     designTags: ["fine-line-detail" as const],
     email: "client@example.com",
+    firstName: "Jamie",
+    lastName: "Rivera",
+    dateOfBirth: "2000-01-01",
     requestedDate: "2027-01-01",
     requestedTime: "11:00" as const,
   };
@@ -120,6 +123,9 @@ describe("clientIntakeInputSchema", () => {
     clientBudgetRange: { minPrice: 50, maxPrice: 500 },
     aestheticTags: ["watercolor-blend" as const],
     email: "client@example.com",
+    firstName: "Jamie",
+    lastName: "Rivera",
+    dateOfBirth: "2000-01-01",
     requestedDate: "2027-01-01",
     requestedTime: "11:00" as const,
   };
@@ -275,6 +281,48 @@ describe("clientIntakeInputSchema", () => {
     const result = clientIntakeInputSchema.safeParse({
       ...validPayload,
       requestedDate: "not-a-date",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a missing firstName", () => {
+    const { firstName: _firstName, ...payloadWithoutFirstName } = validPayload;
+    const result = clientIntakeInputSchema.safeParse(payloadWithoutFirstName);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a blank lastName", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      lastName: "  ",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a client under the minimum age", () => {
+    const under18 = new Date();
+    under18.setFullYear(under18.getFullYear() - 17);
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      dateOfBirth: under18.toISOString().slice(0, 10),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a client exactly at the minimum age", () => {
+    const exactly18 = new Date();
+    exactly18.setFullYear(exactly18.getFullYear() - 18);
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      dateOfBirth: exactly18.toISOString().slice(0, 10),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a malformed dateOfBirth", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      dateOfBirth: "not-a-date",
     });
     expect(result.success).toBe(false);
   });

@@ -13,7 +13,14 @@ export async function getClientProfileContactDetails(
 ): Promise<ClientProfileContactDetails | null> {
   const client = await prisma.clientProfile.findUnique({
     where: { id: clientProfileId },
-    select: { instagramHandle: true, email: true, phone: true },
+    select: {
+      instagramHandle: true,
+      email: true,
+      phone: true,
+      firstName: true,
+      lastName: true,
+      dateOfBirth: true,
+    },
   });
 
   return client;

@@ -34,7 +34,7 @@ test.describe("logged-in client booking & search access", () => {
     await expect(page.getByRole("link", { name: /E2E Fixture Artist/ })).toBeVisible();
   });
 
-  test("prefills and locks the intake form's contact fields for a signed-in client", async ({
+  test("prefills and locks the intake form's known contact fields for a signed-in client", async ({
     page,
   }) => {
     const fixture = await readFixture();
@@ -51,7 +51,10 @@ test.describe("logged-in client booking & search access", () => {
     await expect(email).toHaveValue(fixture.clientLoginEmail);
     await expect(instagramHandle).toBeDisabled();
     await expect(email).toBeDisabled();
-    await expect(phone).toBeDisabled();
+    // Per-field locking (CLAUDE.md 6.2): this fixture's phone was never
+    // set, so unlike instagramHandle/email it stays editable rather
+    // than being locked empty.
+    await expect(phone).toBeEnabled();
   });
 
   test("leaves the intake form blank and editable for a signed-out visitor", async ({

@@ -50,6 +50,15 @@ export interface ClientIntakeInput {
   aestheticTags?: AestheticTag[];
   email: string;
   phone?: string;
+  // Client Onboarding Required Fields (CLAUDE.md 6.2). A signed-in
+  // client whose ClientProfile already has these set never has them
+  // trusted from here -- see submitIntakeRequest, which fills in only
+  // currently-blank fields on the existing profile.
+  firstName: string;
+  lastName: string;
+  // ISO date string ("YYYY-MM-DD"), same shape as requestedDate below
+  // -- that's how the form's date input collects it.
+  dateOfBirth: string;
   clientNotes?: string;
   // Combined into IntakeRequest.requestedStartTime on submission
   // (CLAUDE.md 4.1e) -- kept as separate date/time fields here since
@@ -236,4 +245,9 @@ export interface ClientProfileContactDetails {
   instagramHandle: string;
   email: string;
   phone: string | null;
+  // Onboarding fields (CLAUDE.md 6.2) -- null for any ClientProfile
+  // that predates 6.2 or hasn't provided them yet.
+  firstName: string | null;
+  lastName: string | null;
+  dateOfBirth: Date | null;
 }

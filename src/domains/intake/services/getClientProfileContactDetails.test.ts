@@ -17,6 +17,9 @@ describe("getClientProfileContactDetails", () => {
         instagramHandle: `test_client_${clientId.slice(0, 8)}`,
         email: `test_client_${clientId.slice(0, 8)}@example.com`,
         phone: "+1234567890",
+        firstName: "Jamie",
+        lastName: "Rivera",
+        dateOfBirth: new Date("2000-01-01"),
       },
     });
   });
@@ -25,17 +28,20 @@ describe("getClientProfileContactDetails", () => {
     await prisma.clientProfile.delete({ where: { id: clientId } });
   });
 
-  it("returns the client's contact details", async () => {
+  it("returns the client's contact and onboarding details", async () => {
     const result = await getClientProfileContactDetails(clientId);
 
     expect(result).toEqual({
       instagramHandle: `test_client_${clientId.slice(0, 8)}`,
       email: `test_client_${clientId.slice(0, 8)}@example.com`,
       phone: "+1234567890",
+      firstName: "Jamie",
+      lastName: "Rivera",
+      dateOfBirth: new Date("2000-01-01"),
     });
   });
 
-  it("returns null phone when unset", async () => {
+  it("returns null phone/onboarding fields when unset", async () => {
     const noPhoneClientId = randomUUID();
     await prisma.clientProfile.create({
       data: {
@@ -48,6 +54,9 @@ describe("getClientProfileContactDetails", () => {
     const result = await getClientProfileContactDetails(noPhoneClientId);
 
     expect(result?.phone).toBeNull();
+    expect(result?.firstName).toBeNull();
+    expect(result?.lastName).toBeNull();
+    expect(result?.dateOfBirth).toBeNull();
 
     await prisma.clientProfile.delete({ where: { id: noPhoneClientId } });
   });
