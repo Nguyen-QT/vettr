@@ -192,4 +192,34 @@ describe("getUpcomingAppointments", () => {
       laterId,
     ]);
   });
+
+  it("ignores a RELEASED slot left behind by a reschedule, using only the current BOOKED one", async () => {
+    const requestId = await createApprovedRequest([
+      {
+        startTime: new Date("2099-05-12T14:00:00.000Z"),
+        endTime: new Date("2099-05-12T15:00:00.000Z"),
+      },
+    ]);
+    // Simulates rescheduleApprovedBooking (5.5.1): the old slot is
+    // released, not deleted, and a new one is booked in its place.
+    await prisma.timeSlot.updateMany({
+      where: { intakeRequestId: requestId },
+      data: { status: "RELEASED" },
+    });
+    await prisma.timeSlot.create({
+      data: {
+        artistId,
+        intakeRequestId: requestId,
+        startTime: new Date("2099-05-20T11:00:00.000Z"),
+        endTime: new Date("2099-05-20T12:00:00.000Z"),
+        status: "BOOKED",
+      },
+    });
+
+    const result = await getUpcomingAppointments(artistId);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].startTime).toEqual(new Date("2099-05-20T11:00:00.000Z"));
+    expect(result[0].endTime).toEqual(new Date("2099-05-20T12:00:00.000Z"));
+  });
 });

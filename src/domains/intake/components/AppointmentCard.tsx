@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { Separator } from "@/components/ui/separator";
+import { AppointmentActions } from "@/domains/intake/components/AppointmentActions";
 import type { UpcomingAppointmentSummary } from "@/domains/intake/types";
 
 interface AppointmentCardProps {
@@ -75,6 +76,8 @@ export function AppointmentCard({ appointment }: AppointmentCardProps) {
           <p className="text-sm">{appointment.clientNotes}</p>
         </>
       ) : null}
+
+      <AppointmentActions appointment={appointment} />
     </article>
   );
 }
