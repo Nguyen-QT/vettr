@@ -8,7 +8,7 @@ import {
 } from "../constants";
 import type { CancelIntakeRequestInput, CancelIntakeRequestResult } from "../types";
 
-const RESOLVED_STATUSES = new Set(["CANCELLED", "DECLINED", "COMPLETED"]);
+const RESOLVED_STATUSES = new Set(["CANCELLED_BY_CLIENT", "DECLINED", "COMPLETED"]);
 
 // Self-service cancellation from the client dashboard (CLAUDE.md 5.4).
 // clientProfileId is the trusted session's own id (see
@@ -53,7 +53,7 @@ export async function cancelIntakeRequest(
     });
     await tx.intakeRequest.update({
       where: { id: request.id },
-      data: { status: "CANCELLED" },
+      data: { status: "CANCELLED_BY_CLIENT" },
     });
   });
 

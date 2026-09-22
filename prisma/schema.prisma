@@ -18,7 +18,18 @@ enum RequestStatus {
   AWAITING_SLOT_CONFIRMATION
   APPROVED
   DECLINED
-  CANCELLED
+  // Client self-cancelled via the client dashboard (CLAUDE.md 5.4/5.6).
+  // Renamed from the original plain CANCELLED value -- see this
+  // migration's SQL for the RENAME VALUE that carries existing rows
+  // forward instead of losing their history.
+  CANCELLED_BY_CLIENT
+  // Artist cancelled an already-APPROVED booking (CLAUDE.md 5.6). Never
+  // counts as a client cancellation offense -- it's the artist's call,
+  // not the client's fault.
+  CANCELLED_BY_ARTIST
+  // Artist marked a past-dated APPROVED appointment as a no-show
+  // (CLAUDE.md 5.6). Counts as a client cancellation offense.
+  NO_SHOW
   COMPLETED
 }
 
