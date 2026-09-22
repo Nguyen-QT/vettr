@@ -161,7 +161,7 @@ src/
   - [x] 4.6.2: Domain Service (`getTierReferenceImages(artistId)` in intake, grouped by tier; unit tests).
   - [x] 4.6.3: View & Route (fetched server-side in `/book/[artistId]/page.tsx`, passed to `VisualIntakeForm`, showing example images for whichever tier is currently selected; e2e spec).
 
-### 📦 Phase 5: Authentication & Access Control ◄ CURRENT FOCUS
+### 📦 Phase 5: Authentication & Access Control
 > Both Artist and Client are real accounts that log in -- not just a client-facing feature. The artist dashboard has had **no access control at all** since Phase 3: any URL with a guessable/known `artistId` currently works. Hand-rolled (password hashing + DB-backed sessions + middleware), not a library like Auth.js/NextAuth -- Auth.js's Credentials provider isn't meant for real password auth (the maintainers point OAuth/magic-link users at it instead), and its provider/adapter/callback model doesn't map onto this project's `constants.ts`/`types.ts`/`[domain].schema.ts` + domain-service pattern the way a plain domain service does. A shared `Account` (`email`, `passwordHash`, `role: ARTIST | CLIENT`, linked to exactly one of `Artist`/`ClientProfile`) + `Session` model covers both roles with one auth codepath.
 - [x] **5.1: Artist Authentication & Route Protection** (Password login for the artist, and middleware protecting `/artist/[artistId]/*` so a session must be an ARTIST account whose linked `artistId` matches the URL. Artist accounts stay manually provisioned for now -- no signup UI; there's a single artist and Account rows are created the same way Artist rows already are, via Prisma Studio/a script), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 5.1.1: Data Gateway (`Account`, `Session`, `AccountRole` enum + migration).
@@ -200,19 +200,44 @@ src/
   - [x] 5.6.4: Domain Hook & Logic (`useAppointmentLifecycleActions` orchestrating Cancel/No-Show/Complete button state, alongside the existing `useRescheduleBooking`).
   - [x] 5.6.5: View & Route (a "Needs Resolution" section on the artist's appointments page, using `getPastDueAppointments`, with Mark Completed/Mark No-Show controls; e2e spec. Design correction made during this sub-task: Cancel lives on the *upcoming* list instead -- alongside Reschedule on `AppointmentActions` -- since "cancel" only makes sense for a booking that hasn't happened yet; a past-due appointment's only two real outcomes are completed or no-show, so `AppointmentLifecycleActions` doesn't offer it).
 
-### 📦 Phase 6: Financial Engine, Payments & Policy Enforcement
-- [ ] **6.1: Deposit Payment Gateway Integration** (Integrate Stripe PaymentIntents/Checkout to collect required deposits upon request approval or slot lock-in -- likely also where an artist's own paid subscription to use the platform gets wired up).
+### 📦 Phase 6: Critical Access & Onboarding Fixes ◄ CURRENT FOCUS
+> Sequenced ahead of the Financial Engine below: both items are live gaps in today's app (not speculative polish), and the Financial Engine likely wants real client names/ages on file before it starts charging anyone. Mandatory email capture was already covered by 4.2 -- no further work needed there.
+- [ ] **6.1: Logged-in Booking & Search Access** (Root `/`'s auto-redirect for a signed-in visitor -- straight to `/client` or `/artist/[artistId]` per 5.3's original design -- currently leaves a signed-in client with no way back to `/artists` to book with a different or additional artist. Keep the artist directory/search and the "book now" flow reachable regardless of auth state, and when a signed-in client starts a new booking, pre-fill their known `ClientProfile` details (email, phone, Instagram handle) into the intake form instead of asking again).
 
-- [ ] **6.2: Deposit Forfeiture & Refund Rules Engine** (Build business logic for automatic deposit retention vs. refund calculations based on cancellation timing and policies).
+- [ ] **6.2: Client Onboarding Required Fields** (`ClientProfile` currently only captures `instagramHandle`/`email`/`phone` -- add required `firstName`/`lastName`/`age` fields across the schema, intake form, and validation schemas, with a migration and a backfill plan for existing rows).
 
-- [ ] **6.3: Upfront Cancellation Precharge Engine** (Build middleware check referencing ClientProfile cancellation offenses to force a 50% upfront deposit route for flagged clients).
+- [ ] **6.3: Service Duration Cap** (An optional maximum-service-duration / hard-end-time setting the artist configures once per service, rather than reasoning about it on every booking. Supersedes and folds in the backlog's former "Optional Client Max End Time" idea -- the client-facing soft preference and the artist-facing hard cap are one coherent piece of work, not two).
 
-- [ ] **6.4: Day-of Bill Modifiers & Final Checkout** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
+### 📦 Phase 7: Financial Engine, Payments & Policy Enforcement
+- [ ] **7.1: Deposit Payment Gateway Integration** (Integrate Stripe PaymentIntents/Checkout to collect required deposits upon request approval or slot lock-in -- likely also where an artist's own paid subscription to use the platform gets wired up).
+
+- [ ] **7.2: Deposit Forfeiture & Refund Rules Engine** (Build business logic for automatic deposit retention vs. refund calculations based on cancellation timing and policies).
+
+- [ ] **7.3: Upfront Cancellation Precharge Engine** (Build middleware check referencing ClientProfile cancellation offenses to force a 50% upfront deposit route for flagged clients).
+
+- [ ] **7.4: Day-of Bill Modifiers & Final Checkout** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
+
+### 📦 Phase 8: Safety Confirmations & Navigation Consistency
+- [ ] **8.1: Action Confirmation Dialogs** (A shared confirm-dialog primitive gets wired in front of every destructive or state-changing action across both portals: booking request submission, cancellation, amendment, and status changes -- approve/decline/mark completed/mark no-show).
+
+- [ ] **8.2: Universal Back Navigation** (Audit every client/artist sub-page and modal/overlay for a consistent back control, via a shared navigation component rather than one-off links).
+
+### 📦 Phase 9: Layout & Responsive Consistency Polish
+- [ ] **9.1: Request Page Padding Standardization** (`/book/[artistId]/page.tsx` currently has no wrapper/padding classes at all -- confirmed gap -- unlike `/artists`/`/client`'s shared `mx-auto w-full max-w-lg px-4 py-4` container pattern. Bring it in line).
+
+- [ ] **9.2: Nested Viewport Unit Audit** (The root shell already uses dynamic viewport units -- `min-h-[100dvh]` on `<body>`, `viewportFit: "cover"` in the `Viewport` export -- so this is an audit of remaining nested views/components for any leftover fixed-height assumptions, not a rebuild of the shell).
+
+### 📦 Phase 10: Artist Settings Restructure
+- [ ] **10.1: Decouple the Combined Settings Page** (Split the current single `/artist/[artistId]/hours` page into dedicated sub-views: Profile Management -- folds in the backlog's former "Artist Profile Management UI" item, editing `avatarUrl`/`bio`/`location` -- Business & Operating Hours, Time Slot Rules & Service Durations, and Blackout Dates & Multi-Date Range Overrides, the last supporting continuous date-range selection for extended breaks rather than single dates only).
+
+### 📦 Phase 11: Artist Agenda & Calendar View
+- [ ] **11.1: Day/Week Calendar Agenda** (A dedicated agenda page with a toggleable day/week calendar picker; selecting a date filters the booking list, and clicking a booking opens a detail modal/drawer with quick-action status controls. Internal display only -- no external calendar sync in this phase).
+
+### 📦 Phase 12: Budget Input Enhancements
+- [ ] **12.1: Budget Slider & Wheel Picker Polish** (Freeze the numeric readout during drag to stop jitter, add a touch-friendly wheel-select alternative, and enforce strict £5 step increments on both controls).
 
 ### 🗂️ Backlog (unscoped, no priority order)
 Captured for future scoping into numbered roadmap items — not yet broken down per the Mandatory Task Breakdown Rule, and not committed to a specific phase.
-- Optional Client Max End Time: let clients optionally flag a hard end-time constraint (e.g., "must be done by X") on intake, for the artist to weigh when deciding duration/slot count.
-
 - Artist Custom Response Templates: quick-copy text blocks or automated emails for approval, decline, or off-platform follow-up notifications.
 
 - Reference Image Annotations: allow clients to tag specific reference images with notes during intake (e.g., "Use color from Image 1, but shape from Image 2").
@@ -220,8 +245,6 @@ Captured for future scoping into numbered roadmap items — not yet broken down 
 - Placement & Canvas Metadata: capture body location / nail set context fields in intake schemas (e.g., "Left Forearm", "Full Set - Natural Nails").
 
 - Tier Reference Gallery Management UI: artist-facing upload/reorder/remove for their own `TierReferenceImage` rows (4.6). Images are seeded via Prisma Studio in the meantime.
-
-- Artist Profile Management UI: artist-facing editing for their own `avatarUrl`/`bio`/`location` directory fields (5.3). Seeded via Prisma Studio in the meantime.
 
 - In-App Client/Artist Chat: on-platform messaging tied to a specific `IntakeRequest`, so review/follow-up conversation doesn't have to happen off-platform over Instagram DM. Part of why client auth (5.2) is password-based rather than magic-link -- chat needs frequent, low-friction re-entry. Likely still wants email notifications for new messages, possibly with a scoped link straight into the thread.
 
