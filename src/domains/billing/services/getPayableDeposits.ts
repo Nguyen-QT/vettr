@@ -1,24 +1,18 @@
+import type { ApprovedUnpaidRequestSummary } from "@/domains/intake/types";
 import { prisma } from "@/lib/prisma";
 
 import type { PayableDeposits } from "../types";
 
-// Data Gateway -> Domain Service boundary (CLAUDE.md 7.1.8): every
-// APPROVED, unpaid IntakeRequest a client has whose artist has
-// configured a deposit amount for its tier, keyed by intakeRequestId
-// for the client dashboard's "Pay Deposit" card. Deliberately queried
-// from billing rather than extending intake's getClientBookings --
-// this is billing's own join (IntakeRequest x ArtistDepositSetting),
-// so intake's service/types stay untouched. Batches the settings
-// lookup across every involved artist rather than one query per
-// request.
+// Domain Service (CLAUDE.md 7.1.8): a pure join against
+// ArtistDepositSetting -- takes the client's approved/unpaid requests
+// as input (see intake's getApprovedUnpaidRequestSummaries) rather
+// than querying IntakeRequest itself, so billing never touches
+// intake's table directly; the caller (the client dashboard page)
+// composes both reads. Batches the settings lookup across every
+// involved artist in one query rather than one per request.
 export async function getPayableDeposits(
-  clientProfileId: string
+  requests: ApprovedUnpaidRequestSummary[]
 ): Promise<PayableDeposits> {
-  const requests = await prisma.intakeRequest.findMany({
-    where: { clientId: clientProfileId, status: "APPROVED", depositPaid: false },
-    select: { id: true, artistId: true, tier: true },
-  });
-
   if (requests.length === 0) {
     return {};
   }
