@@ -227,3 +227,13 @@ export interface MarkAppointmentCompletedInput {
 export type MarkAppointmentCompletedResult =
   | { success: true }
   | { success: false; error: string };
+
+// Read-shaped projection of a ClientProfile's contact fields (CLAUDE.md
+// 6.1) -- used to prefill the intake form when a signed-in client
+// starts a new booking, instead of asking them to retype what's
+// already on file.
+export interface ClientProfileContactDetails {
+  instagramHandle: string;
+  email: string;
+  phone: string | null;
+}
