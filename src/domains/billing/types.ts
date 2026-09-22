@@ -38,3 +38,9 @@ export type CreateDepositPaymentIntentResult =
 export type ConfirmDepositPaymentResult =
   | { success: true }
   | { success: false; error: string };
+
+// Keyed by intakeRequestId (CLAUDE.md 7.1.8) -- only requests that are
+// APPROVED, unpaid, and have a configured deposit for their tier
+// appear here at all; there is no "not payable yet" entry, unlike
+// ArtistDepositSettings' every-tier-present shape above.
+export type PayableDeposits = Record<string, number>;
