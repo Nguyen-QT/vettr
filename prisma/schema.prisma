@@ -173,6 +173,16 @@ model ClientProfile {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  // Onboarding fields (CLAUDE.md 6.2) -- nullable at the DB level only,
+  // same reasoning as IntakeRequest.requestedStartTime/estimatedPrice:
+  // "required" is enforced by intake.schema.ts for every new
+  // submission, not by a backfilled placeholder value on existing
+  // rows. dateOfBirth rather than a raw age so exact current age is
+  // always derivable instead of a stored value quietly going stale.
+  firstName   String?
+  lastName    String?
+  dateOfBirth DateTime? @db.Date
+
   account        Account?
   intakeRequests IntakeRequest[]
 }
