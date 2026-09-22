@@ -107,6 +107,7 @@ model Artist {
   weeklyHours         ArtistWeeklyHours[]
   scheduleOverrides   ArtistScheduleOverride[]
   tierReferenceImages TierReferenceImage[]
+  depositSettings     ArtistDepositSetting[]
 }
 
 // Recurring weekly availability (CLAUDE.md 4.3). No row for a given
@@ -158,6 +159,24 @@ model TierReferenceImage {
   artistId String
 
   @@index([artistId, tier])
+}
+
+// Per-tier deposit amount an artist requires before a booking is
+// considered secured (CLAUDE.md 7.1). No row for a given
+// artistId/tier means no deposit is required for that tier yet --
+// getArtistDepositSettings is what actually enforces that default,
+// same "no config = default open" precedent as ArtistWeeklyHours.
+model ArtistDepositSetting {
+  id            String         @id @default(cuid())
+  tier          ComplexityTier
+  depositAmount Decimal        @db.Decimal(10, 2)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  artist   Artist @relation(fields: [artistId], references: [id])
+  artistId String
+
+  @@unique([artistId, tier])
 }
 
 // Tracks cancellation history and the resulting precharge flag (CLAUDE.md
@@ -230,6 +249,16 @@ model IntakeRequest {
   // the client does not supply a price at intake time.
   estimatedPrice Decimal? @db.Decimal(10, 2)
   depositPaid    Boolean  @default(false)
+
+  // Deposit payment (CLAUDE.md 7.1). depositAmount is a snapshot taken
+  // when the PaymentIntent is created -- deliberately decoupled from
+  // the live ArtistDepositSetting for this request's tier, so a later
+  // change to the artist's per-tier amount never retroactively alters
+  // an in-flight or already-paid request. stripePaymentIntentId is set
+  // at the same time; depositPaid above flips true once the webhook
+  // confirms the PaymentIntent succeeded.
+  depositAmount         Decimal? @db.Decimal(10, 2)
+  stripePaymentIntentId String?
 
   clientNotes String?
 
