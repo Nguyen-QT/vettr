@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/lib/prisma";
 
+import * as recordDepositRefundModule from "@/domains/booking/services/recordDepositRefund";
+
 import { refundDeposit } from "./refundDeposit";
 
 const createRefundMock = vi.fn();
@@ -121,5 +123,39 @@ describe("refundDeposit", () => {
 
     expect(result.success).toBe(false);
     expect(createRefundMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a clean error when the Stripe refund call itself fails", async () => {
+    const request = await createRequest({
+      depositPaid: true,
+      stripePaymentIntentId: "pi_refund_fail",
+    });
+    createRefundMock.mockRejectedValue(new Error("Stripe network error"));
+
+    const result = await refundDeposit(request.id);
+
+    expect(result.success).toBe(false);
+    const untouched = await prisma.bookingRequest.findUnique({
+      where: { id: request.id },
+    });
+    expect(untouched?.depositRefunded).toBe(false);
+  });
+
+  it("still reports success when Stripe succeeds but the local write fails -- the refund already happened", async () => {
+    const request = await createRequest({
+      depositPaid: true,
+      stripePaymentIntentId: "pi_refund_write_fail",
+    });
+    createRefundMock.mockResolvedValue({ id: "re_write_fail" });
+    const recordSpy = vi
+      .spyOn(recordDepositRefundModule, "recordDepositRefund")
+      .mockRejectedValueOnce(new Error("DB write failed"));
+
+    const result = await refundDeposit(request.id);
+
+    expect(result).toEqual({ success: true });
+    expect(createRefundMock).toHaveBeenCalledTimes(1);
+
+    recordSpy.mockRestore();
   });
 });

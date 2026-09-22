@@ -36,3 +36,12 @@ export const DEPOSIT_REFUND_NOT_PAID_ERROR_MESSAGE =
   "There is no paid deposit to refund for this booking.";
 export const DEPOSIT_REFUND_MISSING_PAYMENT_INTENT_ERROR_MESSAGE =
   "This booking's deposit payment could not be located for refund.";
+export const DEPOSIT_REFUND_INIT_ERROR_MESSAGE =
+  "Something went wrong issuing this refund. Please try again.";
+
+// Surfaced by confirmDepositRefund (CLAUDE.md 7.3.3-fix) when the
+// webhook reports a PaymentIntent id that doesn't match any
+// BookingRequest -- same reasoning as
+// DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE.
+export const DEPOSIT_REFUND_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE =
+  "No booking request matches this refund.";

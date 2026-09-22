@@ -43,6 +43,10 @@ export type RefundDepositResult =
   | { success: true }
   | { success: false; error: string };
 
+export type ConfirmDepositRefundResult =
+  | { success: true }
+  | { success: false; error: string };
+
 // Keyed by bookingRequestId (CLAUDE.md 7.1.8) -- only requests that are
 // APPROVED, unpaid, and have a configured deposit for their tier
 // appear here at all; there is no "not payable yet" entry, unlike
