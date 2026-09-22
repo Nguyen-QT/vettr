@@ -1,4 +1,4 @@
-import { COMPLEXITY_TIERS } from "@/domains/intake/constants";
+import { COMPLEXITY_TIERS } from "@/domains/booking/constants";
 import { prisma } from "@/lib/prisma";
 
 import type { ArtistDepositSettings } from "../types";

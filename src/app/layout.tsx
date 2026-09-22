@@ -51,7 +51,7 @@ export const viewport: Viewport = {
 
 // 3. Metadata Configuration
 export const metadata: Metadata = {
-  title: "Vettr | Intake & Curation Engine",
+  title: "Vettr | Booking & Curation Engine",
   description: "Automated booking, curation, and scheduling engine for high-demand artists.",
 };
 

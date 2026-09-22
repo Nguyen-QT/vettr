@@ -1,9 +1,9 @@
 import { Separator } from "@/components/ui/separator";
-import { AppointmentActions } from "@/domains/intake/components/AppointmentActions";
-import { AppointmentCard } from "@/domains/intake/components/AppointmentCard";
-import { AppointmentLifecycleActions } from "@/domains/intake/components/AppointmentLifecycleActions";
-import { getPastDueAppointments } from "@/domains/intake/services/getPastDueAppointments";
-import { getUpcomingAppointments } from "@/domains/intake/services/getUpcomingAppointments";
+import { AppointmentActions } from "@/domains/booking/components/AppointmentActions";
+import { AppointmentCard } from "@/domains/booking/components/AppointmentCard";
+import { AppointmentLifecycleActions } from "@/domains/booking/components/AppointmentLifecycleActions";
+import { getPastDueAppointments } from "@/domains/booking/services/getPastDueAppointments";
+import { getUpcomingAppointments } from "@/domains/booking/services/getUpcomingAppointments";
 
 interface ArtistAppointmentsPageProps {
   params: Promise<{ artistId: string }>;
@@ -29,7 +29,7 @@ export default async function ArtistAppointmentsPage({
                 key={appointment.id}
                 appointment={appointment}
                 actions={
-                  <AppointmentLifecycleActions intakeRequestId={appointment.id} />
+                  <AppointmentLifecycleActions bookingRequestId={appointment.id} />
                 }
               />
             ))}

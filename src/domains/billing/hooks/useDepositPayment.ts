@@ -15,11 +15,11 @@ export function useDepositPayment() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function startDepositPayment(intakeRequestId: string) {
+  async function startDepositPayment(bookingRequestId: string) {
     setIsLoading(true);
     setError(null);
 
-    const result = await createDepositPaymentIntentAction(intakeRequestId);
+    const result = await createDepositPaymentIntentAction(bookingRequestId);
     setIsLoading(false);
 
     if (!result.success) {

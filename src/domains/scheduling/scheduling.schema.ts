@@ -11,7 +11,7 @@ import {
 // durationMinutes is the artist's call at approval time, not the client's.
 export const confirmTimeSlotInputSchema = z
   .object({
-    intakeRequestId: z.string().min(1),
+    bookingRequestId: z.string().min(1),
     artistId: z.string().min(1),
     startTime: z.coerce.date(),
     durationMinutes: z

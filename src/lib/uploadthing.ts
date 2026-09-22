@@ -3,13 +3,13 @@ import { createUploadthing, type FileRouter } from "uploadthing/next";
 import {
   MAX_DESIGN_REFERENCE_IMAGES,
   MIN_DESIGN_REFERENCE_IMAGES,
-} from "@/domains/intake/constants";
+} from "@/domains/booking/constants";
 
 const f = createUploadthing();
 
-// Visual Enforcement (CLAUDE.md): the intake form only ever needs to
+// Visual Enforcement (CLAUDE.md): the booking form only ever needs to
 // collect high-resolution design reference images, so this is the sole
-// endpoint. Boundaries mirror intake.schema.ts's array bounds.
+// endpoint. Boundaries mirror booking.schema.ts's array bounds.
 export const uploadRouter = {
   designReferenceImages: f({
     image: {

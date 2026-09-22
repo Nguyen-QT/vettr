@@ -1,4 +1,4 @@
-# Vettr — Bespoke Intake & Selection Engine - Project Guide
+# Vettr — Bespoke Booking & Selection Engine - Project Guide
 
 ## 🛠️ Tech Stack & Tooling Core
 - **Framework:** Next.js 15+ (App Router, Server Actions)
@@ -13,8 +13,8 @@ This project strictly enforces **Domain-Driven Design (DDD)**, **Clean Architect
 - **Domain-Driven Structure:** Code is grouped by business boundaries, not technical types.
 - **Single Responsibility (SOLID):** UI components only render views. Business mutations live in Server Actions. Data orchestration lives in custom React hooks.
 - **Data Encapsulation:** Enforce structural boundaries using the pattern: `Data Gateway (Prisma) -> Domain Service (Business Logic) -> Controller/Action -> View`.
-- **Domain Boundary Isolation:** A domain's own Prisma models are queried and mutated only from within that domain's own `services/` directory. A service that needs another domain's data, or needs to mutate another domain's rows, must call that other domain's exported service function -- never reach through `prisma`/a transaction client directly into a table it doesn't own (e.g. `billing` must never query or write `IntakeRequest`; `intake` must never query or write `TimeSlot`). Where the need is read-only, the owning domain should expose a narrow, purpose-built projection (smaller than its own primary summary type) rather than handing over its full row shape. Composing two domains' independent reads together (e.g. joining two lists for one view) belongs in the Controller/Action or View layer, not inside either domain's own service.
-- **Mandatory File-Splitting (Single Responsibility):** Every domain that requires runtime input validation must decompose into three decoupled files at its root: `constants.ts` (domain arrays, baselines, and boundaries), `types.ts` (pure, standalone TypeScript entity contracts — never derived via Zod's `z.infer`), and `[domain].schema.ts` (Zod runtime validation only, importing from the other two). This is a mandatory technical step for every current and future domain (`intake`, `scheduling`, `billing`), not just intake.
+- **Domain Boundary Isolation:** A domain's own Prisma models are queried and mutated only from within that domain's own `services/` directory. A service that needs another domain's data, or needs to mutate another domain's rows, must call that other domain's exported service function -- never reach through `prisma`/a transaction client directly into a table it doesn't own (e.g. `billing` must never query or write `BookingRequest`; `booking` must never query or write `TimeSlot`). Where the need is read-only, the owning domain should expose a narrow, purpose-built projection (smaller than its own primary summary type) rather than handing over its full row shape. Composing two domains' independent reads together (e.g. joining two lists for one view) belongs in the Controller/Action or View layer, not inside either domain's own service.
+- **Mandatory File-Splitting (Single Responsibility):** Every domain that requires runtime input validation must decompose into three decoupled files at its root: `constants.ts` (domain arrays, baselines, and boundaries), `types.ts` (pure, standalone TypeScript entity contracts — never derived via Zod's `z.infer`), and `[domain].schema.ts` (Zod runtime validation only, importing from the other two). This is a mandatory technical step for every current and future domain (`booking`, `scheduling`, `billing`), not just booking.
 
 ### 🎨 Brand System & Semantic Styling Guardrails
 - **Visual Aesthetic & Layout (Airbnb-Inspired):** Vettr's visual identity borrows Airbnb's layout language, driven entirely by Vettr's own custom palette (below) -- never Airbnb's actual brand colors.
@@ -51,16 +51,16 @@ src/
 │   ├── layout.tsx
 │   ├── page.tsx              # Landing / Root routing
 │   ├── artist/               # Artist Dashboard Routing
-│   └── book/                 # Client Intake Form Routing
+│   └── book/                 # Client Booking Form Routing
 ├── components/               # Cross-cutting UI Components (Shadcn, primitives)
 ├── domains/                  # CORE DOMAIN LAYER (DDD & Clean Architecture)
-│   ├── intake/               # Domain 1: Client briefs, image vetting, handle tracking
-│   │   ├── components/       # Domain-specific UI (VisualIntakeForm, RequestCard)
-│   │   ├── hooks/            # Presentation state orchestrators (useIntakeApproval)
+│   ├── booking/               # Domain 1: Client briefs, image vetting, handle tracking
+│   │   ├── components/       # Domain-specific UI (VisualBookingForm, RequestCard)
+│   │   ├── hooks/            # Presentation state orchestrators (useBookingApproval)
 │   │   ├── services/         # Pure business logic (validateComplexity, routeRequest)
 │   │   ├── constants.ts      # Domain arrays, baselines, and boundaries
 │   │   ├── types.ts          # Pure TypeScript entity contracts (no z.infer)
-│   │   ├── intake.schema.ts  # Zod runtime validation only
+│   │   ├── booking.schema.ts # Zod runtime validation only
 │   │   └── actions.ts        # Next.js Server Actions boundary
 │   ├── scheduling/           # Domain 2: Slot booking, flex-shifts, concurrent blocks
 │   │                         # (same constants.ts / types.ts / scheduling.schema.ts split)
@@ -245,46 +245,50 @@ src/
 
 - [ ] **7.5: Day-of Bill Modifiers & Final Checkout** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 
-### 📦 Phase 8: Client Profile Management
-> Closes a gap surfaced while building 6.2: `firstName`/`lastName`/`dateOfBirth` lock permanently once set, with the intake form as the only place they're ever collected -- a client with a typo, or who just wants to update their phone number, currently has no way to ever correct it. Session-derived like the client dashboard (`/client`, no `clientProfileId` URL param), mirroring Phase 11's analogous artist-facing profile editing.
-- [ ] **8.1: Client Profile Page** (A client-facing page for viewing/editing their own `ClientProfile` details -- name, email, phone, date of birth, Instagram handle -- reachable from the client dashboard).
+### 📦 Phase 8: Domain Rename -- Intake to Booking
+> Project preference: "Booking" reads better than "Intake" for the domain/model that owns a client's request through its full lifecycle (submission through approval, decline, cancellation, completion). Full-depth rename covering the Prisma model, the domain folder, every hand-written identifier, and the database itself -- not just a code-level alias -- so the codebase and the database agree on the name going forward. Landed as one comprehensive change rather than layer-split PRs: renaming the Prisma model cascades instantly (`prisma.intakeRequest` breaks the moment the schema changes), so splitting this the normal way would leave the build broken between merges, the same class of exception as 4.2.1/4.4/6.2's bundling, just at full-codebase scale. Historical roadmap entries in Phases 1-7 above keep their original "intake"/"IntakeRequest" wording -- a record of what was actually built and named at the time, not a live spec; this Directory Blueprint and every phase from here on use the new name.
+- [x] **8.1: Rename Intake to Booking** (`IntakeRequest` Prisma model -> `BookingRequest` (table, relation fields, FK columns, constraint names) via a `RENAME TO`/`RENAME COLUMN`/`RENAME CONSTRAINT` migration -- not DROP + CREATE -- so existing rows and their history carry forward untouched, same reasoning as the `RequestStatus` `RENAME VALUE` migration (5.6.1). `src/domains/intake/` -> `src/domains/booking/`, `intake.schema.ts` -> `booking.schema.ts`, and every hand-written identifier containing "Intake" renamed to "Booking" (`ClientIntakeInput` -> `ClientBookingInput`, `submitIntakeRequest` -> `submitBookingRequest`, `VisualIntakeForm`/`useVisualIntakeForm` -> `VisualBookingForm`/`useVisualBookingForm`, `IntakeRequestDepositView` -> `BookingRequestDepositView`, etc. -- Prisma-generated types weren't hand-edited, just regenerated). e2e fixtures (`global-setup.ts`/`global-teardown.ts`) and the dev seed script (`prisma/seed.ts`) updated to match the renamed table/columns).
 
-### 📦 Phase 9: Safety Confirmations & Navigation Consistency
-- [ ] **9.1: Action Confirmation Dialogs** (A shared confirm-dialog primitive gets wired in front of every destructive or state-changing action across both portals: booking request submission, cancellation, amendment, and status changes -- approve/decline/mark completed/mark no-show).
+### 📦 Phase 9: Client Profile Management
+> Closes a gap surfaced while building 6.2: `firstName`/`lastName`/`dateOfBirth` lock permanently once set, with the booking form as the only place they're ever collected -- a client with a typo, or who just wants to update their phone number, currently has no way to ever correct it. Session-derived like the client dashboard (`/client`, no `clientProfileId` URL param), mirroring Phase 12's analogous artist-facing profile editing.
+- [ ] **9.1: Client Profile Page** (A client-facing page for viewing/editing their own `ClientProfile` details -- name, email, phone, date of birth, Instagram handle -- reachable from the client dashboard).
 
-- [ ] **9.2: Universal Back Navigation** (Audit every client/artist sub-page and modal/overlay for a consistent back control, via a shared navigation component rather than one-off links).
+### 📦 Phase 10: Safety Confirmations & Navigation Consistency
+- [ ] **10.1: Action Confirmation Dialogs** (A shared confirm-dialog primitive gets wired in front of every destructive or state-changing action across both portals: booking request submission, cancellation, amendment, and status changes -- approve/decline/mark completed/mark no-show).
 
-### 📦 Phase 10: Client Intake Wizard (Multi-Step Booking Form)
-- [ ] **10.1: Multi-Step Client Booking Form** (Restructure `VisualIntakeForm` into a four-step wizard with a progress bar, replacing the current single-scroll layout. Purely a reorganization of already-existing, already-validated fields into steps plus new wizard/step state -- no schema or domain-service changes. Step 1 (Contact Details): First Name, Last Name, Date of Birth, Email, Phone, Instagram Handle -- skipped entirely for a signed-in client with a complete profile, who instead lands on Step 2 behind a compact "Booking as {name} ({email}) · Not you? Log out" banner, preserving the per-field lock/prefill behavior from 6.1.3/6.2 for any still-missing field. Step 2 (Service, Budget & Canvas): Service Tier, Tags, Notes, Budget Range, Reference Images. Step 3 (Date & Slot Selection): date + fixed daily time slot filtered strictly by existing operating-hours/booked-slot availability (4.1.10/4.3) -- no duration-based filtering, since duration stays an artist-only decision at approval time per the "No Auto-Booking" core constraint -- plus the optional Client Max End Time (6.3). Step 4 (Request Summary & Confirmation): read-only recap of every collected field, uploaded image thumbnails, and static (non-payment) deposit/cancellation policy copy, with a "Submit Booking Request" CTA that submits immediately -- no confirm-dialog interstitial yet; Phase 9.1's shared confirm-dialog primitive attaches here once it ships, rather than this wizard building its own one-off that 9.1 would later have to replace. Progress-bar step navigation is completion-bounded: a client can always go back to a previously completed step, and forward only as far as steps that have already passed their own step-level Zod validation. Excludes Placement/Canvas Metadata and Reference Image Annotations -- both unscoped backlog items with no domain service yet; their fields plug into Step 2 once those items are built out separately), decomposed per the Mandatory Task Breakdown Rule:
-  - [ ] 10.1.1: UI Primitive & Config (stepper/progress-bar primitive + sticky mobile bottom action bar, zero business logic).
-  - [ ] 10.1.2: Domain Hook & Logic (wizard step/progress state built around the existing `useVisualIntakeForm`, per-step Zod validation gating "Next", skip-step-1-if-logged-in-and-complete logic, completion-bounded step-jump logic).
-  - [ ] 10.1.3: View & Route (the four step views + summary step composed into `VisualIntakeForm.tsx`, progress bar wiring, logged-in banner; e2e spec covering a guest's full-wizard submission, a signed-in client skipping Step 1, backward navigation preserving entered state, and a blocked forward-jump past an invalid step).
+- [ ] **10.2: Universal Back Navigation** (Audit every client/artist sub-page and modal/overlay for a consistent back control, via a shared navigation component rather than one-off links).
 
-### 📦 Phase 11: Artist Settings Restructure
-- [ ] **11.1: Decouple the Combined Settings Page** (Split the current single `/artist/[artistId]/hours` page into dedicated sub-views: Profile Management -- folds in the backlog's former "Artist Profile Management UI" item, editing `avatarUrl`/`bio`/`location` -- Business & Operating Hours, Time Slot Rules & Service Durations, and Blackout Dates & Multi-Date Range Overrides, the last supporting continuous date-range selection for extended breaks rather than single dates only).
+### 📦 Phase 11: Client Booking Wizard (Multi-Step Booking Form)
+- [ ] **11.1: Multi-Step Client Booking Form** (Restructure `VisualBookingForm` into a four-step wizard with a progress bar, replacing the current single-scroll layout. Purely a reorganization of already-existing, already-validated fields into steps plus new wizard/step state -- no schema or domain-service changes. Step 1 (Contact Details): First Name, Last Name, Date of Birth, Email, Phone, Instagram Handle -- skipped entirely for a signed-in client with a complete profile, who instead lands on Step 2 behind a compact "Booking as {name} ({email}) · Not you? Log out" banner, preserving the per-field lock/prefill behavior from 6.1.3/6.2 for any still-missing field. Step 2 (Service, Budget & Canvas): Service Tier, Tags, Notes, Budget Range, Reference Images. Step 3 (Date & Slot Selection): date + fixed daily time slot filtered strictly by existing operating-hours/booked-slot availability (4.1.10/4.3) -- no duration-based filtering, since duration stays an artist-only decision at approval time per the "No Auto-Booking" core constraint -- plus the optional Client Max End Time (6.3). Step 4 (Request Summary & Confirmation): read-only recap of every collected field, uploaded image thumbnails, and static (non-payment) deposit/cancellation policy copy, with a "Submit Booking Request" CTA that submits immediately -- no confirm-dialog interstitial yet; Phase 10.1's shared confirm-dialog primitive attaches here once it ships, rather than this wizard building its own one-off that 10.1 would later have to replace. Progress-bar step navigation is completion-bounded: a client can always go back to a previously completed step, and forward only as far as steps that have already passed their own step-level Zod validation. Excludes Placement/Canvas Metadata and Reference Image Annotations -- both unscoped backlog items with no domain service yet; their fields plug into Step 2 once those items are built out separately), decomposed per the Mandatory Task Breakdown Rule:
+  - [ ] 11.1.1: UI Primitive & Config (stepper/progress-bar primitive + sticky mobile bottom action bar, zero business logic).
+  - [ ] 11.1.2: Domain Hook & Logic (wizard step/progress state built around the existing `useVisualBookingForm`, per-step Zod validation gating "Next", skip-step-1-if-logged-in-and-complete logic, completion-bounded step-jump logic).
+  - [ ] 11.1.3: View & Route (the four step views + summary step composed into `VisualBookingForm.tsx`, progress bar wiring, logged-in banner; e2e spec covering a guest's full-wizard submission, a signed-in client skipping Step 1, backward navigation preserving entered state, and a blocked forward-jump past an invalid step).
 
-### 📦 Phase 12: Artist Agenda & Calendar View
-- [ ] **12.1: Day/Week Calendar Agenda** (A dedicated agenda page with a toggleable day/week calendar picker; selecting a date filters the booking list, and clicking a booking opens a detail modal/drawer with quick-action status controls. Internal display only -- no external calendar sync in this phase).
+### 📦 Phase 12: Artist Settings Restructure
+- [ ] **12.1: Decouple the Combined Settings Page** (Split the current single `/artist/[artistId]/hours` page into dedicated sub-views: Profile Management -- folds in the backlog's former "Artist Profile Management UI" item, editing `avatarUrl`/`bio`/`location` -- Business & Operating Hours, Time Slot Rules & Service Durations, and Blackout Dates & Multi-Date Range Overrides, the last supporting continuous date-range selection for extended breaks rather than single dates only).
 
-### 📦 Phase 13: Budget Input Enhancements
-- [ ] **13.1: Budget Slider & Wheel Picker Polish** (Freeze the numeric readout during drag to stop jitter, add a touch-friendly wheel-select alternative, and enforce strict £5 step increments on both controls).
+### 📦 Phase 13: Artist Agenda & Calendar View
+- [ ] **13.1: Day/Week Calendar Agenda** (A dedicated agenda page with a toggleable day/week calendar picker; selecting a date filters the booking list, and clicking a booking opens a detail modal/drawer with quick-action status controls. Internal display only -- no external calendar sync in this phase).
 
-### 📦 Phase 14: Layout & Responsive Consistency Polish
-- [ ] **14.1: Request Page Padding Standardization** (`/book/[artistId]/page.tsx` currently has no wrapper/padding classes at all -- confirmed gap -- unlike `/artists`/`/client`'s shared `mx-auto w-full max-w-lg px-4 py-4` container pattern. Bring it in line).
+### 📦 Phase 14: Budget Input Enhancements
+- [ ] **14.1: Budget Slider & Wheel Picker Polish** (Freeze the numeric readout during drag to stop jitter, add a touch-friendly wheel-select alternative, and enforce strict £5 step increments on both controls).
 
-- [ ] **14.2: Nested Viewport Unit Audit** (The root shell already uses dynamic viewport units -- `min-h-[100dvh]` on `<body>`, `viewportFit: "cover"` in the `Viewport` export -- so this is an audit of remaining nested views/components for any leftover fixed-height assumptions, not a rebuild of the shell).
+### 📦 Phase 15: Layout & Responsive Consistency Polish
+- [ ] **15.1: Request Page Padding Standardization** (`/book/[artistId]/page.tsx` currently has no wrapper/padding classes at all -- confirmed gap -- unlike `/artists`/`/client`'s shared `mx-auto w-full max-w-lg px-4 py-4` container pattern. Bring it in line).
+
+- [ ] **15.2: Nested Viewport Unit Audit** (The root shell already uses dynamic viewport units -- `min-h-[100dvh]` on `<body>`, `viewportFit: "cover"` in the `Viewport` export -- so this is an audit of remaining nested views/components for any leftover fixed-height assumptions, not a rebuild of the shell).
 
 ### 🗂️ Backlog (unscoped, no priority order)
 Captured for future scoping into numbered roadmap items — not yet broken down per the Mandatory Task Breakdown Rule, and not committed to a specific phase.
 - Artist Custom Response Templates: quick-copy text blocks or automated emails for approval, decline, or off-platform follow-up notifications.
 
-- Reference Image Annotations: allow clients to tag specific reference images with notes during intake (e.g., "Use color from Image 1, but shape from Image 2").
+- Reference Image Annotations: allow clients to tag specific reference images with notes during booking (e.g., "Use color from Image 1, but shape from Image 2").
 
-- Placement & Canvas Metadata: capture body location / nail set context fields in intake schemas (e.g., "Left Forearm", "Full Set - Natural Nails").
+- Placement & Canvas Metadata: capture body location / nail set context fields in booking schemas (e.g., "Left Forearm", "Full Set - Natural Nails").
 
 - Tier Reference Gallery Management UI: artist-facing upload/reorder/remove for their own `TierReferenceImage` rows (4.6). Images are seeded via Prisma Studio in the meantime.
 
-- In-App Client/Artist Chat: on-platform messaging tied to a specific `IntakeRequest`, so review/follow-up conversation doesn't have to happen off-platform over Instagram DM. Part of why client auth (5.2) is password-based rather than magic-link -- chat needs frequent, low-friction re-entry. Likely still wants email notifications for new messages, possibly with a scoped link straight into the thread.
+- In-App Client/Artist Chat: on-platform messaging tied to a specific `BookingRequest`, so review/follow-up conversation doesn't have to happen off-platform over Instagram DM. Part of why client auth (5.2) is password-based rather than magic-link -- chat needs frequent, low-friction re-entry. Likely still wants email notifications for new messages, possibly with a scoped link straight into the thread.
 
 ## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
 - **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
@@ -295,5 +299,5 @@ Captured for future scoping into numbered roadmap items — not yet broken down 
 - **Blast Radius Boundaries:** Data Gateway PRs (schema/migrations) must contain no application code, just Prisma models and/or raw SQL. Domain Service PRs must be pure business logic plus their unit tests, no Prisma calls beyond what the service itself needs. Controller/Action PRs must be thin `actions.ts` wrappers (validate, delegate, shape the result) with no business rules of their own. UI Primitive & Config PRs must be max setup files with zero business logic. Domain Hook & Logic PRs must focus purely on state management, validation, and domain services. View & Route PRs must focus purely on JSX composition and page routing.
 - **Zero Context Bleed:** Absolute ban on adding unrelated "quick styling updates", formatting changes, or side-fixes to files outside the direct functional requirement of the active sub-task.
 - **Review Interception:** Upon completing a single numbered sub-task, Claude must pause, execute `npm run test` to verify zero system regressions, present the target file diff map to the user, and request confirmation before starting the next item. For view/route-layer sub-tasks, this also means adding/updating the relevant `e2e/*.spec.ts` and explicitly telling the user to run `npm run test:e2e:ui` (see Manual E2E Verification Gate) as part of requesting their go-ahead.
-- **Commit Standards:** Use clear, atomic git summaries matching the domain (e.g., `feat(intake): add zod schema validation for instagram handles`, `test(intake): implement logic checks for design complexity`).
+- **Commit Standards:** Use clear, atomic git summaries matching the domain (e.g., `feat(booking): add zod schema validation for instagram handles`, `test(booking): implement logic checks for design complexity`).
 - **Mandatory PR Description Policy** Never raise a PR without this description block. Include a brief summary of the change and why it was made. The `gh` CLI is installed and authenticated (`C:\Users\thang\tools\bin\gh.exe`, on the user PATH) — after pushing, Claude must raise the PR directly with `gh pr create --title "..." --body "..."`, passing the description block via `--body`, rather than handing the user a manual compare-URL link.

@@ -14,7 +14,7 @@ async function readFixture(): Promise<E2eFixture> {
 }
 
 test.describe("client max end time", () => {
-  test("shows an optional 'Must be finished by' input on the intake form", async ({
+  test("shows an optional 'Must be finished by' input on the booking form", async ({
     page,
   }) => {
     const fixture = await readFixture();

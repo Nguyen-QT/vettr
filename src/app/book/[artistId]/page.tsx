@@ -1,7 +1,7 @@
 import { getCurrentSession } from "@/domains/auth/actions";
-import { VisualIntakeForm } from "@/domains/intake/components/VisualIntakeForm";
-import { getClientProfileContactDetails } from "@/domains/intake/services/getClientProfileContactDetails";
-import { getTierReferenceImages } from "@/domains/intake/services/getTierReferenceImages";
+import { VisualBookingForm } from "@/domains/booking/components/VisualBookingForm";
+import { getClientProfileContactDetails } from "@/domains/booking/services/getClientProfileContactDetails";
+import { getTierReferenceImages } from "@/domains/booking/services/getTierReferenceImages";
 
 interface BookPageProps {
   params: Promise<{ artistId: string }>;
@@ -25,7 +25,7 @@ export default async function BookPage({ params }: BookPageProps) {
   return (
     <main>
       <h1>Request a booking</h1>
-      <VisualIntakeForm
+      <VisualBookingForm
         artistId={artistId}
         tierReferenceImages={tierReferenceImages}
         initialClientDetails={initialClientDetails ?? undefined}

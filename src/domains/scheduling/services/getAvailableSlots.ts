@@ -29,7 +29,7 @@ function rangesOverlap(
 // 4.3's getOperatingWindows -- business hours/blackouts/overrides) AND
 // no already-BOOKED TimeSlot for this artist overlaps its nominal
 // [time, time + MAX_SLOT_DURATION_MINUTES) window. Duration isn't known
-// yet at intake time -- this is the same nominal per-slot length
+// yet at booking time -- this is the same nominal per-slot length
 // confirmTimeSlot itself books for a single-slot request, so a time is
 // only ever marked available if a normal one-slot booking there would
 // actually succeed.

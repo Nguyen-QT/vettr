@@ -31,16 +31,16 @@ async function requireArtistId(): Promise<string | null> {
 // Controller/Action boundary (CLAUDE.md 7.1.5): derives clientProfileId
 // from the trusted session -- createDepositPaymentIntent itself
 // re-checks ownership, this layer just supplies a trustworthy id, same
-// posture as intake's cancelIntakeRequestAction (5.4.2).
+// posture as booking's cancelBookingRequestAction (5.4.2).
 export async function createDepositPaymentIntentAction(
-  intakeRequestId: string
+  bookingRequestId: string
 ): Promise<CreateDepositPaymentIntentResult> {
   const clientProfileId = await requireClientProfileId();
   if (!clientProfileId) {
     return { success: false, error: NOT_SIGNED_IN_ERROR_MESSAGE };
   }
 
-  return createDepositPaymentIntent({ intakeRequestId, clientProfileId });
+  return createDepositPaymentIntent({ bookingRequestId, clientProfileId });
 }
 
 export type DepositSettingsMutationResult =
@@ -77,7 +77,7 @@ export type GetArtistDepositSettingsResult =
 
 // Controller/Action boundary (CLAUDE.md 7.1.5): fully session-derived,
 // no id param -- an artist is always reading their own settings, same
-// posture as intake's getClientBookings precedent. Powers the artist
+// posture as booking's getClientBookings precedent. Powers the artist
 // settings UI (7.1.8).
 export async function getArtistDepositSettingsAction(): Promise<GetArtistDepositSettingsResult> {
   const artistId = await requireArtistId();

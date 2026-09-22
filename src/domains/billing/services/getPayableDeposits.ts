@@ -1,13 +1,13 @@
-import type { ApprovedUnpaidRequestSummary } from "@/domains/intake/types";
+import type { ApprovedUnpaidRequestSummary } from "@/domains/booking/types";
 import { prisma } from "@/lib/prisma";
 
 import type { PayableDeposits } from "../types";
 
 // Domain Service (CLAUDE.md 7.1.8): a pure join against
 // ArtistDepositSetting -- takes the client's approved/unpaid requests
-// as input (see intake's getApprovedUnpaidRequestSummaries) rather
-// than querying IntakeRequest itself, so billing never touches
-// intake's table directly; the caller (the client dashboard page)
+// as input (see booking's getApprovedUnpaidRequestSummaries) rather
+// than querying BookingRequest itself, so billing never touches
+// booking's table directly; the caller (the client dashboard page)
 // composes both reads. Batches the settings lookup across every
 // involved artist in one query rather than one per request.
 export async function getPayableDeposits(

@@ -1,5 +1,5 @@
-import { RequestCard } from "@/domains/intake/components/RequestCard";
-import { getPendingIntakeRequests } from "@/domains/intake/services/getPendingIntakeRequests";
+import { RequestCard } from "@/domains/booking/components/RequestCard";
+import { getPendingBookingRequests } from "@/domains/booking/services/getPendingBookingRequests";
 
 interface ArtistDashboardPageProps {
   params: Promise<{ artistId: string }>;
@@ -9,7 +9,7 @@ export default async function ArtistDashboardPage({
   params,
 }: ArtistDashboardPageProps) {
   const { artistId } = await params;
-  const pendingRequests = await getPendingIntakeRequests(artistId);
+  const pendingRequests = await getPendingBookingRequests(artistId);
 
   if (pendingRequests.length === 0) {
     return (

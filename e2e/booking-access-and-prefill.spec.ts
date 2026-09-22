@@ -34,7 +34,7 @@ test.describe("logged-in client booking & search access", () => {
     await expect(page.getByRole("link", { name: /E2E Fixture Artist/ })).toBeVisible();
   });
 
-  test("prefills and locks the intake form's known contact fields for a signed-in client", async ({
+  test("prefills and locks the booking form's known contact fields for a signed-in client", async ({
     page,
   }) => {
     const fixture = await readFixture();
@@ -57,7 +57,7 @@ test.describe("logged-in client booking & search access", () => {
     await expect(phone).toBeEnabled();
   });
 
-  test("leaves the intake form blank and editable for a signed-out visitor", async ({
+  test("leaves the booking form blank and editable for a signed-out visitor", async ({
     page,
   }) => {
     const fixture = await readFixture();
