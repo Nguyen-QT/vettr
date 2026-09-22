@@ -173,6 +173,19 @@ export interface ApprovedUnpaidRequestSummary {
   tier: ComplexityTier;
 }
 
+// Narrow cross-domain read (CLAUDE.md 7.2.3) -- exposes only what
+// billing's deposit-flow services (createDepositPaymentIntent,
+// confirmDepositPayment) need, so billing never queries IntakeRequest
+// directly (CLAUDE.md's Domain Boundary Isolation rule).
+export interface IntakeRequestDepositView {
+  id: string;
+  clientId: string;
+  artistId: string;
+  tier: ComplexityTier;
+  status: RequestStatus;
+  depositPaid: boolean;
+}
+
 // Write command (CLAUDE.md 5.4): self-service cancellation from the
 // client dashboard. clientProfileId comes from the trusted session,
 // never client-supplied input -- see services/cancelIntakeRequest.ts.
