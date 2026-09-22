@@ -114,18 +114,37 @@ export async function submitIntakeRequest(
     return { success: false, error: complexityCheck.error };
   }
 
-  const client = await prisma.clientProfile.upsert({
-    where: { instagramHandle: data.instagramHandle },
-    update: {
-      email: data.email,
-      phone: data.phone,
-    },
-    create: {
-      instagramHandle: data.instagramHandle,
-      email: data.email,
-      phone: data.phone,
-    },
-  });
+  // A signed-in client's booking always attaches to their own
+  // ClientProfile (CLAUDE.md 6.1) -- the intake form disables the
+  // contact fields in that case, but a disabled <input> can still be
+  // re-enabled client-side, so this ignores whatever instagramHandle/
+  // email/phone came in the request body entirely rather than trusting
+  // it to match/upsert a profile. A signed-out/guest submission (no
+  // session) keeps the original by-handle upsert.
+  const sessionClientProfileId = await requireClientProfileId();
+
+  let client;
+  if (sessionClientProfileId) {
+    client = await prisma.clientProfile.findUnique({
+      where: { id: sessionClientProfileId },
+    });
+    if (!client) {
+      return { success: false, error: "Your account could not be found." };
+    }
+  } else {
+    client = await prisma.clientProfile.upsert({
+      where: { instagramHandle: data.instagramHandle },
+      update: {
+        email: data.email,
+        phone: data.phone,
+      },
+      create: {
+        instagramHandle: data.instagramHandle,
+        email: data.email,
+        phone: data.phone,
+      },
+    });
+  }
 
   const intakeRequest = await prisma.intakeRequest.create({
     data: {

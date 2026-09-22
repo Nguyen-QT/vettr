@@ -21,7 +21,10 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { COMPLEXITY_TIERS, OTHER_TAG_VALUE } from "@/domains/intake/constants";
 import { useVisualIntakeForm } from "@/domains/intake/hooks/useVisualIntakeForm";
-import type { TierReferenceImages } from "@/domains/intake/types";
+import type {
+  ClientProfileContactDetails,
+  TierReferenceImages,
+} from "@/domains/intake/types";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
 import type { AvailableSlot } from "@/domains/scheduling/services/getAvailableSlots";
 import type { SlotTime } from "@/domains/scheduling/types";
@@ -30,6 +33,10 @@ import { DesignReferenceDropzone } from "@/lib/uploadthing-client";
 interface VisualIntakeFormProps {
   artistId: string;
   tierReferenceImages: TierReferenceImages;
+  // A signed-in client's known contact details (CLAUDE.md 6.1), passed
+  // through to prefill the form. Undefined for a signed-out/guest
+  // visitor.
+  initialClientDetails?: ClientProfileContactDetails;
 }
 
 const BUDGET_SLIDER_MIN = 0;
@@ -49,6 +56,7 @@ function isTimeAvailable(
 export function VisualIntakeForm({
   artistId,
   tierReferenceImages,
+  initialClientDetails,
 }: VisualIntakeFormProps) {
   const {
     form,
@@ -62,7 +70,7 @@ export function VisualIntakeForm({
     submittedRequestId,
     availableSlots,
     isLoadingAvailability,
-  } = useVisualIntakeForm({ artistId });
+  } = useVisualIntakeForm({ artistId, initialClientDetails });
 
   const {
     control,
@@ -86,6 +94,12 @@ export function VisualIntakeForm({
   const budgetError =
     errors.clientBudgetRange?.maxPrice ?? errors.clientBudgetRange?.minPrice;
   const selectedTierReferenceImages = tierReferenceImages[watch("tier")];
+  // A signed-in client's contact details are known and locked -- the
+  // account they're already signed into is the source of truth, not
+  // whatever they type here. Submission-time enforcement of this lives
+  // server-side in submitIntakeRequest, since a disabled <input> alone
+  // can still be re-enabled client-side.
+  const hasKnownContactDetails = Boolean(initialClientDetails);
 
   return (
     <form onSubmit={onSubmit}>
@@ -95,6 +109,7 @@ export function VisualIntakeForm({
           <Input
             id="instagramHandle"
             placeholder="@yourhandle"
+            disabled={hasKnownContactDetails}
             {...register("instagramHandle")}
           />
           <FieldError errors={errors.instagramHandle && [errors.instagramHandle]} />
@@ -280,13 +295,22 @@ export function VisualIntakeForm({
 
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" type="email" {...register("email")} />
+          <Input
+            id="email"
+            type="email"
+            disabled={hasKnownContactDetails}
+            {...register("email")}
+          />
           <FieldError errors={errors.email && [errors.email]} />
         </Field>
 
         <Field>
           <FieldLabel htmlFor="phone">Phone (optional)</FieldLabel>
-          <Input id="phone" {...register("phone")} />
+          <Input
+            id="phone"
+            disabled={hasKnownContactDetails}
+            {...register("phone")}
+          />
           <FieldError errors={errors.phone && [errors.phone]} />
         </Field>
 
