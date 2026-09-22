@@ -225,24 +225,28 @@ src/
 
 - [ ] **7.4: Day-of Bill Modifiers & Final Checkout** (Scaffold line-item addon schema arrays and mutate prices dynamically on the checkout page).
 
-### 📦 Phase 8: Safety Confirmations & Navigation Consistency
-- [ ] **8.1: Action Confirmation Dialogs** (A shared confirm-dialog primitive gets wired in front of every destructive or state-changing action across both portals: booking request submission, cancellation, amendment, and status changes -- approve/decline/mark completed/mark no-show).
+### 📦 Phase 8: Client Profile Management
+> Closes a gap surfaced while building 6.2: `firstName`/`lastName`/`dateOfBirth` lock permanently once set, with the intake form as the only place they're ever collected -- a client with a typo, or who just wants to update their phone number, currently has no way to ever correct it. Session-derived like the client dashboard (`/client`, no `clientProfileId` URL param), mirroring Phase 11's analogous artist-facing profile editing.
+- [ ] **8.1: Client Profile Page** (A client-facing page for viewing/editing their own `ClientProfile` details -- name, email, phone, date of birth, Instagram handle -- reachable from the client dashboard).
 
-- [ ] **8.2: Universal Back Navigation** (Audit every client/artist sub-page and modal/overlay for a consistent back control, via a shared navigation component rather than one-off links).
+### 📦 Phase 9: Safety Confirmations & Navigation Consistency
+- [ ] **9.1: Action Confirmation Dialogs** (A shared confirm-dialog primitive gets wired in front of every destructive or state-changing action across both portals: booking request submission, cancellation, amendment, and status changes -- approve/decline/mark completed/mark no-show).
 
-### 📦 Phase 9: Layout & Responsive Consistency Polish
-- [ ] **9.1: Request Page Padding Standardization** (`/book/[artistId]/page.tsx` currently has no wrapper/padding classes at all -- confirmed gap -- unlike `/artists`/`/client`'s shared `mx-auto w-full max-w-lg px-4 py-4` container pattern. Bring it in line).
+- [ ] **9.2: Universal Back Navigation** (Audit every client/artist sub-page and modal/overlay for a consistent back control, via a shared navigation component rather than one-off links).
 
-- [ ] **9.2: Nested Viewport Unit Audit** (The root shell already uses dynamic viewport units -- `min-h-[100dvh]` on `<body>`, `viewportFit: "cover"` in the `Viewport` export -- so this is an audit of remaining nested views/components for any leftover fixed-height assumptions, not a rebuild of the shell).
+### 📦 Phase 10: Layout & Responsive Consistency Polish
+- [ ] **10.1: Request Page Padding Standardization** (`/book/[artistId]/page.tsx` currently has no wrapper/padding classes at all -- confirmed gap -- unlike `/artists`/`/client`'s shared `mx-auto w-full max-w-lg px-4 py-4` container pattern. Bring it in line).
 
-### 📦 Phase 10: Artist Settings Restructure
-- [ ] **10.1: Decouple the Combined Settings Page** (Split the current single `/artist/[artistId]/hours` page into dedicated sub-views: Profile Management -- folds in the backlog's former "Artist Profile Management UI" item, editing `avatarUrl`/`bio`/`location` -- Business & Operating Hours, Time Slot Rules & Service Durations, and Blackout Dates & Multi-Date Range Overrides, the last supporting continuous date-range selection for extended breaks rather than single dates only).
+- [ ] **10.2: Nested Viewport Unit Audit** (The root shell already uses dynamic viewport units -- `min-h-[100dvh]` on `<body>`, `viewportFit: "cover"` in the `Viewport` export -- so this is an audit of remaining nested views/components for any leftover fixed-height assumptions, not a rebuild of the shell).
 
-### 📦 Phase 11: Artist Agenda & Calendar View
-- [ ] **11.1: Day/Week Calendar Agenda** (A dedicated agenda page with a toggleable day/week calendar picker; selecting a date filters the booking list, and clicking a booking opens a detail modal/drawer with quick-action status controls. Internal display only -- no external calendar sync in this phase).
+### 📦 Phase 11: Artist Settings Restructure
+- [ ] **11.1: Decouple the Combined Settings Page** (Split the current single `/artist/[artistId]/hours` page into dedicated sub-views: Profile Management -- folds in the backlog's former "Artist Profile Management UI" item, editing `avatarUrl`/`bio`/`location` -- Business & Operating Hours, Time Slot Rules & Service Durations, and Blackout Dates & Multi-Date Range Overrides, the last supporting continuous date-range selection for extended breaks rather than single dates only).
 
-### 📦 Phase 12: Budget Input Enhancements
-- [ ] **12.1: Budget Slider & Wheel Picker Polish** (Freeze the numeric readout during drag to stop jitter, add a touch-friendly wheel-select alternative, and enforce strict £5 step increments on both controls).
+### 📦 Phase 12: Artist Agenda & Calendar View
+- [ ] **12.1: Day/Week Calendar Agenda** (A dedicated agenda page with a toggleable day/week calendar picker; selecting a date filters the booking list, and clicking a booking opens a detail modal/drawer with quick-action status controls. Internal display only -- no external calendar sync in this phase).
+
+### 📦 Phase 13: Budget Input Enhancements
+- [ ] **13.1: Budget Slider & Wheel Picker Polish** (Freeze the numeric readout during drag to stop jitter, add a touch-friendly wheel-select alternative, and enforce strict £5 step increments on both controls).
 
 ### 🗂️ Backlog (unscoped, no priority order)
 Captured for future scoping into numbered roadmap items — not yet broken down per the Mandatory Task Breakdown Rule, and not committed to a specific phase.
