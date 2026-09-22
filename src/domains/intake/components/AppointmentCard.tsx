@@ -1,11 +1,16 @@
 import Image from "next/image";
+import type { ReactNode } from "react";
 
 import { Separator } from "@/components/ui/separator";
-import { AppointmentActions } from "@/domains/intake/components/AppointmentActions";
 import type { UpcomingAppointmentSummary } from "@/domains/intake/types";
 
 interface AppointmentCardProps {
   appointment: UpcomingAppointmentSummary;
+  // Slot rather than a hardcoded <AppointmentActions> -- the upcoming
+  // list (4.5) wants the reschedule control, the past-due "Needs
+  // Resolution" list (5.6.5) wants Cancel/No-Show/Complete instead.
+  // Same read-only layout, different actions per context.
+  actions: ReactNode;
 }
 
 const APPOINTMENT_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
@@ -15,8 +20,10 @@ const APPOINTMENT_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
 
 // Pure view (CLAUDE.md 4.5): read-only projection of an APPROVED
 // request with a booked slot -- unlike RequestCard, there's no
-// RequestActions here, since approve/decline already happened.
-export function AppointmentCard({ appointment }: AppointmentCardProps) {
+// approve/decline here, since that already happened. The actions
+// footer itself is a slot (see actions prop) since it differs by
+// context (reschedule vs. cancel/no-show/complete).
+export function AppointmentCard({ appointment, actions }: AppointmentCardProps) {
   const instagramUrl = `https://instagram.com/${appointment.clientInstagramHandle}`;
   const tags = [...appointment.designTags, ...appointment.aestheticTags];
 
@@ -77,7 +84,7 @@ export function AppointmentCard({ appointment }: AppointmentCardProps) {
         </>
       ) : null}
 
-      <AppointmentActions appointment={appointment} />
+      {actions}
     </article>
   );
 }

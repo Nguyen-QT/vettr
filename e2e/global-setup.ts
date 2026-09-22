@@ -43,6 +43,15 @@ export interface E2eFixture {
   // they don't all have to re-drive the login UI just to reach a
   // protected route.
   authenticatedSessionId: string;
+  // Three separate past-due APPROVED bookings (CLAUDE.md 5.6.5), one
+  // per lifecycle action, so the no-show/complete specs never touch the
+  // same row; a third stays untouched for the "no Cancel control" spec.
+  pastDueNoShowClientHandle: string;
+  pastDueCompleteClientHandle: string;
+  pastDueUntouchedClientHandle: string;
+  // A dedicated upcoming APPROVED booking for the cancel-from-the-
+  // upcoming-list spec (5.6.5).
+  cancelUpcomingClientHandle: string;
   // Real credentials for a pre-provisioned client Account (CLAUDE.md
   // 5.2.4), mirroring artistLoginEmail/Password above -- this
   // ClientProfile has its own booking so the login spec can assert the
@@ -286,6 +295,106 @@ export default async function globalSetup() {
     ]
   );
 
+  // Three separate past-due APPROVED bookings (CLAUDE.md 5.6.5) -- one
+  // per lifecycle action (no-show/complete), plus a third left
+  // untouched purely so a spec can assert Cancel is never offered here
+  // (see AppointmentLifecycleActions) without racing the mutating
+  // no-show/complete specs over the same row. Each on its own
+  // client/request/slot (and a distinct time, so their BOOKED TimeSlots
+  // don't collide with the overlap-exclusion constraint).
+  const pastDueNoShowClientHandle = "e2e_client_pastdue_noshow";
+  const pastDueCompleteClientHandle = "e2e_client_pastdue_complete";
+  const pastDueUntouchedClientHandle = "e2e_client_pastdue_untouched";
+  const pastDueFixtures = [
+    {
+      handle: pastDueNoShowClientHandle,
+      email: "e2e-client-pastdue-noshow@example.com",
+      startTime: new Date("2020-01-02T11:00:00"),
+    },
+    {
+      handle: pastDueCompleteClientHandle,
+      email: "e2e-client-pastdue-complete@example.com",
+      startTime: new Date("2020-01-03T11:00:00"),
+    },
+    {
+      handle: pastDueUntouchedClientHandle,
+      email: "e2e-client-pastdue-untouched@example.com",
+      startTime: new Date("2020-01-04T11:00:00"),
+    },
+  ];
+  const pastDueClientIds: string[] = [];
+  const pastDueRequestIds: string[] = [];
+
+  for (const { handle, email, startTime } of pastDueFixtures) {
+    const pastDueClientId = randomUUID();
+    const pastDueRequestId = randomUUID();
+    const pastDueEndTime = new Date(startTime.getTime() + 60 * 60_000);
+    pastDueClientIds.push(pastDueClientId);
+    pastDueRequestIds.push(pastDueRequestId);
+
+    await client.query(
+      `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+       VALUES ($1, $2, $3, now())`,
+      [pastDueClientId, handle, email]
+    );
+    await client.query(
+      `INSERT INTO "IntakeRequest"
+         (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+       VALUES
+         ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+      [pastDueRequestId, pastDueClientId, artistId, startTime]
+    );
+    await client.query(
+      `INSERT INTO "TimeSlot"
+         (id, "startTime", "endTime", status, "artistId", "intakeRequestId", "updatedAt")
+       VALUES
+         ($1, $2, $3, 'BOOKED', $4, $5, now())`,
+      [randomUUID(), startTime, pastDueEndTime, artistId, pastDueRequestId]
+    );
+  }
+
+  // A dedicated APPROVED booking for the upcoming-list cancel spec
+  // (CLAUDE.md 5.6.5), separate from rescheduleTestRequestId/
+  // bookedSlotRequestId above -- cancelling it must not affect either
+  // of those specs.
+  const cancelUpcomingClientId = randomUUID();
+  const cancelUpcomingRequestId = randomUUID();
+  const cancelUpcomingClientHandle = "e2e_client_cancel_upcoming";
+  const cancelUpcomingStartTime = new Date("2099-08-01T11:00:00");
+  const cancelUpcomingEndTime = new Date(
+    cancelUpcomingStartTime.getTime() + 60 * 60_000
+  );
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [
+      cancelUpcomingClientId,
+      cancelUpcomingClientHandle,
+      "e2e-client-cancel-upcoming@example.com",
+    ]
+  );
+  await client.query(
+    `INSERT INTO "IntakeRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+     VALUES
+       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+    [cancelUpcomingRequestId, cancelUpcomingClientId, artistId, cancelUpcomingStartTime]
+  );
+  await client.query(
+    `INSERT INTO "TimeSlot"
+       (id, "startTime", "endTime", status, "artistId", "intakeRequestId", "updatedAt")
+     VALUES
+       ($1, $2, $3, 'BOOKED', $4, $5, now())`,
+    [
+      randomUUID(),
+      cancelUpcomingStartTime,
+      cancelUpcomingEndTime,
+      artistId,
+      cancelUpcomingRequestId,
+    ]
+  );
+
   // Account/Session fixtures for route-protection specs (CLAUDE.md
   // 5.1.4/5.1.5) -- one real login-capable Account for this artist,
   // plus a second already-valid Session so other specs can skip the
@@ -373,6 +482,8 @@ export default async function globalSetup() {
       bookedSlotClientId,
       rescheduleTestClientId,
       clientLoginProfileId,
+      ...pastDueClientIds,
+      cancelUpcomingClientId,
     ],
     intakeRequestIds: [
       approveRequestId,
@@ -383,6 +494,8 @@ export default async function globalSetup() {
       rescheduleTestRequestId,
       clientLoginRequestId,
       clientEditableRequestId,
+      ...pastDueRequestIds,
+      cancelUpcomingRequestId,
     ],
     approveClientHandle,
     declineClientHandle,
@@ -398,6 +511,10 @@ export default async function globalSetup() {
     clientLoginEmail,
     clientLoginPassword,
     clientSignupEmail,
+    pastDueNoShowClientHandle,
+    pastDueCompleteClientHandle,
+    pastDueUntouchedClientHandle,
+    cancelUpcomingClientHandle,
   };
 
   await writeFile(FIXTURE_PATH, JSON.stringify(fixture, null, 2));
