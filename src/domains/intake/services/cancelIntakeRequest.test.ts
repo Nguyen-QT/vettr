@@ -86,6 +86,16 @@ describe("cancelIntakeRequest", () => {
     expect(updated?.status).toBe("CANCELLED_BY_CLIENT");
   });
 
+  it("does not apply a cancellation strike for a PENDING cancellation", async () => {
+    const requestId = await createRequest("PENDING");
+
+    await cancelIntakeRequest({ intakeRequestId: requestId, clientProfileId: clientId });
+
+    const client = await prisma.clientProfile.findUnique({ where: { id: clientId } });
+    expect(client?.cancellationCount).toBe(0);
+    expect(client?.enforcePrecharge).toBe(false);
+  });
+
   it("cancels an APPROVED request outside the window and releases its slot", async () => {
     const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60_000);
     const requestId = await createRequest("APPROVED", [
@@ -104,6 +114,19 @@ describe("cancelIntakeRequest", () => {
     });
     expect(updated?.status).toBe("CANCELLED_BY_CLIENT");
     expect(updated?.timeSlots[0]?.status).toBe("RELEASED");
+  });
+
+  it("applies a cancellation strike and flags the client for an APPROVED cancellation", async () => {
+    const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60_000);
+    const requestId = await createRequest("APPROVED", [
+      { startTime: farFuture, endTime: new Date(farFuture.getTime() + 60 * 60_000) },
+    ]);
+
+    await cancelIntakeRequest({ intakeRequestId: requestId, clientProfileId: clientId });
+
+    const client = await prisma.clientProfile.findUnique({ where: { id: clientId } });
+    expect(client?.cancellationCount).toBe(1);
+    expect(client?.enforcePrecharge).toBe(true);
   });
 
   it("rejects cancelling an APPROVED request inside the 48-hour window", async () => {

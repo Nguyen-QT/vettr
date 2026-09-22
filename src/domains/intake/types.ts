@@ -194,3 +194,36 @@ export type RescheduleApprovedBookingResult =
 // a key, even with an empty array, so the view never has to guess
 // whether a tier was omitted vs. genuinely has no images yet.
 export type TierReferenceImages = Record<ComplexityTier, string[]>;
+
+// Write command (CLAUDE.md 5.6): artist-initiated cancellation of an
+// already-APPROVED booking. No clientProfileId -- ownership-checked
+// against the artist's own session at the Controller/Action layer,
+// same pattern as RescheduleApprovedBookingInput (5.5). Never applies a
+// cancellation strike -- see services/cancelApprovedBookingAsArtist.ts.
+export interface CancelApprovedBookingAsArtistInput {
+  intakeRequestId: string;
+}
+
+export type CancelApprovedBookingAsArtistResult =
+  | { success: true }
+  | { success: false; error: string };
+
+// Write command (CLAUDE.md 5.6): artist marks a past-dated APPROVED
+// appointment as a no-show. Same ownership-check posture as above.
+export interface MarkAppointmentNoShowInput {
+  intakeRequestId: string;
+}
+
+export type MarkAppointmentNoShowResult =
+  | { success: true }
+  | { success: false; error: string };
+
+// Write command (CLAUDE.md 5.6): artist marks a past-dated APPROVED
+// appointment as completed. Same ownership-check posture as above.
+export interface MarkAppointmentCompletedInput {
+  intakeRequestId: string;
+}
+
+export type MarkAppointmentCompletedResult =
+  | { success: true }
+  | { success: false; error: string };
