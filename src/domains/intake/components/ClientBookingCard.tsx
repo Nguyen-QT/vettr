@@ -15,7 +15,9 @@ const STATUS_LABELS: Record<ClientBookingSummary["status"], string> = {
   AWAITING_SLOT_CONFIRMATION: "Awaiting confirmation",
   APPROVED: "Confirmed",
   DECLINED: "Declined",
-  CANCELLED: "Cancelled",
+  CANCELLED_BY_CLIENT: "Cancelled",
+  CANCELLED_BY_ARTIST: "Cancelled by artist",
+  NO_SHOW: "No-show",
   COMPLETED: "Completed",
 };
 

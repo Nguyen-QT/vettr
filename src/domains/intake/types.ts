@@ -115,13 +115,16 @@ export interface UpcomingAppointmentSummary {
 // Mirrors Prisma's RequestStatus enum. Unlike ActionableRequestStatus
 // above (the artist-dashboard subset), the client dashboard shows every
 // status a booking can be in, including ones the artist view never
-// needs to render (DECLINED, CANCELLED, COMPLETED).
+// needs to render (DECLINED, CANCELLED_BY_CLIENT, CANCELLED_BY_ARTIST,
+// NO_SHOW, COMPLETED).
 export type RequestStatus =
   | "PENDING"
   | "AWAITING_SLOT_CONFIRMATION"
   | "APPROVED"
   | "DECLINED"
-  | "CANCELLED"
+  | "CANCELLED_BY_CLIENT"
+  | "CANCELLED_BY_ARTIST"
+  | "NO_SHOW"
   | "COMPLETED";
 
 // Read-shaped projection of an IntakeRequest for the client dashboard

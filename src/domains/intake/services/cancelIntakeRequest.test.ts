@@ -83,7 +83,7 @@ describe("cancelIntakeRequest", () => {
     const updated = await prisma.intakeRequest.findUnique({
       where: { id: requestId },
     });
-    expect(updated?.status).toBe("CANCELLED");
+    expect(updated?.status).toBe("CANCELLED_BY_CLIENT");
   });
 
   it("cancels an APPROVED request outside the window and releases its slot", async () => {
@@ -102,7 +102,7 @@ describe("cancelIntakeRequest", () => {
       where: { id: requestId },
       include: { timeSlots: true },
     });
-    expect(updated?.status).toBe("CANCELLED");
+    expect(updated?.status).toBe("CANCELLED_BY_CLIENT");
     expect(updated?.timeSlots[0]?.status).toBe("RELEASED");
   });
 
@@ -128,7 +128,7 @@ describe("cancelIntakeRequest", () => {
   });
 
   it("rejects cancelling an already-CANCELLED request", async () => {
-    const requestId = await createRequest("CANCELLED");
+    const requestId = await createRequest("CANCELLED_BY_CLIENT");
 
     const result = await cancelIntakeRequest({
       intakeRequestId: requestId,
