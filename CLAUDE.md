@@ -187,7 +187,11 @@ src/
   - [x] 5.4.3: Domain Hook & Logic (`useClientBookingActions` orchestrating cancel/edit form state and refreshing the dashboard list).
   - [x] 5.4.4: View & Route (Cancel button and an inline edit form on the client dashboard's booking cards; e2e spec).
 
-- [ ] **5.5: Rescheduling & Slot Shift Engine** (Build domain logic allowing artists or clients to propose alternative time slots, update allocations, and handle confirmation workflows).
+- [ ] **5.5: Rescheduling & Slot Shift Engine** (Artist-initiated reschedule of an already-`APPROVED` booking -- the artist has final say over slot allocation, same "No Auto-Booking" model as approval itself, so a reschedule applies immediately rather than needing the client's on-platform confirmation. Client-initiated reschedule proposals, which would need a real propose/confirm handshake and notifications, are a separate backlog item. `PENDING`/`AWAITING_SLOT_CONFIRMATION` requests already have their time adjustable via 5.4's `updatePendingIntakeRequest` or the artist's own review step -- "rescheduling" only means something once a real `TimeSlot` is locked), decomposed per the Mandatory Task Breakdown Rule:
+  - [x] 5.5.1: Domain Service (`rescheduleApprovedBooking` in `intake`, reusing scheduling's `createBookedTimeSlots`/`isSlotConflict`; releases the old `BOOKED` `TimeSlot`(s) and books the new one(s) in one transaction, updating `requestedStartTime`; unit tests covering conflicts, non-APPROVED rejection, and single vs. two-slot durations).
+  - [ ] 5.5.2: Controller/Action (`rescheduleApprovedBookingAction` in `intake/actions.ts`; new action, so it gets an ownership check from day one -- derives the session's `artistId` via `getCurrentSession()` and verifies it matches the request's `artistId`, same pattern as 5.4.2's client-side checks).
+  - [ ] 5.5.3: Domain Hook & Logic (`useRescheduleBooking` orchestrating the reschedule form state on the artist's upcoming-appointments view).
+  - [ ] 5.5.4: View & Route (a "Reschedule" control on `AppointmentCard` opening an inline date/time/duration form; e2e spec).
 
 - [ ] **5.6: Cancellation & No-Show Lifecycle Management** (Implement status transitions for COMPLETED, CANCELLED_BY_CLIENT, CANCELLED_BY_ARTIST, and NO_SHOW, updating ClientProfile cancellation offenses).
 
