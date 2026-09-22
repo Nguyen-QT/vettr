@@ -84,10 +84,16 @@ export const requestedTimeSchema = z.enum(DAILY_SLOT_TIME_OPTIONS);
 // options, since a client's "must be finished by" time (e.g. to make a
 // flight) can fall anywhere in the day. Purely advisory -- see
 // getPendingIntakeRequests/RequestCard, never enforced against actual
-// slot availability.
+// slot availability. Explicitly accepts "" alongside a real HH:MM
+// value (not just an omitted key) -- an untouched <input type="time">
+// reports "" via react-hook-form, not undefined, and downstream code
+// (the superRefine below, submitIntakeRequest) already treats an empty
+// string as "not provided" via a falsy check.
 export const clientMaxEndTimeSchema = z
-  .string()
-  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid time (HH:MM).")
+  .union([
+    z.literal(""),
+    z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid time (HH:MM)."),
+  ])
   .optional();
 
 export const designTagSchema = z.enum(DESIGN_TAG_OPTIONS);

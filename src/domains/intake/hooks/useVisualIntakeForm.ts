@@ -62,6 +62,7 @@ export function useVisualIntakeForm({
       clientNotes: "",
       requestedDate: "",
       requestedTime: DAILY_SLOT_TIME_OPTIONS[0],
+      clientMaxEndTime: "",
     },
   });
 
