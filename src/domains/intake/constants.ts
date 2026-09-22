@@ -77,3 +77,9 @@ export const STRIKE_THRESHOLD = 1;
 
 export const APPOINTMENT_NOT_YET_DUE_ERROR_MESSAGE =
   "This appointment hasn't happened yet.";
+
+// Client Onboarding Required Fields (CLAUDE.md 6.2): minimum age to
+// submit an intake request, matching typical legal minimums for
+// tattoo/piercing services -- confirm the actual age-of-consent rules
+// for wherever Vettr operates before launch.
+export const MIN_CLIENT_AGE_YEARS = 18;

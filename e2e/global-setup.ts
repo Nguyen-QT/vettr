@@ -63,6 +63,10 @@ export interface E2eFixture {
   // reuses freestylePendingClientId, which nothing else ever links an
   // Account to.
   clientSignupEmail: string;
+  // A second login-capable client (CLAUDE.md 6.2) whose onboarding
+  // fields are already set, for the "locked fields" spec.
+  onboardedClientEmail: string;
+  onboardedClientPassword: string;
 }
 
 // Seeds one throwaway Artist with three IntakeRequests -- two PENDING
@@ -470,6 +474,38 @@ export default async function globalSetup() {
     ]
   );
 
+  // A separate login-capable ClientProfile that already has its
+  // onboarding fields set (CLAUDE.md 6.2), for the "locked fields"
+  // spec -- clientLoginProfileId above deliberately predates 6.2 (null
+  // firstName/lastName/dateOfBirth) so it doubles as the "still
+  // editable" case instead.
+  const onboardedClientId = randomUUID();
+  const onboardedClientEmail = "e2e-client-onboarded@example.com";
+  const onboardedClientPassword = "e2e-test-password-123";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "firstName", "lastName", "dateOfBirth", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, now())`,
+    [
+      onboardedClientId,
+      "e2e_client_onboarded",
+      onboardedClientEmail,
+      "Jamie",
+      "Rivera",
+      "2000-01-01",
+    ]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
+     VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
+    [
+      randomUUID(),
+      onboardedClientEmail,
+      hashPasswordForFixture(onboardedClientPassword),
+      onboardedClientId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -484,6 +520,7 @@ export default async function globalSetup() {
       clientLoginProfileId,
       ...pastDueClientIds,
       cancelUpcomingClientId,
+      onboardedClientId,
     ],
     intakeRequestIds: [
       approveRequestId,
@@ -511,6 +548,8 @@ export default async function globalSetup() {
     clientLoginEmail,
     clientLoginPassword,
     clientSignupEmail,
+    onboardedClientEmail,
+    onboardedClientPassword,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
     pastDueUntouchedClientHandle,

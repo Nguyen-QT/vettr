@@ -13,6 +13,7 @@ import {
   DESIGN_TAG_OPTIONS,
   INSTAGRAM_HANDLE_REGEX,
   MAX_DESIGN_REFERENCE_IMAGES,
+  MIN_CLIENT_AGE_YEARS,
   MIN_DESIGN_REFERENCE_IMAGES,
   OTHER_TAG_VALUE,
 } from "./constants";
@@ -81,6 +82,31 @@ export const requestedTimeSchema = z.enum(DAILY_SLOT_TIME_OPTIONS);
 export const designTagSchema = z.enum(DESIGN_TAG_OPTIONS);
 
 export const aestheticTagSchema = z.enum(AESTHETIC_TAG_OPTIONS);
+
+// Client Onboarding Required Fields (CLAUDE.md 6.2).
+export const clientFirstNameSchema = z
+  .string()
+  .trim()
+  .min(1, "First name is required.")
+  .max(100);
+
+export const clientLastNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Last name is required.")
+  .max(100);
+
+export const dateOfBirthSchema = z
+  .iso.date("Enter a valid date of birth.")
+  .refine(
+    (value) => {
+      const dob = new Date(`${value}T00:00:00`);
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - MIN_CLIENT_AGE_YEARS);
+      return dob.getTime() <= cutoff.getTime();
+    },
+    `You must be at least ${MIN_CLIENT_AGE_YEARS} years old to book.`
+  );
 
 export const clientBudgetRangeSchema = z
   .object({
@@ -164,6 +190,9 @@ export const clientIntakeInputSchema = z
     aestheticTags: z.array(aestheticTagSchema).optional(),
     email: z.email("Enter a valid email address."),
     phone: z.string().trim().min(1).optional(),
+    firstName: clientFirstNameSchema,
+    lastName: clientLastNameSchema,
+    dateOfBirth: dateOfBirthSchema,
     clientNotes: z.string().trim().max(1000).optional(),
     requestedDate: requestedDateSchema,
     requestedTime: requestedTimeSchema,

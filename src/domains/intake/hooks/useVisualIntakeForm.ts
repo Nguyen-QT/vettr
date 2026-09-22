@@ -25,6 +25,17 @@ interface UseVisualIntakeFormArgs {
   initialClientDetails?: ClientProfileContactDetails;
 }
 
+// A @db.Date column has no time-of-day meaning, so this reads its UTC
+// calendar fields specifically -- local getters could shift the date
+// by a day depending on the browser's timezone. Must stay the inverse
+// of actions.ts's UTC-midnight construction for a correct round-trip.
+function toDateOfBirthInputValue(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 // Data orchestration (CLAUDE.md): the component below only renders
 // whatever this hook decides is the active tag category/options and
 // submission state — it makes no decisions of its own.
@@ -43,6 +54,11 @@ export function useVisualIntakeForm({
       aestheticTags: [],
       email: initialClientDetails?.email ?? "",
       phone: initialClientDetails?.phone ?? "",
+      firstName: initialClientDetails?.firstName ?? "",
+      lastName: initialClientDetails?.lastName ?? "",
+      dateOfBirth: initialClientDetails?.dateOfBirth
+        ? toDateOfBirthInputValue(initialClientDetails.dateOfBirth)
+        : "",
       clientNotes: "",
       requestedDate: "",
       requestedTime: DAILY_SLOT_TIME_OPTIONS[0],
@@ -80,6 +96,21 @@ export function useVisualIntakeForm({
       setAvailableSlots(result.success ? result.slots : null);
     });
   }, [artistId, requestedDate]);
+
+  // Locks each contact/onboarding field independently based on whether
+  // that specific field already has a known value (CLAUDE.md 6.2) --
+  // deliberately per-field rather than one shared boolean, since
+  // firstName/lastName/dateOfBirth are empty for every client who
+  // signed up before 6.2, and locking a required-but-empty field would
+  // permanently block them from ever submitting a booking again.
+  const lockedFields = {
+    instagramHandle: Boolean(initialClientDetails?.instagramHandle),
+    email: Boolean(initialClientDetails?.email),
+    phone: Boolean(initialClientDetails?.phone),
+    firstName: Boolean(initialClientDetails?.firstName),
+    lastName: Boolean(initialClientDetails?.lastName),
+    dateOfBirth: Boolean(initialClientDetails?.dateOfBirth),
+  };
 
   const tier = form.watch("tier");
   const isFreestyle = tier === "FREESTYLE";
@@ -120,6 +151,7 @@ export function useVisualIntakeForm({
     isSubmitting,
     serverError,
     submittedRequestId,
+    lockedFields,
     availableSlots,
     isLoadingAvailability,
   };
