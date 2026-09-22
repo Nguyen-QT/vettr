@@ -33,7 +33,7 @@ describe("confirmDepositPayment", () => {
   });
 
   afterEach(async () => {
-    await prisma.intakeRequest.deleteMany({ where: { artistId } });
+    await prisma.bookingRequest.deleteMany({ where: { artistId } });
     await prisma.clientProfile.delete({ where: { id: clientId } });
     await prisma.artist.delete({ where: { id: artistId } });
   });
@@ -42,7 +42,7 @@ describe("confirmDepositPayment", () => {
     depositPaid?: boolean;
     stripePaymentIntentId?: string | null;
   }) {
-    return prisma.intakeRequest.create({
+    return prisma.bookingRequest.create({
       data: {
         clientId,
         artistId,
@@ -62,7 +62,7 @@ describe("confirmDepositPayment", () => {
     const result = await confirmDepositPayment("pi_123");
 
     expect(result).toEqual({ success: true });
-    const updated = await prisma.intakeRequest.findUnique({
+    const updated = await prisma.bookingRequest.findUnique({
       where: { id: request.id },
     });
     expect(updated?.depositPaid).toBe(true);
@@ -88,7 +88,7 @@ describe("confirmDepositPayment", () => {
 
     await confirmDepositPayment("pi_999");
 
-    const untouched = await prisma.intakeRequest.findUnique({
+    const untouched = await prisma.bookingRequest.findUnique({
       where: { id: request.id },
     });
     expect(untouched?.depositPaid).toBe(false);

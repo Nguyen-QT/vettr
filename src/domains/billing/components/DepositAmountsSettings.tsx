@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useArtistDepositSettings } from "@/domains/billing/hooks/useArtistDepositSettings";
-import { COMPLEXITY_TIERS } from "@/domains/intake/constants";
-import type { ComplexityTier } from "@/domains/intake/types";
+import { COMPLEXITY_TIERS } from "@/domains/booking/constants";
+import type { ComplexityTier } from "@/domains/booking/types";
 
 // Pure view (CLAUDE.md 7.1.9): renders whatever useArtistDepositSettings
 // reports -- no artistId prop, the hook derives it from the session.

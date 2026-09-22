@@ -16,7 +16,7 @@ type PrismaTransactionClient = Prisma.TransactionClient;
 // empty, so the message is the only reliable signal here.
 const POSTGRES_EXCLUSION_VIOLATION_CODE = "23P01";
 
-// Exported for reuse by callers (e.g. intake's reviewIntakeRequest, 4.1f)
+// Exported for reuse by callers (e.g. booking's reviewBookingRequest, 4.1f)
 // that need to book slots as part of a larger transaction spanning
 // domains, rather than confirmTimeSlot's own self-contained one below.
 export function isSlotConflict(error: unknown): boolean {
@@ -40,7 +40,7 @@ export async function createBookedTimeSlots(
       await tx.timeSlot.create({
         data: {
           artistId: input.artistId,
-          intakeRequestId: input.intakeRequestId,
+          bookingRequestId: input.bookingRequestId,
           startTime: range.startTime,
           endTime: range.endTime,
           status: "BOOKED",

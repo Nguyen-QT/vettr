@@ -1,5 +1,5 @@
-import { getIntakeRequestByPaymentIntentId } from "@/domains/intake/services/getIntakeRequestByPaymentIntentId";
-import { markDepositPaid } from "@/domains/intake/services/markDepositPaid";
+import { getBookingRequestByPaymentIntentId } from "@/domains/booking/services/getBookingRequestByPaymentIntentId";
+import { markDepositPaid } from "@/domains/booking/services/markDepositPaid";
 
 import { DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE } from "../constants";
 import type { ConfirmDepositPaymentResult } from "../types";
@@ -8,13 +8,13 @@ import type { ConfirmDepositPaymentResult } from "../types";
 // Stripe webhook handler once a PaymentIntent succeeds. Idempotent --
 // Stripe may redeliver the same event, and an already-confirmed
 // request simply returns success again without a redundant write.
-// Reads/writes IntakeRequest through intake's narrow deposit functions
-// (7.2.3) rather than prisma.intakeRequest directly -- billing never
-// queries intake's table (CLAUDE.md's Domain Boundary Isolation rule).
+// Reads/writes BookingRequest through booking's narrow deposit functions
+// (7.2.3) rather than prisma.bookingRequest directly -- billing never
+// queries booking's table (CLAUDE.md's Domain Boundary Isolation rule).
 export async function confirmDepositPayment(
   paymentIntentId: string
 ): Promise<ConfirmDepositPaymentResult> {
-  const request = await getIntakeRequestByPaymentIntentId(paymentIntentId);
+  const request = await getBookingRequestByPaymentIntentId(paymentIntentId);
 
   if (!request) {
     return { success: false, error: DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE };

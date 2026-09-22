@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { ApprovedUnpaidRequestSummary } from "@/domains/intake/types";
+import type { ApprovedUnpaidRequestSummary } from "@/domains/booking/types";
 import { prisma } from "@/lib/prisma";
 
 import { getPayableDeposits } from "./getPayableDeposits";
 
 // Hits the real local Postgres database for ArtistDepositSetting only
 // -- getPayableDeposits is a pure join over its input, so no
-// ClientProfile/IntakeRequest fixtures are needed here (see intake's
+// ClientProfile/BookingRequest fixtures are needed here (see booking's
 // getApprovedUnpaidRequestSummaries.test.ts for that side).
 describe("getPayableDeposits", () => {
   let artistId: string;

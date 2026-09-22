@@ -15,7 +15,7 @@ async function readFixture(): Promise<E2eFixture> {
 // Scoped to what 4.1e actually changed: the new preferred date/time
 // fields. A full successful-submission test would also need to drive
 // UploadThing's real upload flow, which is out of scope here.
-test.describe("client intake form -- requested slot", () => {
+test.describe("client booking form -- requested slot", () => {
   test("shows the preferred date and fixed daily time options", async ({
     page,
   }) => {

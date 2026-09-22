@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/lib/prisma";
 
-import type { RequestStatus } from "@/domains/intake/types";
+import type { RequestStatus } from "@/domains/booking/types";
 
 import { createDepositPaymentIntent } from "./createDepositPaymentIntent";
 
@@ -51,7 +51,7 @@ describe("createDepositPaymentIntent", () => {
   });
 
   afterEach(async () => {
-    await prisma.intakeRequest.deleteMany({ where: { artistId } });
+    await prisma.bookingRequest.deleteMany({ where: { artistId } });
     await prisma.artistDepositSetting.deleteMany({ where: { artistId } });
     await prisma.clientProfile.delete({ where: { id: clientId } });
     await prisma.artist.delete({ where: { id: artistId } });
@@ -61,7 +61,7 @@ describe("createDepositPaymentIntent", () => {
     status: RequestStatus,
     overrides: { depositPaid?: boolean } = {}
   ) {
-    return prisma.intakeRequest.create({
+    return prisma.bookingRequest.create({
       data: {
         clientId,
         artistId,
@@ -85,7 +85,7 @@ describe("createDepositPaymentIntent", () => {
     });
 
     const result = await createDepositPaymentIntent({
-      intakeRequestId: request.id,
+      bookingRequestId: request.id,
       clientProfileId: clientId,
     });
 
@@ -93,10 +93,10 @@ describe("createDepositPaymentIntent", () => {
     expect(createPaymentIntentMock).toHaveBeenCalledWith({
       amount: 2000,
       currency: "gbp",
-      metadata: { intakeRequestId: request.id },
+      metadata: { bookingRequestId: request.id },
     });
 
-    const updated = await prisma.intakeRequest.findUnique({
+    const updated = await prisma.bookingRequest.findUnique({
       where: { id: request.id },
     });
     expect(updated?.stripePaymentIntentId).toBe("pi_123");
@@ -110,7 +110,7 @@ describe("createDepositPaymentIntent", () => {
     const request = await createRequest("APPROVED");
 
     const result = await createDepositPaymentIntent({
-      intakeRequestId: request.id,
+      bookingRequestId: request.id,
       clientProfileId: randomUUID(),
     });
 
@@ -125,7 +125,7 @@ describe("createDepositPaymentIntent", () => {
     const request = await createRequest("PENDING");
 
     const result = await createDepositPaymentIntent({
-      intakeRequestId: request.id,
+      bookingRequestId: request.id,
       clientProfileId: clientId,
     });
 
@@ -140,7 +140,7 @@ describe("createDepositPaymentIntent", () => {
     const request = await createRequest("APPROVED", { depositPaid: true });
 
     const result = await createDepositPaymentIntent({
-      intakeRequestId: request.id,
+      bookingRequestId: request.id,
       clientProfileId: clientId,
     });
 
@@ -152,7 +152,7 @@ describe("createDepositPaymentIntent", () => {
     const request = await createRequest("APPROVED");
 
     const result = await createDepositPaymentIntent({
-      intakeRequestId: request.id,
+      bookingRequestId: request.id,
       clientProfileId: clientId,
     });
 

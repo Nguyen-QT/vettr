@@ -19,8 +19,8 @@ export default async function globalTeardown() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
 
-  await client.query(`DELETE FROM "IntakeRequest" WHERE id = ANY($1)`, [
-    fixture.intakeRequestIds,
+  await client.query(`DELETE FROM "BookingRequest" WHERE id = ANY($1)`, [
+    fixture.bookingRequestIds,
   ]);
   // Account.clientProfileId is ON DELETE SET NULL (CLAUDE.md 5.1.1),
   // same reasoning as the artist Account cleanup below -- must clear

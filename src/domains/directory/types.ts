@@ -1,6 +1,6 @@
 // Pure domain contracts for the directory bounded context (CLAUDE.md
 // 5.3) -- public artist-browsing, a distinct concern from booking/
-// vetting logic (intake) or slot scheduling (scheduling). Deliberately
+// vetting logic (booking) or slot scheduling (scheduling). Deliberately
 // standalone TypeScript, same convention as the other domains.
 
 // Read-shaped projection of an Artist for the public discovery

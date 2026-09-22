@@ -24,11 +24,11 @@ describe("releaseBookedTimeSlots", () => {
   });
 
   afterEach(async () => {
-    await prisma.intakeRequest.deleteMany({ where: { artistId } });
+    await prisma.bookingRequest.deleteMany({ where: { artistId } });
     await prisma.artist.delete({ where: { id: artistId } });
   });
 
-  async function createIntakeRequest(): Promise<string> {
+  async function createBookingRequest(): Promise<string> {
     const clientId = randomUUID();
     await prisma.clientProfile.create({
       data: {
@@ -37,36 +37,36 @@ describe("releaseBookedTimeSlots", () => {
         email: `test_client_${clientId.slice(0, 8)}@example.com`,
       },
     });
-    const request = await prisma.intakeRequest.create({
+    const request = await prisma.bookingRequest.create({
       data: { clientId, artistId, tier: "TIER_2", minPrice: 100, maxPrice: 200 },
     });
     return request.id;
   }
 
   it("releases a BOOKED slot to RELEASED", async () => {
-    const intakeRequestId = await createIntakeRequest();
+    const bookingRequestId = await createBookingRequest();
     const slot = await prisma.timeSlot.create({
       data: {
         artistId,
-        intakeRequestId,
+        bookingRequestId,
         startTime: new Date("2026-11-10T11:00:00.000Z"),
         endTime: new Date("2026-11-10T12:00:00.000Z"),
         status: "BOOKED",
       },
     });
 
-    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, intakeRequestId));
+    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, bookingRequestId));
 
     const updated = await prisma.timeSlot.findUnique({ where: { id: slot.id } });
     expect(updated?.status).toBe("RELEASED");
   });
 
   it("releases both slots of a two-slot booking", async () => {
-    const intakeRequestId = await createIntakeRequest();
+    const bookingRequestId = await createBookingRequest();
     const slotA = await prisma.timeSlot.create({
       data: {
         artistId,
-        intakeRequestId,
+        bookingRequestId,
         startTime: new Date("2026-11-11T11:00:00.000Z"),
         endTime: new Date("2026-11-11T12:00:00.000Z"),
         status: "BOOKED",
@@ -75,14 +75,14 @@ describe("releaseBookedTimeSlots", () => {
     const slotB = await prisma.timeSlot.create({
       data: {
         artistId,
-        intakeRequestId,
+        bookingRequestId,
         startTime: new Date("2026-11-11T12:00:00.000Z"),
         endTime: new Date("2026-11-11T13:00:00.000Z"),
         status: "BOOKED",
       },
     });
 
-    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, intakeRequestId));
+    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, bookingRequestId));
 
     const updated = await prisma.timeSlot.findMany({
       where: { id: { in: [slotA.id, slotB.id] } },
@@ -91,19 +91,19 @@ describe("releaseBookedTimeSlots", () => {
   });
 
   it("does not touch a different request's BOOKED slot", async () => {
-    const intakeRequestId = await createIntakeRequest();
-    const otherRequestId = await createIntakeRequest();
+    const bookingRequestId = await createBookingRequest();
+    const otherRequestId = await createBookingRequest();
     const otherSlot = await prisma.timeSlot.create({
       data: {
         artistId,
-        intakeRequestId: otherRequestId,
+        bookingRequestId: otherRequestId,
         startTime: new Date("2026-11-12T11:00:00.000Z"),
         endTime: new Date("2026-11-12T12:00:00.000Z"),
         status: "BOOKED",
       },
     });
 
-    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, intakeRequestId));
+    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, bookingRequestId));
 
     const untouched = await prisma.timeSlot.findUnique({
       where: { id: otherSlot.id },
@@ -112,11 +112,11 @@ describe("releaseBookedTimeSlots", () => {
   });
 
   it("leaves an already-RELEASED slot alone without erroring", async () => {
-    const intakeRequestId = await createIntakeRequest();
+    const bookingRequestId = await createBookingRequest();
     const slot = await prisma.timeSlot.create({
       data: {
         artistId,
-        intakeRequestId,
+        bookingRequestId,
         startTime: new Date("2026-11-13T11:00:00.000Z"),
         endTime: new Date("2026-11-13T12:00:00.000Z"),
         status: "RELEASED",
@@ -124,7 +124,7 @@ describe("releaseBookedTimeSlots", () => {
     });
 
     await expect(
-      prisma.$transaction((tx) => releaseBookedTimeSlots(tx, intakeRequestId))
+      prisma.$transaction((tx) => releaseBookedTimeSlots(tx, bookingRequestId))
     ).resolves.not.toThrow();
 
     const unchanged = await prisma.timeSlot.findUnique({ where: { id: slot.id } });

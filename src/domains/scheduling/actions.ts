@@ -49,8 +49,8 @@ export type GetScheduleOverridesResult =
 // check. Not yet called from any view -- the artist-facing duration
 // picker this depends on hasn't been built (CLAUDE.md 4.1 was scoped to
 // the confirmation logic only). Also deliberately does not touch
-// IntakeRequest.status: composing this with intake's approveIntakeRequest
-// is a later wiring task, same separation intake/actions.ts already
+// BookingRequest.status: composing this with booking's approveBookingRequest
+// is a later wiring task, same separation booking/actions.ts already
 // documents on its own approve/decline mutators.
 export async function confirmTimeSlotAction(
   input: unknown
@@ -68,7 +68,7 @@ export async function confirmTimeSlotAction(
 }
 
 // Controller/Action boundary (CLAUDE.md 4.1j-b): validates structurally,
-// then hands off to the read query. Called from the intake form as the
+// then hands off to the read query. Called from the booking form as the
 // client picks a date (4.1j-c/d), so a real artistId/date are always
 // supplied by the app itself -- validation here mainly guards against a
 // malformed date string, not adversarial input.
@@ -129,7 +129,7 @@ export async function setScheduleOverrideAction(
 // Controller/Action boundary (CLAUDE.md 4.3): a plain passthrough read
 // with no business rules of its own, so it queries Prisma directly
 // rather than adding a single-purpose domain service for it (same
-// precedent as intake/actions.ts's submitIntakeRequest). Powers the
+// precedent as booking/actions.ts's submitBookingRequest). Powers the
 // settings UI (4.3.7), which needs to show what's already configured.
 export async function getWeeklyHoursAction(
   input: unknown

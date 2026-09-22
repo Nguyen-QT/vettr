@@ -7,8 +7,8 @@ import {
   setArtistDepositSettingsAction,
 } from "@/domains/billing/actions";
 import type { ArtistDepositSettings } from "@/domains/billing/types";
-import { COMPLEXITY_TIERS } from "@/domains/intake/constants";
-import type { ComplexityTier } from "@/domains/intake/types";
+import { COMPLEXITY_TIERS } from "@/domains/booking/constants";
+import type { ComplexityTier } from "@/domains/booking/types";
 
 const EMPTY_SETTINGS: ArtistDepositSettings = Object.fromEntries(
   COMPLEXITY_TIERS.map((tier) => [tier, null])

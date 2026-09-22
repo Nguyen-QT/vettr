@@ -26,11 +26,11 @@ describe("confirmTimeSlot", () => {
 
   afterEach(async () => {
     // Cascades to TimeSlot/DesignReference/Addon rows.
-    await prisma.intakeRequest.deleteMany({ where: { artistId } });
+    await prisma.bookingRequest.deleteMany({ where: { artistId } });
     await prisma.artist.delete({ where: { id: artistId } });
   });
 
-  async function createIntakeRequest(): Promise<string> {
+  async function createBookingRequest(): Promise<string> {
     const clientId = randomUUID();
     await prisma.clientProfile.create({
       data: {
@@ -39,7 +39,7 @@ describe("confirmTimeSlot", () => {
         email: `test_client_${clientId.slice(0, 8)}@example.com`,
       },
     });
-    const request = await prisma.intakeRequest.create({
+    const request = await prisma.bookingRequest.create({
       data: {
         clientId,
         artistId,
@@ -52,10 +52,10 @@ describe("confirmTimeSlot", () => {
   }
 
   it("books a single slot for a duration within the per-slot max", async () => {
-    const intakeRequestId = await createIntakeRequest();
+    const bookingRequestId = await createBookingRequest();
 
     const result = await confirmTimeSlot({
-      intakeRequestId,
+      bookingRequestId,
       artistId,
       startTime: new Date("2026-11-01T11:00:00.000Z"),
       durationMinutes: 90,
@@ -72,10 +72,10 @@ describe("confirmTimeSlot", () => {
   });
 
   it("books two adjacent slots and locks the second one when duration overflows one slot", async () => {
-    const intakeRequestId = await createIntakeRequest();
+    const bookingRequestId = await createBookingRequest();
 
     const result = await confirmTimeSlot({
-      intakeRequestId,
+      bookingRequestId,
       artistId,
       startTime: new Date("2026-11-02T11:00:00.000Z"),
       durationMinutes: 300, // exceeds the 180-minute per-slot max
@@ -94,12 +94,12 @@ describe("confirmTimeSlot", () => {
   });
 
   it("rejects a double-booking attempt against an already-booked slot", async () => {
-    const firstRequestId = await createIntakeRequest();
-    const secondRequestId = await createIntakeRequest();
+    const firstRequestId = await createBookingRequest();
+    const secondRequestId = await createBookingRequest();
     const startTime = new Date("2026-11-03T14:00:00.000Z");
 
     const first = await confirmTimeSlot({
-      intakeRequestId: firstRequestId,
+      bookingRequestId: firstRequestId,
       artistId,
       startTime,
       durationMinutes: 60,
@@ -107,7 +107,7 @@ describe("confirmTimeSlot", () => {
     expect(first.success).toBe(true);
 
     const second = await confirmTimeSlot({
-      intakeRequestId: secondRequestId,
+      bookingRequestId: secondRequestId,
       artistId,
       startTime,
       durationMinutes: 60,
@@ -119,11 +119,11 @@ describe("confirmTimeSlot", () => {
   });
 
   it("rejects a booking that only partially overlaps an already-booked slot", async () => {
-    const firstRequestId = await createIntakeRequest();
-    const secondRequestId = await createIntakeRequest();
+    const firstRequestId = await createBookingRequest();
+    const secondRequestId = await createBookingRequest();
 
     const first = await confirmTimeSlot({
-      intakeRequestId: firstRequestId,
+      bookingRequestId: firstRequestId,
       artistId,
       startTime: new Date("2026-11-04T11:00:00.000Z"),
       durationMinutes: 120, // 11:00 - 13:00
@@ -131,7 +131,7 @@ describe("confirmTimeSlot", () => {
     expect(first.success).toBe(true);
 
     const second = await confirmTimeSlot({
-      intakeRequestId: secondRequestId,
+      bookingRequestId: secondRequestId,
       artistId,
       startTime: new Date("2026-11-04T12:00:00.000Z"), // overlaps 12:00 - 13:00
       durationMinutes: 60,
@@ -141,19 +141,19 @@ describe("confirmTimeSlot", () => {
   });
 
   it("allows two concurrently-submitted approvals for the same slot to race, letting exactly one win", async () => {
-    const firstRequestId = await createIntakeRequest();
-    const secondRequestId = await createIntakeRequest();
+    const firstRequestId = await createBookingRequest();
+    const secondRequestId = await createBookingRequest();
     const startTime = new Date("2026-11-05T17:30:00.000Z");
 
     const [first, second] = await Promise.all([
       confirmTimeSlot({
-        intakeRequestId: firstRequestId,
+        bookingRequestId: firstRequestId,
         artistId,
         startTime,
         durationMinutes: 60,
       }),
       confirmTimeSlot({
-        intakeRequestId: secondRequestId,
+        bookingRequestId: secondRequestId,
         artistId,
         startTime,
         durationMinutes: 60,
@@ -167,11 +167,11 @@ describe("confirmTimeSlot", () => {
   });
 
   it("does not block adjacent, non-overlapping slots for the same artist", async () => {
-    const firstRequestId = await createIntakeRequest();
-    const secondRequestId = await createIntakeRequest();
+    const firstRequestId = await createBookingRequest();
+    const secondRequestId = await createBookingRequest();
 
     const first = await confirmTimeSlot({
-      intakeRequestId: firstRequestId,
+      bookingRequestId: firstRequestId,
       artistId,
       startTime: new Date("2026-11-06T11:00:00.000Z"),
       durationMinutes: 60, // 11:00 - 12:00
@@ -179,7 +179,7 @@ describe("confirmTimeSlot", () => {
     expect(first.success).toBe(true);
 
     const second = await confirmTimeSlot({
-      intakeRequestId: secondRequestId,
+      bookingRequestId: secondRequestId,
       artistId,
       startTime: new Date("2026-11-06T12:00:00.000Z"), // starts exactly when the first ends
       durationMinutes: 60,

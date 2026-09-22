@@ -102,7 +102,7 @@ model Artist {
   location  String?
 
   account             Account?
-  intakeRequests      IntakeRequest[]
+  bookingRequests     BookingRequest[]
   timeSlots           TimeSlot[]
   weeklyHours         ArtistWeeklyHours[]
   scheduleOverrides   ArtistScheduleOverride[]
@@ -144,7 +144,7 @@ model ArtistScheduleOverride {
 }
 
 // One artist's own past-work example images, grouped by tier (CLAUDE.md
-// 4.6), shown to clients on the intake form to help them judge which
+// 4.6), shown to clients on the booking form to help them judge which
 // tier fits their idea -- per-artist rather than a shared/generic
 // gallery, since clients are judging this specific artist's style and
 // pricing. Read-only for clients; artist upload/management is a
@@ -193,8 +193,8 @@ model ClientProfile {
   updatedAt         DateTime @updatedAt
 
   // Onboarding fields (CLAUDE.md 6.2) -- nullable at the DB level only,
-  // same reasoning as IntakeRequest.requestedStartTime/estimatedPrice:
-  // "required" is enforced by intake.schema.ts for every new
+  // same reasoning as BookingRequest.requestedStartTime/estimatedPrice:
+  // "required" is enforced by booking.schema.ts for every new
   // submission, not by a backfilled placeholder value on existing
   // rows. dateOfBirth rather than a raw age so exact current age is
   // always derivable instead of a stored value quietly going stale.
@@ -202,11 +202,11 @@ model ClientProfile {
   lastName    String?
   dateOfBirth DateTime? @db.Date
 
-  account        Account?
-  intakeRequests IntakeRequest[]
+  account         Account?
+  bookingRequests BookingRequest[]
 }
 
-model IntakeRequest {
+model BookingRequest {
   id     String        @id @default(cuid())
   status RequestStatus @default(PENDING)
 
@@ -222,11 +222,11 @@ model IntakeRequest {
   // field rather than a TimeSlot row, since no allocation exists yet.
   timeSlots TimeSlot[]
 
-  // Client's chosen slot at intake time (one of the artist's fixed daily
+  // Client's chosen slot at booking time (one of the artist's fixed daily
   // times, e.g. 11:00/14:00/17:30, on a client-picked date). Not itself an
   // allocation -- see timeSlots above. Nullable at the DB level only
-  // because intake capture (CLAUDE.md 4.1e) hasn't landed yet, same as
-  // estimatedPrice below -- intake.schema.ts is what actually enforces it
+  // because booking capture (CLAUDE.md 4.1e) hasn't landed yet, same as
+  // estimatedPrice below -- booking.schema.ts is what actually enforces it
   // once that lands.
   requestedStartTime DateTime?
 
@@ -246,7 +246,7 @@ model IntakeRequest {
   aestheticTags String[]
 
   // Null until the artist triages the request and sets a base estimate;
-  // the client does not supply a price at intake time.
+  // the client does not supply a price at booking time.
   estimatedPrice Decimal? @db.Decimal(10, 2)
   depositPaid    Boolean  @default(false)
 
@@ -273,7 +273,7 @@ model IntakeRequest {
   updatedAt DateTime @updatedAt
 }
 
-// Visual Enforcement: every IntakeRequest must carry at least one high-res
+// Visual Enforcement: every BookingRequest must carry at least one high-res
 // design reference image. The one-or-more minimum is a domain-service
 // validation rule (Phase 2), not something the schema itself can enforce.
 model DesignReference {
@@ -281,8 +281,8 @@ model DesignReference {
   imageUrl  String
   createdAt DateTime @default(now())
 
-  intakeRequest   IntakeRequest @relation(fields: [intakeRequestId], references: [id], onDelete: Cascade)
-  intakeRequestId String
+  bookingRequest   BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
+  bookingRequestId String
 }
 
 // Line-item add-ons applied dynamically on the day of service, layered on
@@ -293,13 +293,13 @@ model Addon {
   price     Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now())
 
-  intakeRequest   IntakeRequest @relation(fields: [intakeRequestId], references: [id], onDelete: Cascade)
-  intakeRequestId String
+  bookingRequest   BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
+  bookingRequestId String
 }
 
 // No Auto-Booking: rows here are only ever created already BOOKED, by
 // the artist's approval action (see confirmTimeSlot) -- the client's own
-// slot preference is IntakeRequest.requestedStartTime, a plain field,
+// slot preference is BookingRequest.requestedStartTime, a plain field,
 // not a row here. REQUESTED/RELEASED remain on SlotStatus for a future
 // cancellation flow (Phase 4.4) that would transition a BOOKED row back
 // out rather than delete it.
@@ -314,8 +314,8 @@ model TimeSlot {
   artist   Artist @relation(fields: [artistId], references: [id])
   artistId String
 
-  intakeRequest   IntakeRequest @relation(fields: [intakeRequestId], references: [id], onDelete: Cascade)
-  intakeRequestId String
+  bookingRequest   BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
+  bookingRequestId String
 
   @@index([artistId, startTime])
 }

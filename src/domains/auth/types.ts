@@ -1,7 +1,7 @@
 // Pure domain contracts for the auth bounded context. Deliberately
 // standalone TypeScript -- no z.infer, no import from auth.schema.ts --
 // kept structurally in sync with auth.schema.ts by hand, same
-// convention as intake/scheduling.
+// convention as booking/scheduling.
 
 export interface LoginInput {
   email: string;

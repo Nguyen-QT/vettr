@@ -8,7 +8,7 @@ import { DepositCardForm } from "@/domains/billing/components/DepositCardForm";
 import { useDepositPayment } from "@/domains/billing/hooks/useDepositPayment";
 
 interface DepositPaymentCardProps {
-  intakeRequestId: string;
+  bookingRequestId: string;
   depositAmount: number;
 }
 
@@ -19,7 +19,7 @@ interface DepositPaymentCardProps {
 // <StripeElementsProvider>, since useStripe()/useElements() only work
 // inside that tree.
 export function DepositPaymentCard({
-  intakeRequestId,
+  bookingRequestId,
   depositAmount,
 }: DepositPaymentCardProps) {
   const { clientSecret, isLoading, error, startDepositPayment } =
@@ -40,7 +40,7 @@ export function DepositPaymentCard({
           disabled={isLoading}
           onClick={() => {
             setStarted(true);
-            startDepositPayment(intakeRequestId);
+            startDepositPayment(bookingRequestId);
           }}
         >
           {isLoading ? "Loading…" : "Pay deposit"}

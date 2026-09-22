@@ -18,7 +18,7 @@ import { Client } from "pg";
 // dev fixtures (artist@vettr.com / client@vettr.com) without
 // clobbering anything already there: weekly hours/tier images/deposit
 // settings use "create only if missing", onboarding fields on an
-// existing ClientProfile only fill in nulls, and IntakeRequests use
+// existing ClientProfile only fill in nulls, and BookingRequests use
 // fixed ids so re-running upserts the same rows instead of duplicating.
 
 function hashPasswordForSeed(password: string): string {
@@ -79,7 +79,7 @@ async function main() {
   );
   const staleClientIds = staleClients.rows.map((row) => row.id);
   if (staleClientIds.length > 0) {
-    await client.query(`DELETE FROM "IntakeRequest" WHERE "clientId" = ANY($1)`, [
+    await client.query(`DELETE FROM "BookingRequest" WHERE "clientId" = ANY($1)`, [
       staleClientIds,
     ]);
     await client.query(`DELETE FROM "Account" WHERE "clientProfileId" = ANY($1)`, [
@@ -103,7 +103,7 @@ async function main() {
     await client.query(`DELETE FROM "ArtistDepositSetting" WHERE "artistId" = $1`, [
       id,
     ]);
-    await client.query(`DELETE FROM "IntakeRequest" WHERE "artistId" = $1`, [id]);
+    await client.query(`DELETE FROM "BookingRequest" WHERE "artistId" = $1`, [id]);
     await client.query(`DELETE FROM "Account" WHERE "artistId" = $1`, [id]);
     await client.query(`DELETE FROM "Artist" WHERE id = $1`, [id]);
   }
@@ -173,7 +173,7 @@ async function main() {
   console.log(`Seeded ${depositSettings.length} deposit-setting rows.`);
 
   // --- Client onboarding fields: fill in only currently-null fields --
-  // same posture as submitIntakeRequest's own signed-in-client path
+  // same posture as submitBookingRequest's own signed-in-client path
   // (CLAUDE.md 6.2) -- never overwrites anything the dev already set.
   await client.query(
     `UPDATE "ClientProfile"
@@ -235,7 +235,7 @@ async function main() {
   );
   console.log("Seeded jordan@vettr.com and flagged@vettr.com client accounts.");
 
-  // --- IntakeRequests: fixed ids, upsert-by-id so re-running this
+  // --- BookingRequests: fixed ids, upsert-by-id so re-running this
   // script doesn't duplicate rows. Dates anchored relative to today so
   // "future"/"past-due" stay correct whenever this is re-run.
   const now = new Date();
@@ -262,7 +262,7 @@ async function main() {
     clientMaxEndTime?: Date;
   }) {
     await client.query(
-      `INSERT INTO "IntakeRequest"
+      `INSERT INTO "BookingRequest"
          (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "depositPaid", "clientMaxEndTime", "updatedAt")
        VALUES ($1, $2, $3, $4, $5, $6, $7, ARRAY[]::text[], ARRAY[]::text[], $8, $9, $10, now())
        ON CONFLICT (id) DO UPDATE SET
@@ -285,15 +285,15 @@ async function main() {
   async function upsertTimeSlot(
     id: string,
     artistId: string,
-    intakeRequestId: string,
+    bookingRequestId: string,
     startTime: Date,
     endTime: Date
   ) {
     await client.query(
-      `INSERT INTO "TimeSlot" (id, "startTime", "endTime", status, "artistId", "intakeRequestId", "updatedAt")
+      `INSERT INTO "TimeSlot" (id, "startTime", "endTime", status, "artistId", "bookingRequestId", "updatedAt")
        VALUES ($1, $2, $3, 'BOOKED', $4, $5, now())
        ON CONFLICT (id) DO UPDATE SET "startTime" = $2, "endTime" = $3`,
-      [id, startTime, endTime, artistId, intakeRequestId]
+      [id, startTime, endTime, artistId, bookingRequestId]
     );
   }
 
@@ -420,7 +420,7 @@ async function main() {
     maxPrice: 400,
   });
 
-  console.log(`Seeded ${Object.keys(REQUEST_IDS).length} additional IntakeRequests.`);
+  console.log(`Seeded ${Object.keys(REQUEST_IDS).length} additional BookingRequests.`);
 
   await client.end();
   console.log("\nSeed complete. Login credentials:");

@@ -9,7 +9,7 @@ import { getAvailableSlots } from "./getAvailableSlots";
 // Hits the real local Postgres database, same as confirmTimeSlot.test.ts.
 describe("getAvailableSlots", () => {
   let artistId: string;
-  let intakeRequestId: string;
+  let bookingRequestId: string;
 
   beforeEach(async () => {
     artistId = randomUUID();
@@ -30,7 +30,7 @@ describe("getAvailableSlots", () => {
         email: `test_client_${clientId.slice(0, 8)}@example.com`,
       },
     });
-    const request = await prisma.intakeRequest.create({
+    const request = await prisma.bookingRequest.create({
       data: {
         clientId,
         artistId,
@@ -39,11 +39,11 @@ describe("getAvailableSlots", () => {
         maxPrice: 200,
       },
     });
-    intakeRequestId = request.id;
+    bookingRequestId = request.id;
   });
 
   afterEach(async () => {
-    await prisma.intakeRequest.deleteMany({ where: { artistId } });
+    await prisma.bookingRequest.deleteMany({ where: { artistId } });
     await prisma.artistScheduleOverride.deleteMany({ where: { artistId } });
     await prisma.artistWeeklyHours.deleteMany({ where: { artistId } });
     await prisma.artist.delete({ where: { id: artistId } });
@@ -51,7 +51,7 @@ describe("getAvailableSlots", () => {
 
   async function bookSlot(startTime: Date, endTime: Date) {
     await prisma.timeSlot.create({
-      data: { artistId, intakeRequestId, startTime, endTime, status: "BOOKED" },
+      data: { artistId, bookingRequestId, startTime, endTime, status: "BOOKED" },
     });
   }
 
@@ -154,7 +154,7 @@ describe("getAvailableSlots", () => {
         email: `test_client_${otherClientId.slice(0, 8)}@example.com`,
       },
     });
-    const otherRequest = await prisma.intakeRequest.create({
+    const otherRequest = await prisma.bookingRequest.create({
       data: {
         clientId: otherClientId,
         artistId: otherArtistId,
@@ -166,7 +166,7 @@ describe("getAvailableSlots", () => {
     await prisma.timeSlot.create({
       data: {
         artistId: otherArtistId,
-        intakeRequestId: otherRequest.id,
+        bookingRequestId: otherRequest.id,
         startTime: new Date("2027-02-06T11:00:00.000Z"),
         endTime: new Date("2027-02-06T14:00:00.000Z"),
         status: "BOOKED",
@@ -177,7 +177,7 @@ describe("getAvailableSlots", () => {
 
     expect(result.every((slot) => slot.available)).toBe(true);
 
-    await prisma.intakeRequest.deleteMany({ where: { artistId: otherArtistId } });
+    await prisma.bookingRequest.deleteMany({ where: { artistId: otherArtistId } });
     await prisma.artist.delete({ where: { id: otherArtistId } });
   });
 });
