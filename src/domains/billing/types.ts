@@ -34,3 +34,7 @@ export interface CreateDepositPaymentIntentInput {
 export type CreateDepositPaymentIntentResult =
   | { success: true; clientSecret: string }
   | { success: false; error: string };
+
+export type ConfirmDepositPaymentResult =
+  | { success: true }
+  | { success: false; error: string };

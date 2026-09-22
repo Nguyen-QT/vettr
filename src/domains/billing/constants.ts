@@ -17,3 +17,10 @@ export const DEPOSIT_NOT_CONFIGURED_ERROR_MESSAGE =
   "This artist has not set a deposit amount for this service tier yet.";
 export const DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE =
   "Something went wrong starting your deposit payment. Please try again.";
+
+// Surfaced by confirmDepositPayment (CLAUDE.md 7.1.4) when the webhook
+// reports a PaymentIntent id that doesn't match any IntakeRequest --
+// should never happen for a genuine Stripe event, but guards against a
+// stale/forged id.
+export const DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE =
+  "No booking request matches this payment.";
