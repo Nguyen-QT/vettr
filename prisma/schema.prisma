@@ -260,6 +260,16 @@ model BookingRequest {
   depositAmount         Decimal? @db.Decimal(10, 2)
   stripePaymentIntentId String?
 
+  // Deposit forfeiture/refund (CLAUDE.md 7.3). A client-initiated
+  // cancellation (only ever reachable outside the existing 48-hour
+  // self-cancel window) and an artist-initiated cancellation both
+  // refund in full; a no-show forfeits the deposit entirely, which
+  // needs no field here -- forfeiture is just the absence of a refund,
+  // not an active state. depositRefunded guards refundDeposit's
+  // idempotency the same way depositPaid guards confirmDepositPayment's.
+  depositRefunded Boolean @default(false)
+  stripeRefundId  String?
+
   clientNotes String?
 
   // Optional, purely advisory (CLAUDE.md 6.3) -- a client-flagged "must
