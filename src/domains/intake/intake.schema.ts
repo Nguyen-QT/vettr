@@ -79,6 +79,17 @@ export const requestedDateSchema = z.iso.date("Enter a valid date.");
 
 export const requestedTimeSchema = z.enum(DAILY_SLOT_TIME_OPTIONS);
 
+// Client Max End Time (CLAUDE.md 6.3) -- unlike requestedTimeSchema
+// above, this isn't constrained to the artist's fixed daily slot
+// options, since a client's "must be finished by" time (e.g. to make a
+// flight) can fall anywhere in the day. Purely advisory -- see
+// getPendingIntakeRequests/RequestCard, never enforced against actual
+// slot availability.
+export const clientMaxEndTimeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Enter a valid time (HH:MM).")
+  .optional();
+
 export const designTagSchema = z.enum(DESIGN_TAG_OPTIONS);
 
 export const aestheticTagSchema = z.enum(AESTHETIC_TAG_OPTIONS);
@@ -196,6 +207,7 @@ export const clientIntakeInputSchema = z
     clientNotes: z.string().trim().max(1000).optional(),
     requestedDate: requestedDateSchema,
     requestedTime: requestedTimeSchema,
+    clientMaxEndTime: clientMaxEndTimeSchema,
   })
   .superRefine((data, ctx) => {
     const requestedStartTime = combineRequestedDateAndTime(
@@ -208,6 +220,19 @@ export const clientIntakeInputSchema = z
         path: ["requestedDate"],
         message: "Choose a date and time in the future.",
       });
+    }
+
+    if (data.clientMaxEndTime) {
+      const maxEndTime = new Date(
+        `${data.requestedDate}T${data.clientMaxEndTime}:00`
+      );
+      if (maxEndTime.getTime() <= requestedStartTime.getTime()) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["clientMaxEndTime"],
+          message: "Must-finish-by time must be after your preferred start time.",
+        });
+      }
     }
 
     const isFreestyle = data.tier === "FREESTYLE";
