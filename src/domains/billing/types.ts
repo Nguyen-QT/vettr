@@ -23,3 +23,14 @@ export interface SetArtistDepositSettingInput {
 // scheduling's ArtistWeeklyHours (4.3), applied here as "no deposit
 // required yet".
 export type ArtistDepositSettings = Record<ComplexityTier, number | null>;
+
+// clientProfileId is the trusted session's own id (see intake's
+// cancelIntakeRequest precedent), never client-supplied.
+export interface CreateDepositPaymentIntentInput {
+  intakeRequestId: string;
+  clientProfileId: string;
+}
+
+export type CreateDepositPaymentIntentResult =
+  | { success: true; clientSecret: string }
+  | { success: false; error: string };
