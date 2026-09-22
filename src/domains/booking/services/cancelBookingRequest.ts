@@ -1,3 +1,4 @@
+import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 import { prisma } from "@/lib/prisma";
 
@@ -61,6 +62,25 @@ export async function cancelBookingRequest(
       await applyCancellationStrike(tx, request.clientId);
     }
   });
+
+  // Refunds in full -- this cancellation only ever reaches here outside
+  // the CANCELLATION_WINDOW_HOURS check above (CLAUDE.md 7.3). Deliberately
+  // outside the transaction: refundDeposit makes an external Stripe call,
+  // which shouldn't hold a DB transaction open for the duration of that
+  // network round-trip. The cancellation has already committed by this
+  // point, so a refund failure is logged rather than reported back as a
+  // cancellation failure -- the booking is genuinely cancelled either way,
+  // and refundDeposit's own webhook backstop (confirmDepositRefund)
+  // reconciles a transient failure independently.
+  if (request.depositPaid) {
+    const refundResult = await refundDeposit(request.id);
+    if (!refundResult.success) {
+      console.error(
+        `Deposit refund failed for cancelled booking request ${request.id}:`,
+        refundResult.error
+      );
+    }
+  }
 
   return { success: true };
 }
