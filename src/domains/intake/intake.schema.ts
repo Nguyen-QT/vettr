@@ -117,6 +117,40 @@ export const updatePendingIntakeRequestInputSchema = z
     }
   });
 
+// Structural validity only for the artist's reschedule step (5.5) --
+// see services/rescheduleApprovedBooking.ts for the APPROVED-only
+// guard and the actual slot reallocation. Shares scheduling's duration
+// bounds with reviewIntakeRequestInputSchema above.
+export const rescheduleApprovedBookingInputSchema = z
+  .object({
+    requestedDate: requestedDateSchema,
+    requestedTime: requestedTimeSchema,
+    durationMinutes: z
+      .number()
+      .int()
+      .min(
+        MIN_SLOT_DURATION_MINUTES,
+        `The service duration must be at least ${MIN_SLOT_DURATION_MINUTES} minutes.`
+      )
+      .max(
+        MAX_TOTAL_SERVICE_DURATION_MINUTES,
+        `The service duration cannot exceed ${MAX_TOTAL_SERVICE_DURATION_MINUTES} minutes.`
+      ),
+  })
+  .superRefine((data, ctx) => {
+    const requestedStartTime = combineRequestedDateAndTime(
+      data.requestedDate,
+      data.requestedTime
+    );
+    if (requestedStartTime.getTime() <= Date.now()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["requestedDate"],
+        message: "Choose a date and time in the future.",
+      });
+    }
+  });
+
 // Network firewall for client submissions. Structural validity only —
 // see src/domains/intake/services/validateComplexity.ts for the content
 // gatekeeper that judges an already-valid request's tags/notes.

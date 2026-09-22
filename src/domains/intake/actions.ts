@@ -3,9 +3,11 @@
 import { getCurrentSession } from "@/domains/auth/actions";
 import { prisma } from "@/lib/prisma";
 
+import { REQUEST_NOT_FOUND_ERROR_MESSAGE } from "./constants";
 import {
   clientIntakeInputSchema,
   combineRequestedDateAndTime,
+  rescheduleApprovedBookingInputSchema,
   reviewIntakeRequestInputSchema,
   updatePendingIntakeRequestInputSchema,
 } from "./intake.schema";
@@ -15,6 +17,7 @@ import {
   type ConfirmProposedBookingResult,
 } from "./services/confirmProposedBooking";
 import { generateResponseMessage } from "./services/generateResponseMessage";
+import { rescheduleApprovedBooking } from "./services/rescheduleApprovedBooking";
 import {
   reviewIntakeRequest,
   type ReviewIntakeRequestResult,
@@ -23,10 +26,13 @@ import { updatePendingIntakeRequest } from "./services/updatePendingIntakeReques
 import { validateComplexity } from "./services/validateComplexity";
 import type {
   CancelIntakeRequestResult,
+  RescheduleApprovedBookingResult,
   UpdatePendingIntakeRequestResult,
 } from "./types";
 
 const NOT_SIGNED_IN_ERROR_MESSAGE = "You must be signed in as a client to do that.";
+const NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE =
+  "You must be signed in as an artist to do that.";
 
 async function requireClientProfileId(): Promise<string | null> {
   const session = await getCurrentSession();
@@ -34,6 +40,14 @@ async function requireClientProfileId(): Promise<string | null> {
     return null;
   }
   return session.clientProfileId;
+}
+
+async function requireArtistId(): Promise<string | null> {
+  const session = await getCurrentSession();
+  if (!session || session.role !== "ARTIST" || !session.artistId) {
+    return null;
+  }
+  return session.artistId;
 }
 
 export type SubmitIntakeRequestResult =
@@ -207,6 +221,48 @@ export async function updatePendingIntakeRequestAction(
     intakeRequestId,
     clientProfileId,
     ...parsed.data,
+  });
+}
+
+// Controller/Action boundary (CLAUDE.md 5.5.2): derives artistId from
+// the trusted session, then confirms the request actually belongs to
+// that artist before delegating -- new action, so unlike some of the
+// pre-existing artist actions above, it gets an ownership check from
+// day one rather than relying on route protection alone. Reported the
+// same as a missing request on mismatch, same posture as the
+// client-side ownership checks (5.4.2).
+export async function rescheduleApprovedBookingAction(
+  intakeRequestId: string,
+  input: unknown
+): Promise<RescheduleApprovedBookingResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  const existing = await prisma.intakeRequest.findUnique({
+    where: { id: intakeRequestId },
+    select: { artistId: true },
+  });
+  if (!existing || existing.artistId !== artistId) {
+    return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
+  }
+
+  const parsed = rescheduleApprovedBookingInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid duration or time.",
+    };
+  }
+
+  return rescheduleApprovedBooking({
+    intakeRequestId,
+    newStartTime: combineRequestedDateAndTime(
+      parsed.data.requestedDate,
+      parsed.data.requestedTime
+    ),
+    durationMinutes: parsed.data.durationMinutes,
   });
 }
 
