@@ -16,6 +16,10 @@ const REQUESTED_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
   timeStyle: "short",
 });
 
+const MAX_END_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  timeStyle: "short",
+});
+
 export function RequestCard({ request }: RequestCardProps) {
   const instagramUrl = `https://instagram.com/${request.clientInstagramHandle}`;
   const tags = [...request.designTags, ...request.aestheticTags];
@@ -42,6 +46,12 @@ export function RequestCard({ request }: RequestCardProps) {
       {request.requestedStartTime ? (
         <p className="text-sm text-muted-foreground">
           Requested: {REQUESTED_TIME_FORMAT.format(request.requestedStartTime)}
+        </p>
+      ) : null}
+
+      {request.clientMaxEndTime ? (
+        <p className="text-sm text-muted-foreground">
+          Must be finished by: {MAX_END_TIME_FORMAT.format(request.clientMaxEndTime)}
         </p>
       ) : null}
 

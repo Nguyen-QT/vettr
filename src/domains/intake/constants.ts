@@ -83,3 +83,24 @@ export const APPOINTMENT_NOT_YET_DUE_ERROR_MESSAGE =
 // tattoo/piercing services -- confirm the actual age-of-consent rules
 // for wherever Vettr operates before launch.
 export const MIN_CLIENT_AGE_YEARS = 18;
+
+// Client Max End Time (CLAUDE.md 6.3): the minimum gap, in minutes,
+// required between the requested start time and the client's "must be
+// finished by" time -- no session is ever realistic below this,
+// regardless of tier. Enforced in intake.schema.ts; blocks submission.
+export const MIN_MAX_END_TIME_GAP_MINUTES = 90;
+
+// Rough expected duration per tier, used only to decide whether to
+// show a soft warning (not a blocking error) that a tight deadline may
+// force design simplification -- the artist still makes the real
+// duration call at review time (CLAUDE.md "No Auto-Booking").
+// Placeholder values — tune to the actual service model.
+export const TIER_ESTIMATED_DURATION_MINUTES: Record<ComplexityTier, number> = {
+  TIER_2: 90,
+  TIER_3: 120,
+  TIER_4: 180,
+  FREESTYLE: 240,
+};
+
+export const CLIENT_MAX_END_TIME_COMPLEXITY_WARNING =
+  "Due to the complexity of this proposal, the design may need to be simplified to meet your hard deadline.";

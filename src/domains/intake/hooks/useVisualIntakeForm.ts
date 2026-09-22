@@ -7,10 +7,16 @@ import { useForm } from "react-hook-form";
 import { submitIntakeRequest } from "@/domains/intake/actions";
 import {
   AESTHETIC_TAG_OPTIONS,
+  CLIENT_MAX_END_TIME_COMPLEXITY_WARNING,
   DESIGN_TAG_OPTIONS,
+  MIN_MAX_END_TIME_GAP_MINUTES,
   TIER_BASELINE_BUDGETS,
+  TIER_ESTIMATED_DURATION_MINUTES,
 } from "@/domains/intake/constants";
-import { clientIntakeInputSchema } from "@/domains/intake/intake.schema";
+import {
+  clientIntakeInputSchema,
+  combineRequestedDateAndTime,
+} from "@/domains/intake/intake.schema";
 import type { ClientProfileContactDetails } from "@/domains/intake/types";
 import { getAvailableSlotsAction } from "@/domains/scheduling/actions";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
@@ -122,6 +128,27 @@ export function useVisualIntakeForm({
     ? AESTHETIC_TAG_OPTIONS
     : DESIGN_TAG_OPTIONS;
 
+  // Soft, non-blocking nudge (CLAUDE.md 6.3) -- unlike the hard
+  // MIN_MAX_END_TIME_GAP_MINUTES floor (enforced in
+  // clientIntakeInputSchema, blocks submission), this only fires once
+  // the window is otherwise valid but still tighter than the tier's
+  // rough expected duration. The artist still makes the real duration
+  // call at review time -- this is purely advisory for the client.
+  const requestedTime = form.watch("requestedTime");
+  const clientMaxEndTime = form.watch("clientMaxEndTime");
+  let complexityWarning: string | null = null;
+  if (requestedDate && clientMaxEndTime) {
+    const startTime = combineRequestedDateAndTime(requestedDate, requestedTime);
+    const maxEndTime = new Date(`${requestedDate}T${clientMaxEndTime}:00`);
+    const windowMinutes = (maxEndTime.getTime() - startTime.getTime()) / 60_000;
+    if (
+      windowMinutes >= MIN_MAX_END_TIME_GAP_MINUTES &&
+      windowMinutes < TIER_ESTIMATED_DURATION_MINUTES[tier]
+    ) {
+      complexityWarning = CLIENT_MAX_END_TIME_COMPLEXITY_WARNING;
+    }
+  }
+
   function handleUploadComplete(urls: string[]) {
     form.setValue("designReferenceImageUrls", urls, { shouldValidate: true });
   }
@@ -155,5 +182,6 @@ export function useVisualIntakeForm({
     lockedFields,
     availableSlots,
     isLoadingAvailability,
+    complexityWarning,
   };
 }

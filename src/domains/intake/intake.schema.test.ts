@@ -359,6 +359,24 @@ describe("clientIntakeInputSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts a clientMaxEndTime exactly 90 minutes after the start time", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      requestedTime: "11:00" as const,
+      clientMaxEndTime: "12:30",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a clientMaxEndTime less than 90 minutes after the start time", () => {
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      requestedTime: "11:00" as const,
+      clientMaxEndTime: "12:00",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a malformed clientMaxEndTime", () => {
     const result = clientIntakeInputSchema.safeParse({
       ...validPayload,
