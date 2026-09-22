@@ -331,6 +331,16 @@ describe("clientIntakeInputSchema", () => {
     expect(clientIntakeInputSchema.safeParse(validPayload).success).toBe(true);
   });
 
+  it("accepts an empty string clientMaxEndTime, same as omitted", () => {
+    // An untouched <input type="time"> reports "" via react-hook-form,
+    // not undefined -- this must not be treated as a malformed time.
+    const result = clientIntakeInputSchema.safeParse({
+      ...validPayload,
+      clientMaxEndTime: "",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("accepts a clientMaxEndTime after the requested start time", () => {
     const result = clientIntakeInputSchema.safeParse({
       ...validPayload,
