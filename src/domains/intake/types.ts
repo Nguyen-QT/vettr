@@ -162,6 +162,17 @@ export interface ClientBookingSummary {
   createdAt: Date;
 }
 
+// Narrow cross-domain read (CLAUDE.md 7.1.8) -- exposes only what a
+// caller outside intake needs to resolve a payable deposit amount
+// (billing's getPayableDeposits), deliberately smaller than
+// ClientBookingSummary so a cross-domain consumer never needs intake's
+// full request shape or its own Prisma access to this table.
+export interface ApprovedUnpaidRequestSummary {
+  id: string;
+  artistId: string;
+  tier: ComplexityTier;
+}
+
 // Write command (CLAUDE.md 5.4): self-service cancellation from the
 // client dashboard. clientProfileId comes from the trusted session,
 // never client-supplied input -- see services/cancelIntakeRequest.ts.
