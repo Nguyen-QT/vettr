@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useAppointmentLifecycleActions } from "@/domains/intake/hooks/useAppointmentLifecycleActions";
 import { useRescheduleBooking } from "@/domains/intake/hooks/useRescheduleBooking";
 import type { UpcomingAppointmentSummary } from "@/domains/intake/types";
 import {
@@ -38,12 +39,20 @@ function toRequestedTimeValue(date: Date): SlotTime {
     : DAILY_SLOT_TIME_OPTIONS[0];
 }
 
-// Pure view (CLAUDE.md 5.5.4): artist-initiated reschedule control for
-// an APPROVED appointment -- applies immediately on save, no client
-// confirmation step (see rescheduleApprovedBooking's own reasoning).
+// Pure view (CLAUDE.md 5.5.4/5.6.5): artist-initiated reschedule and
+// cancel controls for an upcoming APPROVED appointment -- both apply
+// immediately, no client confirmation step (see rescheduleApprovedBooking's
+// own reasoning). Cancel deliberately lives here rather than on
+// AppointmentLifecycleActions (the past-due list) -- "cancel" only makes
+// sense for a booking that hasn't happened yet.
 export function AppointmentActions({ appointment }: AppointmentActionsProps) {
   const { isEditing, startEditing, cancelEditing, saveReschedule, isPending, error } =
     useRescheduleBooking(appointment.id);
+  const {
+    cancel,
+    isPending: isCancelPending,
+    error: cancelError,
+  } = useAppointmentLifecycleActions(appointment.id);
 
   const defaultDurationMinutes =
     (appointment.endTime.getTime() - appointment.startTime.getTime()) / 60_000;
@@ -58,9 +67,23 @@ export function AppointmentActions({ appointment }: AppointmentActionsProps) {
 
   if (!isEditing) {
     return (
-      <Button type="button" variant="outline" size="sm" onClick={startEditing}>
-        Reschedule
-      </Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={startEditing}>
+            Reschedule
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isCancelPending}
+            onClick={cancel}
+          >
+            Cancel booking
+          </Button>
+        </div>
+        {cancelError ? <p className="text-sm text-destructive">{cancelError}</p> : null}
+      </div>
     );
   }
 
