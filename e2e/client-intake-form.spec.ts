@@ -100,4 +100,25 @@ test.describe("client intake form -- requested slot", () => {
       page.getByRole("radio", { name: new RegExp(`^${otherTime}`) })
     ).toBeEnabled();
   });
+
+  test("does not submit the form when Enter is pressed in a text field", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+
+    await page.goto(`/book/${fixture.artistId}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel("Preferred date").fill("2099-01-01");
+    await page.getByLabel("Preferred date").press("Enter");
+
+    // A real submit attempt (via the button) would have surfaced at
+    // least the missing-email error, since none of the other required
+    // fields are filled in either -- its absence confirms Enter didn't
+    // trigger a submission at all.
+    await expect(page.getByText("Enter a valid email address.")).not.toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Submit request" })
+    ).toBeVisible();
+  });
 });

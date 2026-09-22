@@ -67,6 +67,9 @@ export interface E2eFixture {
   // fields are already set, for the "locked fields" spec.
   onboardedClientEmail: string;
   onboardedClientPassword: string;
+  // A dedicated PENDING request carrying a clientMaxEndTime (CLAUDE.md
+  // 6.3), never touched by any mutating spec.
+  maxEndTimeClientHandle: string;
 }
 
 // Seeds one throwaway Artist with three IntakeRequests -- two PENDING
@@ -100,6 +103,9 @@ export default async function globalSetup() {
   const clientLoginProfileId = randomUUID();
   const clientLoginRequestId = randomUUID();
   const clientEditableRequestId = randomUUID();
+  const maxEndTimeClientId = randomUUID();
+  const maxEndTimeRequestId = randomUUID();
+  const maxEndTimeClientHandle = "e2e_client_maxendtime";
   const approveClientHandle = "e2e_client_approve";
   const declineClientHandle = "e2e_client_decline";
   const awaitingConfirmationClientHandle = "e2e_client_awaiting";
@@ -196,6 +202,33 @@ export default async function globalSetup() {
       randomUUID(),
       "https://utfs.io/f/e2e-fixture-decline-reference.jpg",
       declineRequestId,
+    ]
+  );
+
+  // A dedicated PENDING request carrying a clientMaxEndTime (CLAUDE.md
+  // 6.3), purely for the artist-dashboard display spec -- never
+  // touched by any mutating spec (unlike approveRequestId/
+  // declineRequestId above), so its status/fields stay stable
+  // regardless of test run order.
+  const maxEndTimeStartTime = new Date("2099-01-04T11:00:00.000Z");
+  const maxEndTimeClientMaxEndTime = new Date("2099-01-04T14:30:00.000Z");
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [maxEndTimeClientId, maxEndTimeClientHandle, "e2e-client-maxendtime@example.com"]
+  );
+  await client.query(
+    `INSERT INTO "IntakeRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "clientMaxEndTime", "updatedAt")
+     VALUES
+       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, $5, now())`,
+    [
+      maxEndTimeRequestId,
+      maxEndTimeClientId,
+      artistId,
+      maxEndTimeStartTime,
+      maxEndTimeClientMaxEndTime,
     ]
   );
 
@@ -521,6 +554,7 @@ export default async function globalSetup() {
       ...pastDueClientIds,
       cancelUpcomingClientId,
       onboardedClientId,
+      maxEndTimeClientId,
     ],
     intakeRequestIds: [
       approveRequestId,
@@ -533,6 +567,7 @@ export default async function globalSetup() {
       clientEditableRequestId,
       ...pastDueRequestIds,
       cancelUpcomingRequestId,
+      maxEndTimeRequestId,
     ],
     approveClientHandle,
     declineClientHandle,
@@ -550,6 +585,7 @@ export default async function globalSetup() {
     clientSignupEmail,
     onboardedClientEmail,
     onboardedClientPassword,
+    maxEndTimeClientHandle,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
     pastDueUntouchedClientHandle,

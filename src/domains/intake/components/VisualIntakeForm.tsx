@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import type { KeyboardEvent } from "react";
 import { Controller } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,22 @@ function isTimeAvailable(
   return availableSlots.find((slot) => slot.time === time)?.available ?? true;
 }
 
+// Pressing Enter inside a single-line <input> implicitly submits its
+// enclosing <form> (native browser behavior) -- with this many fields,
+// that's an easy way to submit by accident well before the form is
+// actually filled out. Only the real Submit button (or a <textarea>,
+// where Enter means "new line") should ever trigger a submission.
+function preventEnterSubmit(event: KeyboardEvent<HTMLFormElement>) {
+  const target = event.target as HTMLElement;
+  if (
+    event.key === "Enter" &&
+    target.tagName !== "TEXTAREA" &&
+    target.tagName !== "BUTTON"
+  ) {
+    event.preventDefault();
+  }
+}
+
 export function VisualIntakeForm({
   artistId,
   tierReferenceImages,
@@ -71,6 +88,7 @@ export function VisualIntakeForm({
     lockedFields,
     availableSlots,
     isLoadingAvailability,
+    complexityWarning,
   } = useVisualIntakeForm({ artistId, initialClientDetails });
 
   const {
@@ -97,7 +115,7 @@ export function VisualIntakeForm({
   const selectedTierReferenceImages = tierReferenceImages[watch("tier")];
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} onKeyDown={preventEnterSubmit}>
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="instagramHandle">Instagram handle</FieldLabel>
@@ -194,6 +212,31 @@ export function VisualIntakeForm({
             <FieldDescription>Checking availability…</FieldDescription>
           ) : null}
           <FieldError errors={errors.requestedTime && [errors.requestedTime]} />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="clientMaxEndTime">
+            Must be finished by (optional)
+          </FieldLabel>
+          <Input
+            id="clientMaxEndTime"
+            type="time"
+            {...register("clientMaxEndTime")}
+          />
+          <FieldDescription>
+            Let the artist know if you have a hard deadline, e.g. a flight to
+            catch.
+          </FieldDescription>
+          {complexityWarning ? (
+            // Soft, non-blocking nudge -- text-muted-foreground rather
+            // than a dedicated warning token, since CLAUDE.md's brand
+            // guardrail reserves a chart-*-family token for "soft
+            // warnings" that isn't actually defined in globals.css yet
+            // (dangling reference, a known gap). Not text-destructive:
+            // this never blocks submission, unlike a real FieldError.
+            <p className="text-sm text-muted-foreground">{complexityWarning}</p>
+          ) : null}
+          <FieldError errors={errors.clientMaxEndTime && [errors.clientMaxEndTime]} />
         </Field>
 
         <Field>

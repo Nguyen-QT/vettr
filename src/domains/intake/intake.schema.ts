@@ -15,6 +15,7 @@ import {
   MAX_DESIGN_REFERENCE_IMAGES,
   MIN_CLIENT_AGE_YEARS,
   MIN_DESIGN_REFERENCE_IMAGES,
+  MIN_MAX_END_TIME_GAP_MINUTES,
   OTHER_TAG_VALUE,
 } from "./constants";
 
@@ -232,11 +233,12 @@ export const clientIntakeInputSchema = z
       const maxEndTime = new Date(
         `${data.requestedDate}T${data.clientMaxEndTime}:00`
       );
-      if (maxEndTime.getTime() <= requestedStartTime.getTime()) {
+      const minWindowMs = MIN_MAX_END_TIME_GAP_MINUTES * 60_000;
+      if (maxEndTime.getTime() - requestedStartTime.getTime() < minWindowMs) {
         ctx.addIssue({
           code: "custom",
           path: ["clientMaxEndTime"],
-          message: "Must-finish-by time must be after your preferred start time.",
+          message: `Must-finish-by time must allow at least ${MIN_MAX_END_TIME_GAP_MINUTES} minutes from your preferred start time.`,
         });
       }
     }
