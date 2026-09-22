@@ -7,6 +7,7 @@ import {
   REQUEST_NOT_FOUND_ERROR_MESSAGE,
 } from "../constants";
 import type { CancelIntakeRequestInput, CancelIntakeRequestResult } from "../types";
+import { applyCancellationStrike } from "./applyCancellationStrike";
 
 const RESOLVED_STATUSES = new Set(["CANCELLED_BY_CLIENT", "DECLINED", "COMPLETED"]);
 
@@ -18,7 +19,8 @@ const RESOLVED_STATUSES = new Set(["CANCELLED_BY_CLIENT", "DECLINED", "COMPLETED
 // AWAITING_SLOT_CONFIRMATION have no locked slot yet, so only APPROVED
 // is subject to the cancellation window; cancelling one releases its
 // BOOKED TimeSlot rows back to RELEASED so the slot frees up again in
-// getAvailableSlots.
+// getAvailableSlots, and applies a cancellation strike (CLAUDE.md 5.6)
+// since it cost the artist a real, already-locked slot.
 export async function cancelIntakeRequest(
   input: CancelIntakeRequestInput
 ): Promise<CancelIntakeRequestResult> {
@@ -46,6 +48,8 @@ export async function cancelIntakeRequest(
     }
   }
 
+  const wasApproved = request.status === "APPROVED";
+
   await prisma.$transaction(async (tx) => {
     await tx.timeSlot.updateMany({
       where: { intakeRequestId: request.id, status: "BOOKED" },
@@ -55,6 +59,9 @@ export async function cancelIntakeRequest(
       where: { id: request.id },
       data: { status: "CANCELLED_BY_CLIENT" },
     });
+    if (wasApproved) {
+      await applyCancellationStrike(tx, request.clientId);
+    }
   });
 
   return { success: true };

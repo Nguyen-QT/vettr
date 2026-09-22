@@ -66,3 +66,14 @@ export const CANCELLATION_WINDOW_ERROR_MESSAGE = `This appointment is within ${C
 
 export const REQUEST_NOT_EDITABLE_ERROR_MESSAGE =
   "Only pending requests can be edited.";
+
+// Cancellation & No-Show Lifecycle (CLAUDE.md 5.6): a ClientProfile is
+// flagged for enforcePrecharge once cancellationCount reaches this many
+// strikes. Only an APPROVED-booking client cancellation or a no-show
+// counts as a strike -- a PENDING/AWAITING cancellation has no locked
+// slot yet (free), and an artist-initiated cancellation is never the
+// client's fault (see cancelApprovedBookingAsArtist).
+export const STRIKE_THRESHOLD = 1;
+
+export const APPOINTMENT_NOT_YET_DUE_ERROR_MESSAGE =
+  "This appointment hasn't happened yet.";
