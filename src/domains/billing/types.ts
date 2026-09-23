@@ -86,3 +86,22 @@ export interface BillingAddonSummary {
 export type GetBillingAddonsResult =
   | { success: true; addons: BillingAddonSummary[] }
   | { success: false; error: string };
+
+// The day-of checkout flow's running total (CLAUDE.md 7.5.4): the base
+// estimate plus every addon, crediting a deposit already paid against
+// the total. depositCredit is 0 whenever depositPaid is false, not
+// just when no deposit was ever configured for this tier.
+export interface FinalBillBreakdown {
+  estimatedPrice: number;
+  addonsTotal: number;
+  depositCredit: number;
+  total: number;
+}
+
+export type GetFinalBillTotalResult =
+  | { success: true; bill: FinalBillBreakdown }
+  | { success: false; error: string };
+
+export type FinalizeCheckoutResult =
+  | { success: true }
+  | { success: false; error: string };
