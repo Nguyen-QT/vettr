@@ -59,7 +59,7 @@ describe("createDepositPaymentIntent", () => {
 
   async function createRequest(
     status: RequestStatus,
-    overrides: { depositPaid?: boolean } = {}
+    overrides: { depositPaid?: boolean; estimatedPrice?: number } = {}
   ) {
     return prisma.bookingRequest.create({
       data: {
@@ -70,7 +70,15 @@ describe("createDepositPaymentIntent", () => {
         maxPrice: 200,
         status,
         depositPaid: overrides.depositPaid ?? false,
+        estimatedPrice: overrides.estimatedPrice,
       },
+    });
+  }
+
+  async function flagClient() {
+    await prisma.clientProfile.update({
+      where: { id: clientId },
+      data: { enforcePrecharge: true },
     });
   }
 
@@ -158,5 +166,94 @@ describe("createDepositPaymentIntent", () => {
 
     expect(result.success).toBe(false);
     expect(createPaymentIntentMock).not.toHaveBeenCalled();
+  });
+
+  it("applies a 50% precharge for a flagged client even with no configured deposit", async () => {
+    await flagClient();
+    const request = await createRequest("APPROVED", { estimatedPrice: 200 });
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_precharge_1",
+      client_secret: "secret_precharge_1",
+    });
+
+    const result = await createDepositPaymentIntent({
+      bookingRequestId: request.id,
+      clientProfileId: clientId,
+    });
+
+    expect(result).toEqual({ success: true, clientSecret: "secret_precharge_1" });
+    expect(createPaymentIntentMock).toHaveBeenCalledWith({
+      amount: 10_000, // 50% of £200 = £100
+      currency: "gbp",
+      metadata: { bookingRequestId: request.id },
+    });
+  });
+
+  it("uses the precharge amount when it exceeds the artist's configured deposit", async () => {
+    await prisma.artistDepositSetting.create({
+      data: { artistId, tier: "TIER_2", depositAmount: 20 },
+    });
+    await flagClient();
+    const request = await createRequest("APPROVED", { estimatedPrice: 200 });
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_precharge_2",
+      client_secret: "secret_precharge_2",
+    });
+
+    await createDepositPaymentIntent({
+      bookingRequestId: request.id,
+      clientProfileId: clientId,
+    });
+
+    expect(createPaymentIntentMock).toHaveBeenCalledWith({
+      amount: 10_000, // 50% of £200 = £100, greater than the configured £20
+      currency: "gbp",
+      metadata: { bookingRequestId: request.id },
+    });
+  });
+
+  it("keeps the artist's configured deposit when it exceeds the precharge amount", async () => {
+    await prisma.artistDepositSetting.create({
+      data: { artistId, tier: "TIER_2", depositAmount: 90 },
+    });
+    await flagClient();
+    const request = await createRequest("APPROVED", { estimatedPrice: 100 });
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_precharge_3",
+      client_secret: "secret_precharge_3",
+    });
+
+    await createDepositPaymentIntent({
+      bookingRequestId: request.id,
+      clientProfileId: clientId,
+    });
+
+    expect(createPaymentIntentMock).toHaveBeenCalledWith({
+      amount: 9_000, // configured £90, greater than 50% of £100 = £50
+      currency: "gbp",
+      metadata: { bookingRequestId: request.id },
+    });
+  });
+
+  it("does not apply precharge for an unflagged client even with a high estimate", async () => {
+    await prisma.artistDepositSetting.create({
+      data: { artistId, tier: "TIER_2", depositAmount: 20 },
+    });
+    const request = await createRequest("APPROVED", { estimatedPrice: 500 });
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_precharge_4",
+      client_secret: "secret_precharge_4",
+    });
+
+    await createDepositPaymentIntent({
+      bookingRequestId: request.id,
+      clientProfileId: clientId,
+    });
+
+    expect(createPaymentIntentMock).toHaveBeenCalledWith({
+      amount: 2_000, // stays at the configured £20, precharge never applies
+      currency: "gbp",
+      metadata: { bookingRequestId: request.id },
+    });
   });
 });
