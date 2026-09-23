@@ -102,6 +102,7 @@ describe("createDepositPaymentIntent", () => {
       amount: 2000,
       currency: "gbp",
       metadata: { bookingRequestId: request.id },
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
     });
 
     const updated = await prisma.bookingRequest.findUnique({
@@ -186,6 +187,7 @@ describe("createDepositPaymentIntent", () => {
       amount: 10_000, // 50% of £200 = £100
       currency: "gbp",
       metadata: { bookingRequestId: request.id },
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
     });
   });
 
@@ -209,6 +211,7 @@ describe("createDepositPaymentIntent", () => {
       amount: 10_000, // 50% of £200 = £100, greater than the configured £20
       currency: "gbp",
       metadata: { bookingRequestId: request.id },
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
     });
   });
 
@@ -232,6 +235,7 @@ describe("createDepositPaymentIntent", () => {
       amount: 9_000, // configured £90, greater than 50% of £100 = £50
       currency: "gbp",
       metadata: { bookingRequestId: request.id },
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
     });
   });
 
@@ -254,6 +258,7 @@ describe("createDepositPaymentIntent", () => {
       amount: 2_000, // stays at the configured £20, precharge never applies
       currency: "gbp",
       metadata: { bookingRequestId: request.id },
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
     });
   });
 });

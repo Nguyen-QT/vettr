@@ -73,6 +73,16 @@ export async function createDepositPaymentIntent(
     amount: Math.round(depositAmount * 100),
     currency: "gbp",
     metadata: { bookingRequestId: request.id },
+    // Restricts to payment methods that never redirect off-page, since
+    // this app's Stripe Elements integration (CLAUDE.md 7.1) stays
+    // embedded and in-app rather than sending the client to a
+    // Stripe-hosted page. Without this, Stripe defaults to whatever's
+    // enabled in the Dashboard, which can include redirect-based
+    // methods -- those require a return_url this app never provides,
+    // and confirming without one fails outright. Caught by the real,
+    // unmocked Stripe test-mode call in 14.1.2's integration test; the
+    // mocked unit suite can't see this since it stubs the API entirely.
+    automatic_payment_methods: { enabled: true, allow_redirects: "never" },
   });
 
   if (!paymentIntent.client_secret) {
