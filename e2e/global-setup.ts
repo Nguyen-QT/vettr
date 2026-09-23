@@ -25,6 +25,10 @@ export interface E2eFixture {
   declineClientHandle: string;
   awaitingConfirmationClientHandle: string;
   freestylePendingClientHandle: string;
+  // A dedicated PENDING request from a client with cancellation
+  // history/the precharge flag already set (CLAUDE.md 11.1), purely
+  // for the RequestCard flag display spec.
+  flaggedClientHandle: string;
   bookedSlotClientHandle: string;
   // A separate APPROVED booking dedicated to the reschedule spec
   // (5.5.4), untouched by any other spec.
@@ -125,6 +129,9 @@ export default async function globalSetup() {
   const maxEndTimeClientId = randomUUID();
   const maxEndTimeRequestId = randomUUID();
   const maxEndTimeClientHandle = "e2e_client_maxendtime";
+  const flaggedClientId = randomUUID();
+  const flaggedRequestId = randomUUID();
+  const flaggedClientHandle = "e2e_client_flagged";
   const approveClientHandle = "e2e_client_approve";
   const declineClientHandle = "e2e_client_decline";
   const awaitingConfirmationClientHandle = "e2e_client_awaiting";
@@ -232,6 +239,22 @@ export default async function globalSetup() {
       "https://utfs.io/f/e2e-fixture-decline-reference.jpg",
       declineRequestId,
     ]
+  );
+
+  // A dedicated flagged client (CLAUDE.md 11.1) with a PENDING request,
+  // purely for the RequestCard cancellation-flag display spec -- never
+  // touched by any mutating spec.
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "cancellationCount", "enforcePrecharge", "updatedAt")
+     VALUES ($1, $2, $3, 2, true, now())`,
+    [flaggedClientId, flaggedClientHandle, "e2e-client-flagged@example.com"]
+  );
+  await client.query(
+    `INSERT INTO "BookingRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "updatedAt")
+     VALUES
+       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], now())`,
+    [flaggedRequestId, flaggedClientId, artistId]
   );
 
   // A dedicated PENDING request carrying a clientMaxEndTime (CLAUDE.md
@@ -620,6 +643,7 @@ export default async function globalSetup() {
       cancelUpcomingClientId,
       onboardedClientId,
       maxEndTimeClientId,
+      flaggedClientId,
     ],
     bookingRequestIds: [
       approveRequestId,
@@ -635,11 +659,13 @@ export default async function globalSetup() {
       ...pastDueRequestIds,
       cancelUpcomingRequestId,
       maxEndTimeRequestId,
+      flaggedRequestId,
     ],
     approveClientHandle,
     declineClientHandle,
     awaitingConfirmationClientHandle,
     freestylePendingClientHandle,
+    flaggedClientHandle,
     bookedSlotClientHandle,
     rescheduleTestClientHandle,
     bookedSlotDate,

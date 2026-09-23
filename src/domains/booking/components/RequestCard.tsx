@@ -20,9 +20,26 @@ const MAX_END_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
   timeStyle: "short",
 });
 
+// Cancellation history visibility (CLAUDE.md 11.1) -- null when
+// there's nothing worth flagging. cancellationCount > 0 without
+// enforcePrecharge shouldn't normally happen (STRIKE_THRESHOLD = 1
+// auto-toggles the flag on the first strike), but the label still
+// reads sensibly either way rather than assuming the two always agree.
+function cancellationFlagLabel(request: PendingBookingRequestSummary): string | null {
+  if (request.clientCancellationCount === 0 && !request.clientEnforcePrecharge) {
+    return null;
+  }
+  const count = request.clientCancellationCount;
+  const countLabel = `${count} cancellation${count === 1 ? "" : "s"}`;
+  return request.clientEnforcePrecharge
+    ? `${countLabel} · Deposit required`
+    : countLabel;
+}
+
 export function RequestCard({ request }: RequestCardProps) {
   const instagramUrl = `https://instagram.com/${request.clientInstagramHandle}`;
   const tags = [...request.designTags, ...request.aestheticTags];
+  const cancellationFlag = cancellationFlagLabel(request);
 
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-border p-4">
@@ -37,6 +54,12 @@ export function RequestCard({ request }: RequestCardProps) {
         </a>
         <span className="text-sm text-muted-foreground">{request.tier}</span>
       </div>
+
+      {cancellationFlag ? (
+        <span className="w-fit rounded-full bg-chart-4/20 px-2 py-0.5 text-xs font-medium text-chart-4">
+          {cancellationFlag}
+        </span>
+      ) : null}
 
       <p className="text-sm text-muted-foreground">
         {request.clientEmail}
