@@ -309,7 +309,7 @@ src/
   - [x] 13.2.2-13.2.3: Domain Service -- Write + Controller/Action, shipped as a single bundled PR (same coupling as 4.2.1/4.4/6.2: making `designReferenceImageUrls` required on `UpdatePendingBookingRequestInput` breaks `updatePendingBookingRequestAction`'s `...parsed.data` spread the moment the type changes, until `updatePendingBookingRequestInputSchema` also supplies the field -- splitting it the normal way would leave the build broken between merges):
     - Domain Service: `UpdatePendingBookingRequestInput`/`updatePendingBookingRequest` gain `designReferenceImageUrls`, replacing the request's `DesignReference` rows transactionally, validating at least one image remains; unit tests.
     - Controller/Action: `updatePendingBookingRequestInputSchema` gains the images field, reusing the existing `designReferenceImagesSchema`.
-  - [ ] 13.2.4: Domain Hook & Logic (`useClientBookingActions`'s edit state gains image add/remove management, mirroring `useVisualBookingForm`'s (13.1.2) append/remove pattern).
+  - [x] 13.2.4: Domain Hook & Logic (`useClientBookingActions`'s edit state gains image add/remove management, mirroring `useVisualBookingForm`'s (13.1.2) append/remove pattern).
   - [ ] 13.2.5: View & Route (`ClientBookingActions.tsx`'s edit form gains the dropzone + remove/preview UI, reusing 13.1.1's `Dialog`; e2e spec -- covers the full add/remove/preview interaction against seeded existing images, closing the gap 13.1.3's spec had to defer).
 
 ### 📦 Phase 14: CI Pipeline Maturity
