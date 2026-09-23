@@ -185,7 +185,7 @@ model ArtistDepositSetting {
 model ClientProfile {
   id                String   @id @default(cuid())
   instagramHandle   String   @unique
-  email             String
+  email             String   @unique
   phone             String?
   cancellationCount Int      @default(0)
   enforcePrecharge  Boolean  @default(false)
