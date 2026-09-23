@@ -102,6 +102,13 @@ export interface PendingBookingRequestSummary {
   // Optional, purely advisory (CLAUDE.md 6.3) -- see ClientBookingInput.
   clientMaxEndTime: Date | null;
   createdAt: Date;
+  // Cancellation history visibility (CLAUDE.md 11.1) -- the same
+  // ClientProfile fields 7.4's precharge engine already reacts to on
+  // the billing side, surfaced here so the artist can factor them into
+  // their own approve/decline decision too, not just the deposit
+  // amount billing computes from them.
+  clientCancellationCount: number;
+  clientEnforcePrecharge: boolean;
 }
 
 // Read-shaped projection of an APPROVED BookingRequest with a future
