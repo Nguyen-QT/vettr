@@ -1,4 +1,5 @@
 import { getCurrentSession } from "@/domains/auth/actions";
+import { BookingProcessExplainer } from "@/domains/booking/components/BookingProcessExplainer";
 import { VisualBookingForm } from "@/domains/booking/components/VisualBookingForm";
 import { getClientProfileContactDetails } from "@/domains/booking/services/getClientProfileContactDetails";
 import { getTierReferenceImages } from "@/domains/booking/services/getTierReferenceImages";
@@ -25,6 +26,7 @@ export default async function BookPage({ params }: BookPageProps) {
   return (
     <main>
       <h1>Request a booking</h1>
+      <BookingProcessExplainer />
       <VisualBookingForm
         artistId={artistId}
         tierReferenceImages={tierReferenceImages}

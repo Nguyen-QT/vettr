@@ -30,6 +30,19 @@ test.describe("client booking form -- requested slot", () => {
     await expect(page.getByText("17:30")).toBeVisible();
   });
 
+  test("shows the 'How booking works' explainer (CLAUDE.md 12.1)", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+
+    await page.goto(`/book/${fixture.artistId}`);
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByText("How booking works")).toBeVisible();
+    await expect(page.getByText("Submit your request")).toBeVisible();
+    await expect(page.getByText("Pay your deposit")).toBeVisible();
+  });
+
   test("rejects a preferred date/time in the past on submit", async ({
     page,
   }) => {
