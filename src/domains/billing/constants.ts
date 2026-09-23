@@ -54,3 +54,14 @@ export const DEPOSIT_REFUND_INIT_ERROR_MESSAGE =
 // DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE.
 export const DEPOSIT_REFUND_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE =
   "No booking request matches this refund.";
+
+// Surfaced by the day-of checkout flow (CLAUDE.md 7.5.3/7.5.4):
+// addBillingAddon, removeBillingAddon, getBillingAddons. Not found and
+// ownership-mismatch share one message deliberately, same precedent
+// as the deposit flow above.
+export const CHECKOUT_REQUEST_NOT_FOUND_ERROR_MESSAGE =
+  "This booking request could not be found.";
+export const CHECKOUT_REQUEST_NOT_APPROVED_ERROR_MESSAGE =
+  "Checkout is only available for an approved booking.";
+export const CHECKOUT_ADDON_NOT_FOUND_ERROR_MESSAGE =
+  "This addon could not be found.";
