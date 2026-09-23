@@ -8,6 +8,7 @@ import {
   DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE,
   DEPOSIT_REQUEST_NOT_APPROVED_ERROR_MESSAGE,
   DEPOSIT_REQUEST_NOT_FOUND_ERROR_MESSAGE,
+  PRECHARGE_PERCENTAGE,
 } from "../constants";
 import type {
   CreateDepositPaymentIntentInput,
@@ -45,7 +46,24 @@ export async function createDepositPaymentIntent(
   }
 
   const settings = await getArtistDepositSettings(request.artistId);
-  const depositAmount = settings[request.tier];
+  const configuredAmount = settings[request.tier];
+
+  // Upfront Cancellation Precharge Engine (CLAUDE.md 7.4): a flagged
+  // client's required deposit is the greater of the artist's normal
+  // per-tier amount and PRECHARGE_PERCENTAGE of the estimate -- applies
+  // even when the artist hasn't configured a deposit for this tier at
+  // all. estimatedPrice is nullable at the DB level only; every request
+  // that reaches APPROVED already has one set (4.4), so a null here
+  // just means precharge doesn't apply this time rather than erroring.
+  const prechargeAmount =
+    request.clientEnforcePrecharge && request.estimatedPrice !== null
+      ? Math.round(request.estimatedPrice * PRECHARGE_PERCENTAGE * 100) / 100
+      : null;
+
+  const depositAmount =
+    configuredAmount === null && prechargeAmount === null
+      ? null
+      : Math.max(configuredAmount ?? 0, prechargeAmount ?? 0);
 
   if (depositAmount === null) {
     return { success: false, error: DEPOSIT_NOT_CONFIGURED_ERROR_MESSAGE };

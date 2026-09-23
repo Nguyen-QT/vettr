@@ -3,6 +3,15 @@
 // "free" deposit that would always trivially satisfy depositPaid.
 export const MIN_DEPOSIT_AMOUNT = 1;
 
+// Upfront Cancellation Precharge Engine (CLAUDE.md 7.4, blueprint
+// "Flagging Mechanism"). A flagged client's (ClientProfile.
+// enforcePrecharge) required deposit is the greater of the artist's
+// normal per-tier amount and this percentage of the request's
+// estimatedPrice -- applies even when the artist hasn't configured a
+// deposit for that tier at all, since a flagged client is exactly the
+// case a deposit should be required regardless.
+export const PRECHARGE_PERCENTAGE = 0.5;
+
 // Surfaced by createDepositPaymentIntent (CLAUDE.md 7.1.3). Not found
 // and ownership-mismatch share one message deliberately, same
 // precedent as booking's cancelBookingRequest, so a request can't be
