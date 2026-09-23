@@ -30,6 +30,23 @@ test.describe("client booking form -- requested slot", () => {
     await expect(page.getByText("17:30")).toBeVisible();
   });
 
+  test("shows the design reference dropzone with no remove controls when empty", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+
+    await page.goto(`/book/${fixture.artistId}`);
+    await page.waitForLoadState("networkidle");
+
+    // Full add/remove/preview coverage (CLAUDE.md 13.1) needs a real
+    // uploaded image to interact with, which needs driving UploadThing's
+    // actual upload flow -- out of scope here, same as this file's other
+    // upload-dependent tests. 13.2 (editing an existing PENDING request)
+    // seeds real DesignReference rows via fixture SQL rather than a real
+    // upload, so full remove/preview interaction is covered there instead.
+    await expect(page.getByRole("button", { name: "Remove image" })).toHaveCount(0);
+  });
+
   test("shows the 'How booking works' explainer (CLAUDE.md 12.1)", async ({
     page,
   }) => {

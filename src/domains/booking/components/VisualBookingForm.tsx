@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import { XIcon } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { Controller } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   Field,
   FieldContent,
@@ -83,6 +85,7 @@ export function VisualBookingForm({
     activeTagField,
     activeTagOptions,
     handleUploadComplete,
+    removeDesignReferenceImage,
     onSubmit,
     isSubmitting,
     serverError,
@@ -282,15 +285,44 @@ export function VisualBookingForm({
                     handleUploadComplete(files.map((file) => file.ufsUrl));
                   }}
                 />
-                <ul>
+                <ul className="flex flex-wrap gap-2">
                   {field.value.map((url) => (
-                    <li key={url}>
-                      <Image
-                        src={url}
-                        alt="Design reference"
-                        width={96}
-                        height={96}
-                      />
+                    <li key={url} className="relative">
+                      <Dialog>
+                        <DialogTrigger
+                          render={
+                            <button type="button" className="block">
+                              <Image
+                                src={url}
+                                alt="Design reference"
+                                width={96}
+                                height={96}
+                                className="rounded-md object-cover"
+                              />
+                            </button>
+                          }
+                        />
+                        <DialogContent>
+                          <DialogTitle>Design reference preview</DialogTitle>
+                          <Image
+                            src={url}
+                            alt="Design reference"
+                            width={600}
+                            height={600}
+                            className="h-auto w-full rounded-md object-contain"
+                          />
+                        </DialogContent>
+                      </Dialog>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon-xs"
+                        className="absolute -top-1 -right-1 rounded-full"
+                        onClick={() => removeDesignReferenceImage(url)}
+                        aria-label="Remove image"
+                      >
+                        <XIcon />
+                      </Button>
                     </li>
                   ))}
                 </ul>
