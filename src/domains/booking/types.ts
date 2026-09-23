@@ -292,6 +292,25 @@ export type MarkAppointmentCompletedResult =
   | { success: true }
   | { success: false; error: string };
 
+// Narrow cross-domain read (CLAUDE.md 7.5.2) -- exposes only what
+// billing's day-of checkout flow needs (addon management, final bill
+// computation, finalize-and-complete), so billing never queries
+// BookingRequest directly (CLAUDE.md's Domain Boundary Isolation rule).
+export interface BookingRequestCheckoutView {
+  id: string;
+  artistId: string;
+  status: RequestStatus;
+  // Nullable at the DB level only -- every request that reaches
+  // APPROVED via reviewBookingRequest/confirmProposedBooking (4.4)
+  // always has an estimatedPrice set by the time it gets here.
+  estimatedPrice: number | null;
+  // The deposit amount actually charged (a snapshot, CLAUDE.md 7.1.1),
+  // not the artist's live per-tier setting -- credited against the
+  // final total only when depositPaid is true.
+  depositAmount: number | null;
+  depositPaid: boolean;
+}
+
 // Read-shaped projection of a ClientProfile's contact fields (CLAUDE.md
 // 6.1) -- used to prefill the booking form when a signed-in client
 // starts a new booking, instead of asking them to retype what's
