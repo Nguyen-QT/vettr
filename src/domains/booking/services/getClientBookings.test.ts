@@ -112,6 +112,38 @@ describe("getClientBookings", () => {
     });
   });
 
+  it("returns the request's existing design reference image URLs", async () => {
+    const artistId = await createArtist("Design Reference Test Artist");
+    const request = await prisma.bookingRequest.create({
+      data: {
+        clientId,
+        artistId,
+        tier: "TIER_2",
+        minPrice: 100,
+        maxPrice: 200,
+        status: "PENDING",
+        designReferences: {
+          create: [
+            { imageUrl: "https://example.com/one.jpg" },
+            { imageUrl: "https://example.com/two.jpg" },
+          ],
+        },
+      },
+    });
+
+    const result = await getClientBookings(clientId);
+
+    expect(
+      result.find((booking) => booking.id === request.id)
+        ?.designReferenceImageUrls
+    ).toEqual(
+      expect.arrayContaining([
+        "https://example.com/one.jpg",
+        "https://example.com/two.jpg",
+      ])
+    );
+  });
+
   it("spans bookings across multiple artists for the same client", async () => {
     const firstArtistId = await createArtist("First Artist");
     const secondArtistId = await createArtist("Second Artist");
