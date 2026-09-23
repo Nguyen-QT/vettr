@@ -273,7 +273,11 @@ src/
 
 ### 📦 Phase 9: Safety Confirmations ◄ CURRENT FOCUS
 > Promoted ahead of every other Phase 9+ item: an accidental destructive click (cancel, decline, mark no-show, etc.) has real consequences across both portals today, with nothing in front of it -- and Phase 16 (the booking wizard) already wants this primitive to exist first rather than build a throwaway one-off of its own.
-- [ ] **9.1: Action Confirmation Dialogs** (A shared confirm-dialog primitive gets wired in front of every destructive or state-changing action across both portals: booking request submission, cancellation, amendment, and status changes -- approve/decline/mark completed/mark no-show).
+- [ ] **9.1: Action Confirmation Dialogs** (A shared confirm-dialog primitive gets wired in front of every destructive or state-changing action across both portals: booking request submission, cancellation, amendment, and status changes -- approve/decline/mark completed/mark no-show. No Data Gateway/Domain Service/Controller-Action layers needed -- every underlying action already exists, this only gates each behind a confirmation step), decomposed per the Mandatory Task Breakdown Rule:
+  - [ ] 9.1.1: UI Primitive & Config (a shared `ConfirmDialog` component, built on the same Radix/base-ui primitive family as the rest of `src/components/ui/`; zero business logic).
+  - [ ] 9.1.2: Domain Hook & Logic (a generic `useConfirmAction` hook wrapping "open dialog -> user confirms -> run the callback" state, reusable by any existing action regardless of domain; pure state orchestration, no new business rules).
+  - [ ] 9.1.3: View & Route -- Client Portal (wires 9.1.1/9.1.2 into booking request submission, cancel, and amend: `VisualBookingForm`, `useClientBookingActions`'s cancel/save-edit buttons; e2e spec).
+  - [ ] 9.1.4: View & Route -- Artist Portal (wires 9.1.1/9.1.2 into approve/decline, reschedule, cancel-as-artist, mark no-show, and checkout's finalize: `RequestActions`, `AppointmentActions`, `AppointmentLifecycleActions`, `CheckoutView`; e2e spec).
 
 ### 📦 Phase 10: Client Profile Management
 > Closes a gap surfaced while building 6.2: `firstName`/`lastName`/`dateOfBirth` lock permanently once set, with the booking form as the only place they're ever collected -- a client with a typo, or who just wants to update their phone number, currently has no way to ever correct it. Session-derived like the client dashboard (`/client`, no `clientProfileId` URL param), mirroring Phase 19's analogous artist-facing profile editing.
