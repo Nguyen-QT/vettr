@@ -365,3 +365,16 @@ export interface UpdateClientProfileInput {
 export type UpdateClientProfileResult =
   | { success: true }
   | { success: false; error: string };
+
+// Guest-upsert input for a signed-out booking submission (CLAUDE.md
+// Phase 16). dateOfBirth is already a real Date here (UTC midnight),
+// unlike ClientBookingInput's raw ISO string -- submitBookingRequest
+// does that construction once, before calling into this service.
+export interface ResolveGuestClientProfileInput {
+  instagramHandle: string;
+  email: string;
+  phone?: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: Date;
+}
