@@ -3,10 +3,12 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { useConfirmAction } from "@/components/ui/use-confirm-action";
 import { useClientBookingActions } from "@/domains/booking/hooks/useClientBookingActions";
 import type { ClientBookingSummary } from "@/domains/booking/types";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
@@ -50,6 +52,9 @@ const CANCELLABLE_STATUSES = new Set([
 export function ClientBookingActions({ booking }: ClientBookingActionsProps) {
   const { cancel, isEditing, startEditing, cancelEditing, saveEdit, isPending, error } =
     useClientBookingActions(booking.id);
+
+  const cancelConfirm = useConfirmAction();
+  const saveConfirm = useConfirmAction();
 
   const [clientNotes, setClientNotes] = useState(booking.clientNotes ?? "");
   const [minPrice, setMinPrice] = useState(booking.minPrice);
@@ -127,12 +132,14 @@ export function ClientBookingActions({ booking }: ClientBookingActionsProps) {
             type="button"
             disabled={isPending}
             onClick={() =>
-              saveEdit({
-                clientNotes: clientNotes || undefined,
-                clientBudgetRange: { minPrice, maxPrice },
-                requestedDate,
-                requestedTime,
-              })
+              saveConfirm.requestConfirmation(() =>
+                saveEdit({
+                  clientNotes: clientNotes || undefined,
+                  clientBudgetRange: { minPrice, maxPrice },
+                  requestedDate,
+                  requestedTime,
+                })
+              )
             }
           >
             Save
@@ -147,6 +154,14 @@ export function ClientBookingActions({ booking }: ClientBookingActionsProps) {
           </Button>
         </div>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <ConfirmDialog
+          open={saveConfirm.isOpen}
+          onOpenChange={saveConfirm.onOpenChange}
+          title="Save these changes?"
+          description="This updates your booking request's notes, budget, and requested date/time."
+          confirmLabel="Save changes"
+          onConfirm={saveConfirm.confirm}
+        />
       </div>
     );
   }
@@ -164,12 +179,21 @@ export function ClientBookingActions({ booking }: ClientBookingActionsProps) {
           variant="destructive"
           size="sm"
           disabled={isPending}
-          onClick={cancel}
+          onClick={() => cancelConfirm.requestConfirmation(cancel)}
         >
           Cancel booking
         </Button>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <ConfirmDialog
+        open={cancelConfirm.isOpen}
+        onOpenChange={cancelConfirm.onOpenChange}
+        title="Cancel this booking?"
+        description="This cannot be undone. Depending on the booking's status, any paid deposit may or may not be refunded automatically."
+        confirmLabel="Cancel booking"
+        variant="destructive"
+        onConfirm={cancelConfirm.confirm}
+      />
     </div>
   );
 }
