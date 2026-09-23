@@ -267,3 +267,20 @@ export const clientBookingInputSchema = z
       });
     }
   });
+
+// Structural validity only -- see services/updateClientProfile.ts for
+// the write itself. clientProfileId is deliberately excluded --
+// actions.ts derives it from the trusted session, same posture as
+// updatePendingBookingRequestInputSchema above. Every field required
+// (unlike ClientProfileContactDetails' nullable onboarding fields) --
+// this is the one place a client can ever fill in a still-blank
+// firstName/lastName/dateOfBirth after 6.2, or fix a typo in any
+// field, so the form always collects the complete set on save.
+export const updateClientProfileInputSchema = z.object({
+  instagramHandle: instagramHandleSchema,
+  email: z.email("Enter a valid email address."),
+  phone: z.string().trim().min(1).optional(),
+  firstName: clientFirstNameSchema,
+  lastName: clientLastNameSchema,
+  dateOfBirth: dateOfBirthSchema,
+  });

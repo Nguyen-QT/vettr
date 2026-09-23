@@ -9,6 +9,7 @@ import {
   combineRequestedDateAndTime,
   rescheduleApprovedBookingInputSchema,
   reviewBookingRequestInputSchema,
+  updateClientProfileInputSchema,
   updatePendingBookingRequestInputSchema,
 } from "./booking.schema";
 import { cancelApprovedBookingAsArtist } from "./services/cancelApprovedBookingAsArtist";
@@ -25,6 +26,7 @@ import {
   reviewBookingRequest,
   type ReviewBookingRequestResult,
 } from "./services/reviewBookingRequest";
+import { updateClientProfile } from "./services/updateClientProfile";
 import { updatePendingBookingRequest } from "./services/updatePendingBookingRequest";
 import { validateComplexity } from "./services/validateComplexity";
 import type {
@@ -33,6 +35,7 @@ import type {
   MarkAppointmentCompletedResult,
   MarkAppointmentNoShowResult,
   RescheduleApprovedBookingResult,
+  UpdateClientProfileResult,
   UpdatePendingBookingRequestResult,
 } from "./types";
 
@@ -304,6 +307,28 @@ export async function updatePendingBookingRequestAction(
     clientProfileId,
     ...parsed.data,
   });
+}
+
+// Controller/Action boundary (CLAUDE.md 10.1.2): same session-derived
+// clientProfileId as updatePendingBookingRequestAction above, plus
+// structural validation of every profile field before delegating.
+export async function updateClientProfileAction(
+  input: unknown
+): Promise<UpdateClientProfileResult> {
+  const clientProfileId = await requireClientProfileId();
+  if (!clientProfileId) {
+    return { success: false, error: NOT_SIGNED_IN_ERROR_MESSAGE };
+  }
+
+  const parsed = updateClientProfileInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid profile details.",
+    };
+  }
+
+  return updateClientProfile({ clientProfileId, ...parsed.data });
 }
 
 // Controller/Action boundary (CLAUDE.md 5.5.2): derives artistId from
