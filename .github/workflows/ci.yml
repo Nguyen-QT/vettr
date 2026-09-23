@@ -51,6 +51,14 @@ jobs:
 
       - run: npx prisma migrate deploy
 
+      - name: Generate Next.js route types
+        # tsc otherwise fails on the ambient `LayoutProps`/`PageProps`
+        # types Next.js normally writes to .next/types/ during `next
+        # dev`/`next build` -- a fresh checkout never has that
+        # directory, only a local one that's already run the dev
+        # server does, which is exactly why this only failed in CI.
+        run: npx next typegen
+
       - name: Typecheck
         run: npx tsc --noEmit
 
