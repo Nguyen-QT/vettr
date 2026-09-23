@@ -284,7 +284,7 @@ src/
 - [ ] **10.1: Client Profile Page** (A client-facing page for viewing/editing their own `ClientProfile` details -- name, email, phone, date of birth, Instagram handle -- reachable from the client dashboard. The read side reuses `getClientProfileContactDetails` (6.1.1) as-is -- it already returns every field needed -- so this is purely additive: a write plus its own layers), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 10.1.1: Domain Service (`updateClientProfile(clientProfileId, fields)` in `booking`, alongside `ClientProfile`'s existing read/write services; handles `instagramHandle`'s unique-constraint conflict gracefully as a friendly error rather than a raw Prisma exception; unit tests).
   - [x] 10.1.2: Controller/Action (`updateClientProfileAction`, deriving `clientProfileId` from the trusted session; a new `updateClientProfileInputSchema` in `booking.schema.ts`).
-  - [ ] 10.1.3: Domain Hook & Logic (`useClientProfile` orchestrating fetch/edit/save state).
+  - [x] 10.1.3: Domain Hook & Logic (`useClientProfile` orchestrating fetch/edit/save state).
   - [ ] 10.1.4: View & Route (the profile page itself, editable fields, a link from the `/client` dashboard; e2e spec).
 
 ### 📦 Phase 11: Client Cancellation History Visibility for Artists
