@@ -29,5 +29,7 @@ export async function getClientBookings(
     clientNotes: request.clientNotes,
     requestedStartTime: request.requestedStartTime,
     createdAt: request.createdAt,
+    depositPaid: request.depositPaid,
+    depositRefunded: request.depositRefunded,
   }));
 }

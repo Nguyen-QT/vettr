@@ -68,3 +68,26 @@ test.describe("deposit payment (client dashboard)", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 });
+
+test.describe("deposit refund status (client dashboard)", () => {
+  test("shows 'Deposit refunded' on a cancelled booking whose deposit was refunded", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsClient(page, fixture);
+
+    const card = page.locator("article", { hasText: "FREESTYLE" });
+    await expect(card.getByText("Deposit refunded")).toBeVisible();
+  });
+
+  test("does not show a deposit status label on a booking with no deposit paid", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsClient(page, fixture);
+
+    const card = page.locator("article", { hasText: "TIER_3" });
+    await expect(card.getByText("Deposit refunded")).not.toBeVisible();
+    await expect(card.getByText("Deposit paid")).not.toBeVisible();
+  });
+});

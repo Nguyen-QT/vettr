@@ -160,6 +160,15 @@ export interface ClientBookingSummary {
   clientNotes: string | null;
   requestedStartTime: Date | null;
   createdAt: Date;
+  // Deposit status (CLAUDE.md 7.3.5) -- depositPaid: false means no
+  // deposit badge shows at all (a still-payable one surfaces
+  // separately via billing's getPayableDeposits/DepositPaymentCard).
+  // depositRefunded only ever becomes true after a cancellation
+  // refund (7.3); a NO_SHOW with depositPaid true and depositRefunded
+  // false is a forfeited deposit, distinguished at render time by
+  // status rather than a dedicated field.
+  depositPaid: boolean;
+  depositRefunded: boolean;
 }
 
 // Narrow cross-domain read (CLAUDE.md 7.1.8) -- exposes only what a
