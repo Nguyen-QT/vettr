@@ -52,3 +52,37 @@ export type ConfirmDepositRefundResult =
 // appear here at all; there is no "not payable yet" entry, unlike
 // ArtistDepositSettings' every-tier-present shape above.
 export type PayableDeposits = Record<string, number>;
+
+// Day-of checkout flow (CLAUDE.md 7.5). artistId on every input below
+// is the trusted session's own id, checked against the owning artist
+// via booking's narrow checkout read (7.5.2) inside each service --
+// never trusted from client-supplied input.
+export interface AddBillingAddonInput {
+  bookingRequestId: string;
+  artistId: string;
+  label: string;
+  price: number;
+}
+
+export type AddBillingAddonResult =
+  | { success: true }
+  | { success: false; error: string };
+
+export interface RemoveBillingAddonInput {
+  addonId: string;
+  artistId: string;
+}
+
+export type RemoveBillingAddonResult =
+  | { success: true }
+  | { success: false; error: string };
+
+export interface BillingAddonSummary {
+  id: string;
+  label: string;
+  price: number;
+}
+
+export type GetBillingAddonsResult =
+  | { success: true; addons: BillingAddonSummary[] }
+  | { success: false; error: string };
