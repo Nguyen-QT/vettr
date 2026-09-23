@@ -3,6 +3,11 @@
 // "free" deposit that would always trivially satisfy depositPaid.
 export const MIN_DEPOSIT_AMOUNT = 1;
 
+// Day-of checkout addons (CLAUDE.md 7.5.5) -- kept above zero for the
+// same reason as MIN_DEPOSIT_AMOUNT; a free line item has no billing
+// purpose and is almost certainly a data-entry mistake.
+export const MIN_ADDON_PRICE = 1;
+
 // Upfront Cancellation Precharge Engine (CLAUDE.md 7.4, blueprint
 // "Flagging Mechanism"). A flagged client's (ClientProfile.
 // enforcePrecharge) required deposit is the greater of the artist's
