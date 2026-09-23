@@ -12,7 +12,7 @@ import type { BookingRequestDepositView } from "../types";
 export async function getBookingRequestByPaymentIntentId(
   stripePaymentIntentId: string
 ): Promise<BookingRequestDepositView | null> {
-  return prisma.bookingRequest.findFirst({
+  const request = await prisma.bookingRequest.findFirst({
     where: { stripePaymentIntentId },
     select: {
       id: true,
@@ -23,6 +23,19 @@ export async function getBookingRequestByPaymentIntentId(
       depositPaid: true,
       stripePaymentIntentId: true,
       depositRefunded: true,
+      estimatedPrice: true,
+      client: { select: { enforcePrecharge: true } },
     },
   });
+
+  if (!request) {
+    return null;
+  }
+
+  const { client, estimatedPrice, ...rest } = request;
+  return {
+    ...rest,
+    estimatedPrice: estimatedPrice === null ? null : Number(estimatedPrice),
+    clientEnforcePrecharge: client.enforcePrecharge,
+  };
 }
