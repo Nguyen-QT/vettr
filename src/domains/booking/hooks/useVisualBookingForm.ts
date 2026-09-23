@@ -149,8 +149,24 @@ export function useVisualBookingForm({
     }
   }
 
+  // Appends rather than replaces (CLAUDE.md 13.1.2) -- the dropzone's
+  // onClientUploadComplete only ever reports the batch that just
+  // finished, not every image uploaded so far in this session; a
+  // second add would otherwise silently wipe out the first.
   function handleUploadComplete(urls: string[]) {
-    form.setValue("designReferenceImageUrls", urls, { shouldValidate: true });
+    const current = form.getValues("designReferenceImageUrls");
+    form.setValue("designReferenceImageUrls", [...current, ...urls], {
+      shouldValidate: true,
+    });
+  }
+
+  function removeDesignReferenceImage(url: string) {
+    const current = form.getValues("designReferenceImageUrls");
+    form.setValue(
+      "designReferenceImageUrls",
+      current.filter((existingUrl) => existingUrl !== url),
+      { shouldValidate: true }
+    );
   }
 
   const onSubmit = form.handleSubmit(async (data) => {
@@ -175,6 +191,7 @@ export function useVisualBookingForm({
     activeTagField,
     activeTagOptions,
     handleUploadComplete,
+    removeDesignReferenceImage,
     onSubmit,
     isSubmitting,
     serverError,
