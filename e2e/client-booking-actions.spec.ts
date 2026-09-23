@@ -113,11 +113,14 @@ test.describe("client self-service booking modification and cancellation", () =>
     await expect(
       card.getByRole("button", { name: "Edit", exact: true })
     ).toBeVisible();
-    // saveEdit flips isEditing to false immediately but router.refresh()
-    // (which re-fetches the booking's now-updated image list) resolves
-    // slightly after -- waiting here avoids re-opening Edit against a
-    // still-stale prop in that brief window.
-    await page.waitForLoadState("networkidle");
+    // Confirm the removal actually persisted server-side, rather than
+    // racing saveEdit's router.refresh() -- it flips isEditing to false
+    // immediately, but the refetch of the booking's updated image list
+    // resolves slightly after, and a networkidle wait doesn't reliably
+    // guarantee that refetch has been applied to the React tree by the
+    // time the next click fires. A hard reload forces a fresh
+    // server-rendered fetch, sidestepping that timing window entirely.
+    await page.reload();
     await card.getByRole("button", { name: "Edit", exact: true }).click();
     await expect(card.getByRole("button", { name: "Remove image" })).toHaveCount(1);
   });
