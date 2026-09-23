@@ -281,7 +281,11 @@ src/
 
 ### 📦 Phase 10: Client Profile Management ◄ CURRENT FOCUS
 > Closes a gap surfaced while building 6.2: `firstName`/`lastName`/`dateOfBirth` lock permanently once set, with the booking form as the only place they're ever collected -- a client with a typo, or who just wants to update their phone number, currently has no way to ever correct it. Session-derived like the client dashboard (`/client`, no `clientProfileId` URL param), mirroring Phase 19's analogous artist-facing profile editing.
-- [ ] **10.1: Client Profile Page** (A client-facing page for viewing/editing their own `ClientProfile` details -- name, email, phone, date of birth, Instagram handle -- reachable from the client dashboard).
+- [ ] **10.1: Client Profile Page** (A client-facing page for viewing/editing their own `ClientProfile` details -- name, email, phone, date of birth, Instagram handle -- reachable from the client dashboard. The read side reuses `getClientProfileContactDetails` (6.1.1) as-is -- it already returns every field needed -- so this is purely additive: a write plus its own layers), decomposed per the Mandatory Task Breakdown Rule:
+  - [ ] 10.1.1: Domain Service (`updateClientProfile(clientProfileId, fields)` in `booking`, alongside `ClientProfile`'s existing read/write services; handles `instagramHandle`'s unique-constraint conflict gracefully as a friendly error rather than a raw Prisma exception; unit tests).
+  - [ ] 10.1.2: Controller/Action (`updateClientProfileAction`, deriving `clientProfileId` from the trusted session; a new `updateClientProfileInputSchema` in `booking.schema.ts`).
+  - [ ] 10.1.3: Domain Hook & Logic (`useClientProfile` orchestrating fetch/edit/save state).
+  - [ ] 10.1.4: View & Route (the profile page itself, editable fields, a link from the `/client` dashboard; e2e spec).
 
 ### 📦 Phase 11: Client Cancellation History Visibility for Artists
 > Surfaced while scoping 7.4 -- the artist currently has zero visibility into a client's cancellation/no-show history (`ClientProfile.cancellationCount`/`enforcePrecharge`) when reviewing a request on `RequestCard`, even though 7.4's precharge engine already reacts to that same flag on the billing side. Promoted from the Backlog: this closes the loop on an already-shipped feature's real-world usefulness rather than adding something new.
