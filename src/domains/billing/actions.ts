@@ -2,11 +2,23 @@
 
 import { getCurrentSession } from "@/domains/auth/actions";
 
-import { setArtistDepositSettingInputSchema } from "./billing.schema";
+import {
+  addBillingAddonInputSchema,
+  setArtistDepositSettingInputSchema,
+} from "./billing.schema";
+import { addBillingAddon } from "./services/addBillingAddon";
 import { createDepositPaymentIntent } from "./services/createDepositPaymentIntent";
+import { finalizeCheckout } from "./services/finalizeCheckout";
 import { getArtistDepositSettings } from "./services/getArtistDepositSettings";
+import { removeBillingAddon } from "./services/removeBillingAddon";
 import { setArtistDepositSettings } from "./services/setArtistDepositSettings";
-import type { ArtistDepositSettings, CreateDepositPaymentIntentResult } from "./types";
+import type {
+  AddBillingAddonResult,
+  ArtistDepositSettings,
+  CreateDepositPaymentIntentResult,
+  FinalizeCheckoutResult,
+  RemoveBillingAddonResult,
+} from "./types";
 
 const NOT_SIGNED_IN_ERROR_MESSAGE = "You must be signed in as a client to do that.";
 const NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE =
@@ -87,4 +99,58 @@ export async function getArtistDepositSettingsAction(): Promise<GetArtistDeposit
 
   const settings = await getArtistDepositSettings(artistId);
   return { success: true, settings };
+}
+
+// Controller/Action boundary (CLAUDE.md 7.5.5): validates structurally,
+// derives artistId from the trusted session -- addBillingAddon itself
+// re-checks ownership against bookingRequestId, this layer just
+// supplies a trustworthy id, same posture as
+// setArtistDepositSettingsAction above.
+export async function addBillingAddonAction(
+  bookingRequestId: string,
+  input: unknown
+): Promise<AddBillingAddonResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  const parsed = addBillingAddonInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid addon.",
+    };
+  }
+
+  return addBillingAddon({ bookingRequestId, artistId, ...parsed.data });
+}
+
+// Controller/Action boundary (CLAUDE.md 7.5.5): derives artistId from
+// the trusted session -- removeBillingAddon itself re-checks ownership
+// by resolving the addon back to its owning request.
+export async function removeBillingAddonAction(
+  addonId: string
+): Promise<RemoveBillingAddonResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  return removeBillingAddon({ addonId, artistId });
+}
+
+// Controller/Action boundary (CLAUDE.md 7.5.5): derives artistId from
+// the trusted session -- finalizeCheckout itself re-checks ownership,
+// then delegates the APPROVED/past-due business rules to booking's
+// markAppointmentCompleted.
+export async function finalizeCheckoutAction(
+  bookingRequestId: string
+): Promise<FinalizeCheckoutResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  return finalizeCheckout(bookingRequestId, artistId);
 }
