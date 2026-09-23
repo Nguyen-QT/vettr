@@ -36,6 +36,10 @@ test.describe("artist reschedules an approved booking", () => {
     await card.getByLabel("New date").fill("2099-07-15");
     await card.getByRole("radio", { name: "14:00" }).click();
     await card.getByRole("button", { name: "Save new time" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Save new time" })
+      .click();
 
     await expect(card.getByText(/14:00 –/)).toBeVisible();
     await expect(card.getByText("15 Jul 2099", { exact: false })).toBeVisible();

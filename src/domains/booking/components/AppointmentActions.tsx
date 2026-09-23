@@ -3,9 +3,11 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useConfirmAction } from "@/components/ui/use-confirm-action";
 import { useAppointmentLifecycleActions } from "@/domains/booking/hooks/useAppointmentLifecycleActions";
 import { useRescheduleBooking } from "@/domains/booking/hooks/useRescheduleBooking";
 import type { UpcomingAppointmentSummary } from "@/domains/booking/types";
@@ -54,6 +56,9 @@ export function AppointmentActions({ appointment }: AppointmentActionsProps) {
     error: cancelError,
   } = useAppointmentLifecycleActions(appointment.id);
 
+  const cancelConfirm = useConfirmAction();
+  const rescheduleConfirm = useConfirmAction();
+
   const defaultDurationMinutes =
     (appointment.endTime.getTime() - appointment.startTime.getTime()) / 60_000;
 
@@ -77,12 +82,21 @@ export function AppointmentActions({ appointment }: AppointmentActionsProps) {
             variant="outline"
             size="sm"
             disabled={isCancelPending}
-            onClick={cancel}
+            onClick={() => cancelConfirm.requestConfirmation(cancel)}
           >
             Cancel booking
           </Button>
         </div>
         {cancelError ? <p className="text-sm text-destructive">{cancelError}</p> : null}
+        <ConfirmDialog
+          open={cancelConfirm.isOpen}
+          onOpenChange={cancelConfirm.onOpenChange}
+          title="Cancel this booking?"
+          description="This cannot be undone. Depending on the booking's status, any paid deposit is refunded automatically."
+          confirmLabel="Cancel booking"
+          variant="destructive"
+          onConfirm={cancelConfirm.confirm}
+        />
       </div>
     );
   }
@@ -132,7 +146,9 @@ export function AppointmentActions({ appointment }: AppointmentActionsProps) {
           type="button"
           disabled={isPending}
           onClick={() =>
-            saveReschedule({ requestedDate, requestedTime, durationMinutes })
+            rescheduleConfirm.requestConfirmation(() =>
+              saveReschedule({ requestedDate, requestedTime, durationMinutes })
+            )
           }
         >
           Save new time
@@ -147,6 +163,14 @@ export function AppointmentActions({ appointment }: AppointmentActionsProps) {
         </Button>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <ConfirmDialog
+        open={rescheduleConfirm.isOpen}
+        onOpenChange={rescheduleConfirm.onOpenChange}
+        title="Save this new time?"
+        description="This immediately moves the appointment -- the client isn't asked to confirm on-platform."
+        confirmLabel="Save new time"
+        onConfirm={rescheduleConfirm.confirm}
+      />
     </div>
   );
 }

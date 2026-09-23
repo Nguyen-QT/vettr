@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Field,
   FieldContent,
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { useConfirmAction } from "@/components/ui/use-confirm-action";
 import { AppointmentCard } from "@/domains/booking/components/AppointmentCard";
 import type { UpcomingAppointmentSummary } from "@/domains/booking/types";
 
@@ -57,6 +59,7 @@ export function CheckoutView({
 
   const [label, setLabel] = useState("");
   const [price, setPrice] = useState("");
+  const finalizeConfirm = useConfirmAction();
 
   function handleAddAddon() {
     const parsedPrice = Number(price);
@@ -172,11 +175,19 @@ export function CheckoutView({
         <Button
           type="button"
           disabled={isAddonMutating || isFinalizing}
-          onClick={finalize}
+          onClick={() => finalizeConfirm.requestConfirmation(finalize)}
         >
           {isFinalizing ? "Finalizing…" : "Finalize & complete"}
         </Button>
       </div>
+      <ConfirmDialog
+        open={finalizeConfirm.isOpen}
+        onOpenChange={finalizeConfirm.onOpenChange}
+        title="Finalize this checkout?"
+        description="This marks the appointment as completed and can't be undone from here."
+        confirmLabel="Finalize & complete"
+        onConfirm={finalizeConfirm.confirm}
+      />
     </div>
   );
 }

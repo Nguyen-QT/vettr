@@ -27,6 +27,10 @@ test.describe("artist cancels an upcoming appointment", () => {
     await expect(card).toBeVisible();
 
     await card.getByRole("button", { name: "Cancel booking" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Cancel booking" })
+      .click();
 
     await expect(
       page.getByText(fixture.cancelUpcomingClientHandle)
