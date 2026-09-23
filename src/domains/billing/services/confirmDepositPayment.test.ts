@@ -56,10 +56,17 @@ describe("confirmDepositPayment", () => {
     });
   }
 
+  // PaymentIntent ids are namespaced with this test's own artistId
+  // (unique per test via randomUUID in beforeEach) rather than bare
+  // literals -- getBookingRequestByPaymentIntentId uses findFirst
+  // against the whole shared table, so a bare "pi_123" reused across
+  // test files running in parallel can otherwise match another file's
+  // concurrently-live row.
   it("flips depositPaid to true for the matching request", async () => {
-    const request = await createRequest({ stripePaymentIntentId: "pi_123" });
+    const paymentIntentId = `pi_123_${artistId}`;
+    const request = await createRequest({ stripePaymentIntentId: paymentIntentId });
 
-    const result = await confirmDepositPayment("pi_123");
+    const result = await confirmDepositPayment(paymentIntentId);
 
     expect(result).toEqual({ success: true });
     const updated = await prisma.bookingRequest.findUnique({
@@ -69,24 +76,27 @@ describe("confirmDepositPayment", () => {
   });
 
   it("is idempotent when called again for an already-confirmed request", async () => {
-    await createRequest({ stripePaymentIntentId: "pi_456", depositPaid: true });
+    const paymentIntentId = `pi_456_${artistId}`;
+    await createRequest({ stripePaymentIntentId: paymentIntentId, depositPaid: true });
 
-    const result = await confirmDepositPayment("pi_456");
+    const result = await confirmDepositPayment(paymentIntentId);
 
     expect(result).toEqual({ success: true });
   });
 
   it("rejects a PaymentIntent id that matches no request", async () => {
-    const result = await confirmDepositPayment("pi_unknown");
+    const result = await confirmDepositPayment(`pi_unknown_${artistId}`);
 
     expect(result.success).toBe(false);
   });
 
   it("does not flip depositPaid for a different request's PaymentIntent id", async () => {
-    const request = await createRequest({ stripePaymentIntentId: "pi_789" });
-    await createRequest({ stripePaymentIntentId: "pi_999" });
+    const request = await createRequest({
+      stripePaymentIntentId: `pi_789_${artistId}`,
+    });
+    await createRequest({ stripePaymentIntentId: `pi_999_${artistId}` });
 
-    await confirmDepositPayment("pi_999");
+    await confirmDepositPayment(`pi_999_${artistId}`);
 
     const untouched = await prisma.bookingRequest.findUnique({
       where: { id: request.id },
