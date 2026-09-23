@@ -26,8 +26,8 @@ export function ClientSignupForm() {
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input id="email" type="email" {...register("email")} />
           <FieldDescription>
-            Use the same email you booked with -- that's how we find your
-            booking history.
+            Use the same email you booked with -- that&apos;s how we find
+            your booking history.
           </FieldDescription>
           <FieldError errors={errors.email && [errors.email]} />
         </Field>
