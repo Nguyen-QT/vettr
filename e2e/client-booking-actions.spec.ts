@@ -29,6 +29,10 @@ test.describe("client self-service booking modification and cancellation", () =>
     await expect(card.getByText("Pending review")).toBeVisible();
 
     await card.getByRole("button", { name: "Cancel booking" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Cancel booking" })
+      .click();
 
     await expect(card.getByText("Cancelled")).toBeVisible();
     await expect(
@@ -47,6 +51,10 @@ test.describe("client self-service booking modification and cancellation", () =>
     const minPriceInput = card.getByLabel("Budget range (£)");
     await minPriceInput.fill("175");
     await card.getByRole("button", { name: "Save" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Save changes" })
+      .click();
 
     await expect(card.getByText("£175 – £300")).toBeVisible();
   });

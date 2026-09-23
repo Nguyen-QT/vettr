@@ -6,6 +6,7 @@ import { Controller } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Field,
   FieldContent,
@@ -20,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
+import { useConfirmAction } from "@/components/ui/use-confirm-action";
 import { COMPLEXITY_TIERS, OTHER_TAG_VALUE } from "@/domains/booking/constants";
 import { useVisualBookingForm } from "@/domains/booking/hooks/useVisualBookingForm";
 import type {
@@ -95,8 +97,11 @@ export function VisualBookingForm({
     control,
     register,
     watch,
+    trigger,
     formState: { errors },
   } = form;
+
+  const confirmSubmit = useConfirmAction();
 
   if (submittedRequestId) {
     return (
@@ -115,7 +120,7 @@ export function VisualBookingForm({
   const selectedTierReferenceImages = tierReferenceImages[watch("tier")];
 
   return (
-    <form onSubmit={onSubmit} onKeyDown={preventEnterSubmit}>
+    <form onKeyDown={preventEnterSubmit}>
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="instagramHandle">Instagram handle</FieldLabel>
@@ -393,10 +398,29 @@ export function VisualBookingForm({
 
         {serverError ? <FieldError>{serverError}</FieldError> : null}
 
-        <Button type="submit" disabled={isSubmitting}>
+        <Button
+          type="button"
+          disabled={isSubmitting}
+          onClick={async () => {
+            const isValid = await trigger();
+            if (isValid) {
+              confirmSubmit.requestConfirmation(() => {
+                void onSubmit();
+              });
+            }
+          }}
+        >
           {isSubmitting ? "Submitting..." : "Submit request"}
         </Button>
       </FieldGroup>
+      <ConfirmDialog
+        open={confirmSubmit.isOpen}
+        onOpenChange={confirmSubmit.onOpenChange}
+        title="Submit this booking request?"
+        description="The artist will review it and reach out once they've made a decision -- you won't be charged anything yet."
+        confirmLabel="Submit request"
+        onConfirm={confirmSubmit.confirm}
+      />
     </form>
   );
 }
