@@ -42,7 +42,7 @@ export function RequestCard({ request }: RequestCardProps) {
   const cancellationFlag = cancellationFlagLabel(request);
 
   return (
-    <article className="flex flex-col gap-3 rounded-lg border border-border p-4">
+    <article className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 text-card-foreground">
       <div className="flex items-center justify-between">
         <a
           href={instagramUrl}
