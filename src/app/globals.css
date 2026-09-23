@@ -91,20 +91,20 @@
 
 .dark {
   /* --- 60% Pitch Black Canvas --- */
-  --background: oklch(0 0 0);                    /* #000000 */
+  --background: oklch(0.1912 0.0062 337.91);                    /* #000000 */
 
   /* --- Typography Layers --- */
   --foreground: oklch(1 0 0);                    /* #ffffff */
   --muted-foreground: oklch(0.988 0.003 340 / 85%); /* #FDFAFC @ 85% opacity */
 
   /* --- 30% Dark Surfaces --- */
-  --card: oklch(0.14 0 0);                       /* #121212 */
+  --card: oklch(0.326 0.012 342.44);                       /* #121212 */
   --card-foreground: oklch(1 0 0);               /* #ffffff */
   --popover: oklch(0.14 0 0);
   --popover-foreground: oklch(1 0 0);
 
   /* --- 10% Action Accents --- */
-  --primary: oklch(0.91 0.02 340);               /* #edd9e3 */
+  --primary: oklch(0.91 0.00 340);               /* #edd9e3 */
   --primary-foreground: oklch(0.245 0.038 340);  /* #37222e */
 
   --secondary: oklch(0.20 0.01 340);
