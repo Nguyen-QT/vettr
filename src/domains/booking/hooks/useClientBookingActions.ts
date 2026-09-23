@@ -29,6 +29,13 @@ export function useClientBookingActions(bookingRequestId: string) {
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Lifts 5.4's original images exclusion (CLAUDE.md 13.2.4) -- unlike
+  // notes/budget/date, which stay local useState in ClientBookingActions
+  // itself, the image list needs an append/remove pair to mirror
+  // useVisualBookingForm's (13.1.2) pattern, so it lives here instead.
+  const [designReferenceImageUrls, setDesignReferenceImageUrls] = useState<
+    string[]
+  >([]);
 
   function cancel() {
     setError(null);
@@ -42,8 +49,12 @@ export function useClientBookingActions(bookingRequestId: string) {
     });
   }
 
-  function startEditing() {
+  // Seeds the editable image list from the booking's current images --
+  // defaults to [] only for callers that haven't been updated yet to
+  // pass it (CLAUDE.md 13.2.5 wires the real value in).
+  function startEditing(initialDesignReferenceImageUrls: string[] = []) {
     setError(null);
+    setDesignReferenceImageUrls(initialDesignReferenceImageUrls);
     setIsEditing(true);
   }
 
@@ -52,12 +63,22 @@ export function useClientBookingActions(bookingRequestId: string) {
     setIsEditing(false);
   }
 
+  function addDesignReferenceImages(urls: string[]) {
+    setDesignReferenceImageUrls((current) => [...current, ...urls]);
+  }
+
+  function removeDesignReferenceImage(url: string) {
+    setDesignReferenceImageUrls((current) =>
+      current.filter((existingUrl) => existingUrl !== url)
+    );
+  }
+
   function saveEdit(fields: UpdatePendingBookingFields) {
     setError(null);
     startTransition(async () => {
       const result = await updatePendingBookingRequestAction(
         bookingRequestId,
-        fields
+        { ...fields, designReferenceImageUrls }
       );
       if (!result.success) {
         setError(result.error);
@@ -76,5 +97,8 @@ export function useClientBookingActions(bookingRequestId: string) {
     saveEdit,
     isPending,
     error,
+    designReferenceImageUrls,
+    addDesignReferenceImages,
+    removeDesignReferenceImage,
   };
 }
