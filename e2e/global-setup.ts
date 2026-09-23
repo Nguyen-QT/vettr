@@ -107,6 +107,11 @@ export default async function globalSetup() {
   // -- APPROVED, unpaid, TIER_4 so it never overlaps the TIER_2/TIER_3
   // bookings the cancel/edit specs already touch on this same profile.
   const depositRequestId = randomUUID();
+  // A fourth booking for the same client -- CANCELLED_BY_CLIENT/
+  // FREESTYLE with a refunded deposit, so the client dashboard's
+  // deposit-status labels (CLAUDE.md 7.3.5) have a real "Deposit
+  // refunded" example to assert against.
+  const refundedDepositRequestId = randomUUID();
   const maxEndTimeClientId = randomUUID();
   const maxEndTimeRequestId = randomUUID();
   const maxEndTimeClientHandle = "e2e_client_maxendtime";
@@ -523,6 +528,14 @@ export default async function globalSetup() {
   );
 
   await client.query(
+    `INSERT INTO "BookingRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "depositPaid", "depositRefunded", "updatedAt")
+     VALUES
+       ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'FREESTYLE', 50, 500, ARRAY[]::text[], ARRAY[]::text[], true, true, now())`,
+    [refundedDepositRequestId, clientLoginProfileId, artistId]
+  );
+
+  await client.query(
     `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
      VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
     [
@@ -592,6 +605,7 @@ export default async function globalSetup() {
       clientLoginRequestId,
       clientEditableRequestId,
       depositRequestId,
+      refundedDepositRequestId,
       ...pastDueRequestIds,
       cancelUpcomingRequestId,
       maxEndTimeRequestId,

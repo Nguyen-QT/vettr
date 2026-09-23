@@ -74,6 +74,44 @@ describe("getClientBookings", () => {
     expect(result[0].artistInstagramHandle).toMatch(/^test_artist_/);
   });
 
+  it("returns the deposit status fields", async () => {
+    const artistId = await createArtist("Deposit Status Test Artist");
+    const paid = await prisma.bookingRequest.create({
+      data: {
+        clientId,
+        artistId,
+        tier: "TIER_2",
+        minPrice: 100,
+        maxPrice: 200,
+        status: "APPROVED",
+        depositPaid: true,
+      },
+    });
+    const refunded = await prisma.bookingRequest.create({
+      data: {
+        clientId,
+        artistId,
+        tier: "TIER_3",
+        minPrice: 100,
+        maxPrice: 200,
+        status: "CANCELLED_BY_CLIENT",
+        depositPaid: true,
+        depositRefunded: true,
+      },
+    });
+
+    const result = await getClientBookings(clientId);
+
+    expect(result.find((booking) => booking.id === paid.id)).toMatchObject({
+      depositPaid: true,
+      depositRefunded: false,
+    });
+    expect(result.find((booking) => booking.id === refunded.id)).toMatchObject({
+      depositPaid: true,
+      depositRefunded: true,
+    });
+  });
+
   it("spans bookings across multiple artists for the same client", async () => {
     const firstArtistId = await createArtist("First Artist");
     const secondArtistId = await createArtist("Second Artist");
