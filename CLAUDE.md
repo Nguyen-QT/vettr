@@ -287,13 +287,13 @@ src/
   - [x] 10.1.3: Domain Hook & Logic (`useClientProfile` orchestrating fetch/edit/save state).
   - [x] 10.1.4: View & Route (the profile page itself, editable fields, a link from the `/client` dashboard; e2e spec).
 
-### 📦 Phase 11: Client Cancellation History Visibility for Artists ◄ CURRENT FOCUS
+### 📦 Phase 11: Client Cancellation History Visibility for Artists
 > Surfaced while scoping 7.4 -- the artist currently has zero visibility into a client's cancellation/no-show history (`ClientProfile.cancellationCount`/`enforcePrecharge`) when reviewing a request on `RequestCard`, even though 7.4's precharge engine already reacts to that same flag on the billing side. Promoted from the Backlog: this closes the loop on an already-shipped feature's real-world usefulness rather than adding something new.
-- [ ] **11.1: Cancellation History Flag on RequestCard** (A visible flag/badge on `RequestCard` surfacing a client's `cancellationCount`/`enforcePrecharge` state, so the artist can factor it into their own approve/decline decision, not just the deposit amount 7.4 already computes from it. No Controller/Action layer -- `getPendingBookingRequests` is already called directly from the artist dashboard page, same precedent as elsewhere), decomposed per the Mandatory Task Breakdown Rule:
+- [x] **11.1: Cancellation History Flag on RequestCard** (A visible flag/badge on `RequestCard` surfacing a client's `cancellationCount`/`enforcePrecharge` state, so the artist can factor it into their own approve/decline decision, not just the deposit amount 7.4 already computes from it. No Controller/Action layer -- `getPendingBookingRequests` is already called directly from the artist dashboard page, same precedent as elsewhere), decomposed per the Mandatory Task Breakdown Rule:
   - [x] 11.1.1: Domain Service (extend `PendingBookingRequestSummary` with `clientCancellationCount`/`clientEnforcePrecharge`; update `getPendingBookingRequests` to map them from the already-included `client` relation -- purely additive, no new query; unit tests).
-  - [ ] 11.1.2: View & Route (`RequestCard` shows a visible flag/badge when `clientCancellationCount > 0` or `clientEnforcePrecharge` is true; e2e spec).
+  - [x] 11.1.2: View & Route (`RequestCard` shows a visible flag/badge when `clientCancellationCount > 0` or `clientEnforcePrecharge` is true; e2e spec).
 
-### 📦 Phase 12: Booking Process Explainer
+### 📦 Phase 12: Booking Process Explainer ◄ CURRENT FOCUS
 > Surfaced directly by the user: a first-time client has no way to know, before submitting, that the flow is request -> artist review -> (if approved) pay a deposit to actually lock in the slot -- the request form and the client dashboard both just present each stage in isolation with no framing of the sequence. Ranked alongside the other real-gap items above rather than with pure polish, since it affects every guest's first impression of the whole booking flow.
 - [ ] **12.1: "How Booking Works" Explainer** (Static copy on `/book/[artistId]` -- and Phase 17's wizard Step 4 summary once that ships -- laying out the request -> review -> deposit -> locked-in sequence explicitly, so a client isn't surprised that approval doesn't itself confirm the slot).
 
