@@ -290,7 +290,7 @@ src/
 ### 📦 Phase 11: Client Cancellation History Visibility for Artists ◄ CURRENT FOCUS
 > Surfaced while scoping 7.4 -- the artist currently has zero visibility into a client's cancellation/no-show history (`ClientProfile.cancellationCount`/`enforcePrecharge`) when reviewing a request on `RequestCard`, even though 7.4's precharge engine already reacts to that same flag on the billing side. Promoted from the Backlog: this closes the loop on an already-shipped feature's real-world usefulness rather than adding something new.
 - [ ] **11.1: Cancellation History Flag on RequestCard** (A visible flag/badge on `RequestCard` surfacing a client's `cancellationCount`/`enforcePrecharge` state, so the artist can factor it into their own approve/decline decision, not just the deposit amount 7.4 already computes from it. No Controller/Action layer -- `getPendingBookingRequests` is already called directly from the artist dashboard page, same precedent as elsewhere), decomposed per the Mandatory Task Breakdown Rule:
-  - [ ] 11.1.1: Domain Service (extend `PendingBookingRequestSummary` with `clientCancellationCount`/`clientEnforcePrecharge`; update `getPendingBookingRequests` to map them from the already-included `client` relation -- purely additive, no new query; unit tests).
+  - [x] 11.1.1: Domain Service (extend `PendingBookingRequestSummary` with `clientCancellationCount`/`clientEnforcePrecharge`; update `getPendingBookingRequests` to map them from the already-included `client` relation -- purely additive, no new query; unit tests).
   - [ ] 11.1.2: View & Route (`RequestCard` shows a visible flag/badge when `clientCancellationCount > 0` or `clientEnforcePrecharge` is true; e2e spec).
 
 ### 📦 Phase 12: Booking Process Explainer
