@@ -23,17 +23,33 @@ interface UseCheckoutArgs {
 // (5.4.3)/useAppointmentLifecycleActions (5.6.4). finalize navigates
 // back to the appointments list instead, since the booking leaves
 // past-due state entirely once COMPLETED.
+//
+// Each of the three actions gets its own isPending/error pair (CLAUDE.md
+// "Independent Mutation State Isolation") rather than one shared pair --
+// otherwise an older action's result can clobber a newer one's error
+// after both resolve out of order, and the view has no correct way to
+// disable only the right control. removingAddonId additionally tracks
+// *which* addon a remove is in flight for, since removeAddon is a
+// per-item action, not a single toggle like addAddon/finalize.
 export function useCheckout({ bookingRequestId, artistId }: UseCheckoutArgs) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+
+  const [isAdding, startAddTransition] = useTransition();
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const [, startRemoveTransition] = useTransition();
+  const [removingAddonId, setRemovingAddonId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  const [isFinalizing, startFinalizeTransition] = useTransition();
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
   function addAddon(input: { label: string; price: number }) {
-    setError(null);
-    startTransition(async () => {
+    setAddError(null);
+    startAddTransition(async () => {
       const result = await addBillingAddonAction(bookingRequestId, input);
       if (!result.success) {
-        setError(result.error);
+        setAddError(result.error);
         return;
       }
       router.refresh();
@@ -41,11 +57,13 @@ export function useCheckout({ bookingRequestId, artistId }: UseCheckoutArgs) {
   }
 
   function removeAddon(addonId: string) {
-    setError(null);
-    startTransition(async () => {
+    setRemoveError(null);
+    setRemovingAddonId(addonId);
+    startRemoveTransition(async () => {
       const result = await removeBillingAddonAction(addonId);
+      setRemovingAddonId(null);
       if (!result.success) {
-        setError(result.error);
+        setRemoveError(result.error);
         return;
       }
       router.refresh();
@@ -53,16 +71,26 @@ export function useCheckout({ bookingRequestId, artistId }: UseCheckoutArgs) {
   }
 
   function finalize() {
-    setError(null);
-    startTransition(async () => {
+    setFinalizeError(null);
+    startFinalizeTransition(async () => {
       const result = await finalizeCheckoutAction(bookingRequestId);
       if (!result.success) {
-        setError(result.error);
+        setFinalizeError(result.error);
         return;
       }
       router.push(`/artist/${artistId}/appointments`);
     });
   }
 
-  return { addAddon, removeAddon, finalize, isPending, error };
+  return {
+    addAddon,
+    isAdding,
+    addError,
+    removeAddon,
+    removingAddonId,
+    removeError,
+    finalize,
+    isFinalizing,
+    finalizeError,
+  };
 }
