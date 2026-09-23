@@ -58,6 +58,18 @@ export async function updatePendingBookingRequest(
         input.requestedDate,
         input.requestedTime
       ),
+      // Whole-set replacement (CLAUDE.md 13.2.2), not a delta -- the
+      // caller (useClientBookingActions) always submits the full
+      // current image list, same shape as the booking form's own
+      // designReferenceImageUrls field. Nested writes on a single
+      // update() run inside one Prisma-managed transaction, so this
+      // stays atomic with the rest of the row update above.
+      designReferences: {
+        deleteMany: {},
+        create: input.designReferenceImageUrls.map((imageUrl) => ({
+          imageUrl,
+        })),
+      },
     },
   });
 

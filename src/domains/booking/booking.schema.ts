@@ -146,6 +146,7 @@ export const updatePendingBookingRequestInputSchema = z
     clientBudgetRange: clientBudgetRangeSchema,
     requestedDate: requestedDateSchema,
     requestedTime: requestedTimeSchema,
+    designReferenceImageUrls: designReferenceImagesSchema,
   })
   .superRefine((data, ctx) => {
     const requestedStartTime = combineRequestedDateAndTime(
