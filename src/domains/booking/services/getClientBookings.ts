@@ -12,7 +12,7 @@ export async function getClientBookings(
 ): Promise<ClientBookingSummary[]> {
   const requests = await prisma.bookingRequest.findMany({
     where: { clientId: clientProfileId },
-    include: { artist: true },
+    include: { artist: true, designReferences: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -29,6 +29,9 @@ export async function getClientBookings(
     clientNotes: request.clientNotes,
     requestedStartTime: request.requestedStartTime,
     createdAt: request.createdAt,
+    designReferenceImageUrls: request.designReferences.map(
+      (reference) => reference.imageUrl
+    ),
     depositPaid: request.depositPaid,
     depositRefunded: request.depositRefunded,
   }));

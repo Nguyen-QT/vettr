@@ -167,6 +167,10 @@ export interface ClientBookingSummary {
   clientNotes: string | null;
   requestedStartTime: Date | null;
   createdAt: Date;
+  // Existing reference images (CLAUDE.md 13.2.1) -- lets the client
+  // dashboard's edit form show/remove what's already attached to a
+  // still-PENDING request, not just add new ones.
+  designReferenceImageUrls: string[];
   // Deposit status (CLAUDE.md 7.3.5) -- depositPaid: false means no
   // deposit badge shows at all (a still-payable one surfaces
   // separately via billing's getPayableDeposits/DepositPaymentCard).
