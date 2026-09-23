@@ -67,3 +67,57 @@ jobs:
 
       - name: Unit tests
         run: npm run test
+
+  stripe-integration-tests:
+    runs-on: ubuntu-latest
+
+    # CLAUDE.md 14.1.5: `secrets.STRIPE_SECRET_KEY` isn't available to a
+    # workflow run triggered from a fork's pull request, so this job
+    # would otherwise fail there for a reason unrelated to the code
+    # itself. Skipping it in that case (rather than failing) means only
+    # a push/PR from within this repo -- where the secret is present --
+    # actually runs and blocks on these tests.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push' }}
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vettr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vettr_test?schema=public
+      # The real test-mode secret (a GitHub Actions repo secret), unlike
+      # the `test` job's non-secret placeholder above -- these tests
+      # make real, unmocked calls against Stripe's test-mode API.
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_PUBLISHABLE_KEY: pk_test_dummy
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_dummy
+      STRIPE_WEBHOOK_SECRET: whsec_dummy
+      UPLOADTHING_TOKEN: dummy_uploadthing_token
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - run: npx prisma migrate deploy
+
+      - name: Stripe test-mode integration tests
+        run: npm run test:stripe
