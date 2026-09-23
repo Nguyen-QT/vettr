@@ -104,3 +104,10 @@ export const TIER_ESTIMATED_DURATION_MINUTES: Record<ComplexityTier, number> = {
 
 export const CLIENT_MAX_END_TIME_COMPLEXITY_WARNING =
   "Due to the complexity of this proposal, the design may need to be simplified to meet your hard deadline.";
+
+// Surfaced by updateClientProfile (CLAUDE.md 10.1) when the requested
+// Instagram handle is already taken by another ClientProfile --
+// translates the DB's unique-constraint violation into a message a
+// client can act on, rather than a raw Prisma exception.
+export const INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE =
+  "That Instagram handle is already in use by another account.";

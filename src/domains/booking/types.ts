@@ -325,3 +325,27 @@ export interface ClientProfileContactDetails {
   lastName: string | null;
   dateOfBirth: Date | null;
 }
+
+// Write command (CLAUDE.md 10.1): self-service edit of a client's own
+// profile from the client dashboard. clientProfileId comes from the
+// trusted session, never client-supplied -- same ownership posture as
+// CancelBookingRequestInput (5.4). Every field required here (unlike
+// ClientProfileContactDetails' nullable onboarding fields above) --
+// this is the one place a client can ever fill in a still-blank
+// firstName/lastName/dateOfBirth after 6.2, or fix a typo in any
+// field, so the form always collects the complete set on save.
+export interface UpdateClientProfileInput {
+  clientProfileId: string;
+  instagramHandle: string;
+  email: string;
+  phone?: string;
+  firstName: string;
+  lastName: string;
+  // ISO date string ("YYYY-MM-DD"), same shape as ClientBookingInput's
+  // dateOfBirth (6.2).
+  dateOfBirth: string;
+}
+
+export type UpdateClientProfileResult =
+  | { success: true }
+  | { success: false; error: string };
