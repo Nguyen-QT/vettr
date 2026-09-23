@@ -3,6 +3,8 @@
 import Link from "next/link";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useConfirmAction } from "@/components/ui/use-confirm-action";
 import { useAppointmentLifecycleActions } from "@/domains/booking/hooks/useAppointmentLifecycleActions";
 
 interface AppointmentLifecycleActionsProps {
@@ -26,6 +28,7 @@ export function AppointmentLifecycleActions({
 }: AppointmentLifecycleActionsProps) {
   const { markNoShow, isPending, error } =
     useAppointmentLifecycleActions(bookingRequestId);
+  const noShowConfirm = useConfirmAction();
 
   return (
     <div className="flex flex-col gap-2">
@@ -40,12 +43,21 @@ export function AppointmentLifecycleActions({
           type="button"
           variant="outline"
           disabled={isPending}
-          onClick={markNoShow}
+          onClick={() => noShowConfirm.requestConfirmation(markNoShow)}
         >
           Mark no-show
         </Button>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <ConfirmDialog
+        open={noShowConfirm.isOpen}
+        onOpenChange={noShowConfirm.onOpenChange}
+        title="Mark this appointment as a no-show?"
+        description="This counts as a cancellation strike against the client and may flag them for a required upfront deposit on future bookings."
+        confirmLabel="Mark no-show"
+        variant="destructive"
+        onConfirm={noShowConfirm.confirm}
+      />
     </div>
   );
 }

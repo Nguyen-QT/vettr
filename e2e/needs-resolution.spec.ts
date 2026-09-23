@@ -52,6 +52,10 @@ test.describe("artist resolves a past-due appointment", () => {
       hasText: fixture.pastDueNoShowClientHandle,
     });
     await card.getByRole("button", { name: "Mark no-show" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Mark no-show" })
+      .click();
 
     await expect(
       page.getByText(fixture.pastDueNoShowClientHandle)

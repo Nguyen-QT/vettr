@@ -41,6 +41,10 @@ test.describe("artist runs the day-of checkout flow", () => {
     await expect(totalRow).toContainText("£15");
 
     await page.getByRole("button", { name: "Finalize & complete" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Finalize & complete" })
+      .click();
     await page.waitForURL(`**/artist/${fixture.artistId}/appointments`);
 
     await expect(

@@ -25,6 +25,10 @@ test.describe("artist dashboard approve/decline", () => {
 
     await card.getByLabel("Estimated price (£)").fill("150");
     await card.getByRole("button", { name: "Approve" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Approve request" })
+      .click();
 
     await expect(card.getByText(/approved/i)).toBeVisible();
     await expect(
@@ -40,6 +44,10 @@ test.describe("artist dashboard approve/decline", () => {
     const card = page.locator("article", { hasText: fixture.declineClientHandle });
 
     await card.getByRole("button", { name: "Decline" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Decline request" })
+      .click();
 
     await expect(card.getByText(/not able to take/i)).toBeVisible();
     await expect(
@@ -74,6 +82,10 @@ test.describe("artist dashboard approve/decline", () => {
 
     await expect(card.getByText(/double-slot booking/i)).toBeVisible();
     await card.getByRole("button", { name: "Confirm Booking" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Confirm booking" })
+      .click();
 
     await expect(card.getByText(/approved/i)).toBeVisible();
     await expect(

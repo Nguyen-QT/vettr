@@ -3,8 +3,10 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useConfirmAction } from "@/components/ui/use-confirm-action";
 import { TIER_BASELINE_BUDGETS } from "@/domains/booking/constants";
 import {
   MAX_TOTAL_SERVICE_DURATION_MINUTES,
@@ -44,6 +46,10 @@ export function RequestActions({
     defaultEstimatedPrice(tier)
   );
 
+  const approveConfirm = useConfirmAction();
+  const declineConfirm = useConfirmAction();
+  const confirmBookingConfirm = useConfirmAction();
+
   async function handleCopy() {
     if (!responseMessage) return;
     await navigator.clipboard.writeText(responseMessage);
@@ -69,19 +75,40 @@ export function RequestActions({
           agreed the timing with the client off-platform.
         </p>
         <div className="flex gap-2">
-          <Button type="button" disabled={isPending} onClick={confirmBooking}>
+          <Button
+            type="button"
+            disabled={isPending}
+            onClick={() => confirmBookingConfirm.requestConfirmation(confirmBooking)}
+          >
             Confirm Booking
           </Button>
           <Button
             type="button"
             variant="destructive"
             disabled={isPending}
-            onClick={decline}
+            onClick={() => declineConfirm.requestConfirmation(decline)}
           >
             Decline
           </Button>
         </div>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <ConfirmDialog
+          open={confirmBookingConfirm.isOpen}
+          onOpenChange={confirmBookingConfirm.onOpenChange}
+          title="Confirm this double-slot booking?"
+          description="Only confirm once you've agreed the timing with the client off-platform -- this locks in both time slots."
+          confirmLabel="Confirm booking"
+          onConfirm={confirmBookingConfirm.confirm}
+        />
+        <ConfirmDialog
+          open={declineConfirm.isOpen}
+          onOpenChange={declineConfirm.onOpenChange}
+          title="Decline this request?"
+          description="This cannot be undone."
+          confirmLabel="Decline request"
+          variant="destructive"
+          onConfirm={declineConfirm.confirm}
+        />
       </div>
     );
   }
@@ -118,7 +145,11 @@ export function RequestActions({
         <Button
           type="button"
           disabled={isPending}
-          onClick={() => review(durationMinutes, estimatedPrice)}
+          onClick={() =>
+            approveConfirm.requestConfirmation(() =>
+              review(durationMinutes, estimatedPrice)
+            )
+          }
         >
           Approve
         </Button>
@@ -126,12 +157,29 @@ export function RequestActions({
           type="button"
           variant="destructive"
           disabled={isPending}
-          onClick={decline}
+          onClick={() => declineConfirm.requestConfirmation(decline)}
         >
           Decline
         </Button>
       </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <ConfirmDialog
+        open={approveConfirm.isOpen}
+        onOpenChange={approveConfirm.onOpenChange}
+        title="Approve this request?"
+        description="This locks in the requested time slot for the duration and price you've entered."
+        confirmLabel="Approve request"
+        onConfirm={approveConfirm.confirm}
+      />
+      <ConfirmDialog
+        open={declineConfirm.isOpen}
+        onOpenChange={declineConfirm.onOpenChange}
+        title="Decline this request?"
+        description="This cannot be undone."
+        confirmLabel="Decline request"
+        variant="destructive"
+        onConfirm={declineConfirm.confirm}
+      />
     </div>
   );
 }
