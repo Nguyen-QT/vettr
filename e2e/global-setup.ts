@@ -49,6 +49,16 @@ export interface E2eFixture {
   pastDueNoShowClientHandle: string;
   pastDueCompleteClientHandle: string;
   pastDueUntouchedClientHandle: string;
+  // A fourth past-due booking dedicated to the checkout add-on removal
+  // spec (7.5.7), so it never races pastDueUntouchedClientHandle's
+  // "no Cancel control" read over the same row.
+  pastDueCheckoutClientHandle: string;
+  // A fifth past-due booking dedicated to the checkout finalize spec
+  // (7.5.7), which transitions it to COMPLETED and removes it from
+  // the past-due list -- must never share a row with
+  // pastDueCompleteClientHandle, which needs-resolution.spec.ts reads
+  // non-destructively (asserting the Checkout link is present).
+  pastDueFinalizeClientHandle: string;
   // A dedicated upcoming APPROVED booking for the cancel-from-the-
   // upcoming-list spec (5.6.5).
   cancelUpcomingClientHandle: string;
@@ -361,6 +371,12 @@ export default async function globalSetup() {
   const pastDueNoShowClientHandle = "e2e_client_pastdue_noshow";
   const pastDueCompleteClientHandle = "e2e_client_pastdue_complete";
   const pastDueUntouchedClientHandle = "e2e_client_pastdue_untouched";
+  // Deliberately doesn't contain the substring "checkout" -- Playwright's
+  // getByRole name matching is a case-insensitive substring match by
+  // default, and would otherwise collide with the "Checkout" link's own
+  // accessible name.
+  const pastDueCheckoutClientHandle = "e2e_client_pastdue_addon";
+  const pastDueFinalizeClientHandle = "e2e_client_pastdue_finalize";
   const pastDueFixtures = [
     {
       handle: pastDueNoShowClientHandle,
@@ -376,6 +392,16 @@ export default async function globalSetup() {
       handle: pastDueUntouchedClientHandle,
       email: "e2e-client-pastdue-untouched@example.com",
       startTime: new Date("2020-01-04T11:00:00"),
+    },
+    {
+      handle: pastDueCheckoutClientHandle,
+      email: "e2e-client-pastdue-checkout@example.com",
+      startTime: new Date("2020-01-05T11:00:00"),
+    },
+    {
+      handle: pastDueFinalizeClientHandle,
+      email: "e2e-client-pastdue-finalize@example.com",
+      startTime: new Date("2020-01-06T11:00:00"),
     },
   ];
   const pastDueClientIds: string[] = [];
@@ -630,6 +656,8 @@ export default async function globalSetup() {
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
     pastDueUntouchedClientHandle,
+    pastDueCheckoutClientHandle,
+    pastDueFinalizeClientHandle,
     cancelUpcomingClientHandle,
   };
 

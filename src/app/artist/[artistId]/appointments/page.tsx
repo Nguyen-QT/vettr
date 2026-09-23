@@ -29,7 +29,10 @@ export default async function ArtistAppointmentsPage({
                 key={appointment.id}
                 appointment={appointment}
                 actions={
-                  <AppointmentLifecycleActions bookingRequestId={appointment.id} />
+                  <AppointmentLifecycleActions
+                    artistId={artistId}
+                    bookingRequestId={appointment.id}
+                  />
                 }
               />
             ))}
