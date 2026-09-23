@@ -84,6 +84,12 @@ export interface E2eFixture {
   // A dedicated PENDING request carrying a clientMaxEndTime (CLAUDE.md
   // 6.3), never touched by any mutating spec.
   maxEndTimeClientHandle: string;
+  // A dedicated login-capable client hosting two PENDING bookings with
+  // seeded images (CLAUDE.md 13.2.5), for the image add/remove/preview
+  // e2e specs -- kept off clientLoginProfileId, see the fixture-setup
+  // comment near its creation for why.
+  imageClientEmail: string;
+  imageClientPassword: string;
 }
 
 // Seeds one throwaway Artist with three BookingRequests -- two PENDING
@@ -564,6 +570,22 @@ export default async function globalSetup() {
     ]
   );
 
+  // A baseline image for the editable request (CLAUDE.md 13.2.2) --
+  // saveEdit always resubmits the current image list on every save,
+  // even one that only touches notes/budget/date, and the domain
+  // service now requires at least one image on every save. Without
+  // this, the budget-range edit spec above would fail that check
+  // despite never touching images itself.
+  await client.query(
+    `INSERT INTO "DesignReference" (id, "imageUrl", "bookingRequestId", "createdAt")
+     VALUES ($1, $2, $3, now())`,
+    [
+      randomUUID(),
+      "https://utfs.io/f/e2e-fixture-client-editable-reference.jpg",
+      clientEditableRequestId,
+    ]
+  );
+
   // A third booking for the same client, APPROVED/TIER_4/unpaid, so the
   // deposit payment spec (CLAUDE.md 7.1.9) can log in as the same
   // already-provisioned clientLoginEmail account rather than needing
@@ -627,6 +649,81 @@ export default async function globalSetup() {
     ]
   );
 
+  // A fully separate login-capable client, entirely off
+  // clientLoginProfileId, for the image add/remove/preview e2e specs
+  // (CLAUDE.md 13.2.5) -- two reasons, not one:
+  // 1. Every ComplexityTier value is already claimed by a plain
+  //    `hasText` card locator somewhere across the e2e suite (this
+  //    file's own cancel/edit specs plus deposit-payment.spec.ts), so
+  //    adding bookings under any tier to that client would collide.
+  // 2. clientEditableRequestId (TIER_3, on clientLoginProfileId) is
+  //    also mutated by "edits a pending booking's budget range" in
+  //    this same file, and every saveEdit() call resubmits the full
+  //    current image list regardless of which fields actually
+  //    changed -- sharing that row with an image test risks one test's
+  //    save silently clobbering the other's image state when they run
+  //    in different parallel workers.
+  // Two bookings on this dedicated client (TIER_2/TIER_3, distinct
+  // tiers, no other test ever logs into this account) cover the two
+  // image specs below without any of the above collision risk.
+  const imageClientId = randomUUID();
+  const imageRemoveRequestId = randomUUID();
+  const imageRejectRequestId = randomUUID();
+  const imageClientEmail = "e2e-client-image-only@example.com";
+  const imageClientPassword = "e2e-test-password-123";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [imageClientId, "e2e_client_image_only", imageClientEmail]
+  );
+  await client.query(
+    `INSERT INTO "BookingRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+     VALUES
+       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now()),
+       ($5, 'PENDING', $2, $3, 'TIER_3', 150, 300, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+    [
+      imageRemoveRequestId,
+      imageClientId,
+      artistId,
+      new Date("2099-09-02T11:00:00"),
+      imageRejectRequestId,
+    ]
+  );
+  await client.query(
+    `INSERT INTO "DesignReference" (id, "imageUrl", "bookingRequestId", "createdAt")
+     VALUES
+       ($1, $2, $5, now()),
+       ($3, $4, $5, now())`,
+    [
+      randomUUID(),
+      "https://utfs.io/f/e2e-fixture-client-image-remove-1.jpg",
+      randomUUID(),
+      "https://utfs.io/f/e2e-fixture-client-image-remove-2.jpg",
+      imageRemoveRequestId,
+    ]
+  );
+  await client.query(
+    `INSERT INTO "DesignReference" (id, "imageUrl", "bookingRequestId", "createdAt")
+     VALUES ($1, $2, $3, now())`,
+    [
+      randomUUID(),
+      "https://utfs.io/f/e2e-fixture-client-image-reject.jpg",
+      imageRejectRequestId,
+    ]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
+     VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
+    [
+      randomUUID(),
+      imageClientEmail,
+      hashPasswordForFixture(imageClientPassword),
+      imageClientId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -644,6 +741,7 @@ export default async function globalSetup() {
       onboardedClientId,
       maxEndTimeClientId,
       flaggedClientId,
+      imageClientId,
     ],
     bookingRequestIds: [
       approveRequestId,
@@ -660,6 +758,8 @@ export default async function globalSetup() {
       cancelUpcomingRequestId,
       maxEndTimeRequestId,
       flaggedRequestId,
+      imageRemoveRequestId,
+      imageRejectRequestId,
     ],
     approveClientHandle,
     declineClientHandle,
@@ -678,6 +778,8 @@ export default async function globalSetup() {
     clientSignupEmail,
     onboardedClientEmail,
     onboardedClientPassword,
+    imageClientEmail,
+    imageClientPassword,
     maxEndTimeClientHandle,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
