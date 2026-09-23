@@ -25,7 +25,9 @@ test.describe("artist resolves a past-due appointment", () => {
     await expect(page.getByText(fixture.pastDueNoShowClientHandle)).toBeVisible();
   });
 
-  test("marks a past-due appointment as completed", async ({ page }) => {
+  test("offers a Checkout link instead of a direct Mark completed control", async ({
+    page,
+  }) => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
@@ -35,11 +37,8 @@ test.describe("artist resolves a past-due appointment", () => {
     const card = page.locator("article", {
       hasText: fixture.pastDueCompleteClientHandle,
     });
-    await card.getByRole("button", { name: "Mark completed" }).click();
-
-    await expect(
-      page.getByText(fixture.pastDueCompleteClientHandle)
-    ).not.toBeVisible();
+    await expect(card.getByRole("button", { name: "Mark completed" })).toHaveCount(0);
+    await expect(card.getByRole("link", { name: "Checkout" })).toBeVisible();
   });
 
   test("marks a past-due appointment as a no-show", async ({ page }) => {
