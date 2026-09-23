@@ -262,7 +262,7 @@ src/
   - [x] 7.5.3: Domain Service -- Addon Management (`addBillingAddon`/`removeBillingAddon`/`getBillingAddons` in `billing`, ownership-checked against the artist's session `artistId` via 7.5.2's read; unit tests).
   - [x] 7.5.4: Domain Service -- Final Bill & Finalize (`getFinalBillTotal(bookingRequestId)` computing the credited total above; `finalizeCheckout(bookingRequestId, artistId)` validating ownership/status then calling `booking`'s `markAppointmentCompleted`; unit tests).
   - [x] 7.5.5: Controller/Action (`addBillingAddonAction`, `removeBillingAddonAction`, `finalizeCheckoutAction` -- thin wrappers. The final-bill read is composed directly in the page server component instead, same precedent as `getPayableDeposits`/7.1.9's page composition).
-  - [ ] 7.5.6: Domain Hook & Logic (`useCheckout` orchestrating addon add/remove state and the finalize action's pending/error state).
+  - [x] 7.5.6: Domain Hook & Logic (`useCheckout` orchestrating addon add/remove state and the finalize action's pending/error state -- each of the three actions gets its own `isPending`/`error` pair per the Independent Mutation State Isolation rule above, plus `removingAddonId` tracking which addon a remove is in flight for).
   - [ ] 7.5.7: View & Route (new dedicated route, e.g. `/artist/[artistId]/appointments/[bookingRequestId]/checkout` -- booking summary, addon entry, running total showing the deposit credit, "Finalize & Complete" button; a "Checkout" link added to the past-due "Needs Resolution" section; e2e spec).
 
 ### 📦 Phase 8: Domain Rename -- Intake to Booking
