@@ -1,10 +1,13 @@
 "use client";
 
+import Image from "next/image";
+import { XIcon } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Field, FieldLabel, FieldLegend } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +16,7 @@ import { useClientBookingActions } from "@/domains/booking/hooks/useClientBookin
 import type { ClientBookingSummary } from "@/domains/booking/types";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
 import type { SlotTime } from "@/domains/scheduling/types";
+import { DesignReferenceDropzone } from "@/lib/uploadthing-client";
 
 interface ClientBookingActionsProps {
   booking: ClientBookingSummary;
@@ -50,8 +54,18 @@ const CANCELLABLE_STATUSES = new Set([
 // APPROVED are all cancellable, with the 48-hour APPROVED window
 // enforced server-side -- a rejected attempt just surfaces as `error`.
 export function ClientBookingActions({ booking }: ClientBookingActionsProps) {
-  const { cancel, isEditing, startEditing, cancelEditing, saveEdit, isPending, error } =
-    useClientBookingActions(booking.id);
+  const {
+    cancel,
+    isEditing,
+    startEditing,
+    cancelEditing,
+    saveEdit,
+    isPending,
+    error,
+    designReferenceImageUrls,
+    addDesignReferenceImages,
+    removeDesignReferenceImage,
+  } = useClientBookingActions(booking.id);
 
   const cancelConfirm = useConfirmAction();
   const saveConfirm = useConfirmAction();
@@ -127,6 +141,56 @@ export function ClientBookingActions({ booking }: ClientBookingActionsProps) {
             </label>
           ))}
         </RadioGroup>
+        <Field>
+          <FieldLegend>Design reference images</FieldLegend>
+          <DesignReferenceDropzone
+            endpoint="designReferenceImages"
+            onClientUploadComplete={(files) => {
+              addDesignReferenceImages(files.map((file) => file.ufsUrl));
+            }}
+          />
+          <ul className="flex flex-wrap gap-2">
+            {designReferenceImageUrls.map((url) => (
+              <li key={url} className="relative">
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <button type="button" className="block">
+                        <Image
+                          src={url}
+                          alt="Design reference"
+                          width={96}
+                          height={96}
+                          className="rounded-md object-cover"
+                        />
+                      </button>
+                    }
+                  />
+                  <DialogContent>
+                    <DialogTitle>Design reference preview</DialogTitle>
+                    <Image
+                      src={url}
+                      alt="Design reference"
+                      width={600}
+                      height={600}
+                      className="h-auto w-full rounded-md object-contain"
+                    />
+                  </DialogContent>
+                </Dialog>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon-xs"
+                  className="absolute -top-1 -right-1 rounded-full"
+                  onClick={() => removeDesignReferenceImage(url)}
+                  aria-label="Remove image"
+                >
+                  <XIcon />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Field>
         <div className="flex gap-2">
           <Button
             type="button"
