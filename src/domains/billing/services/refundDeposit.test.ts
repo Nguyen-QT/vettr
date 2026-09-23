@@ -85,9 +85,10 @@ describe("refundDeposit", () => {
     const result = await refundDeposit(request.id);
 
     expect(result).toEqual({ success: true });
-    expect(createRefundMock).toHaveBeenCalledWith({
-      payment_intent: "pi_refund_123",
-    });
+    expect(createRefundMock).toHaveBeenCalledWith(
+      { payment_intent: "pi_refund_123" },
+      { idempotencyKey: `deposit-refund:${request.id}` }
+    );
 
     const updated = await prisma.bookingRequest.findUnique({
       where: { id: request.id },

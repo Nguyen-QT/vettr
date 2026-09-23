@@ -3,6 +3,7 @@ import { recordDepositRefund } from "@/domains/booking/services/recordDepositRef
 import { stripe } from "@/lib/stripe";
 
 import {
+  DEPOSIT_REFUND_IDEMPOTENCY_KEY_PREFIX,
   DEPOSIT_REFUND_INIT_ERROR_MESSAGE,
   DEPOSIT_REFUND_MISSING_PAYMENT_INTENT_ERROR_MESSAGE,
   DEPOSIT_REFUND_NOT_PAID_ERROR_MESSAGE,
@@ -55,9 +56,16 @@ export async function refundDeposit(
   // safe to report as an error.
   let refund;
   try {
-    refund = await stripe.refunds.create({
-      payment_intent: request.stripePaymentIntentId,
-    });
+    refund = await stripe.refunds.create(
+      { payment_intent: request.stripePaymentIntentId },
+      {
+        // Idempotency Keys on Deposit/Refund Calls (CLAUDE.md 15.1): a
+        // dropped response after Stripe already accepted the refund
+        // must not let a client-side retry issue a second one for the
+        // same booking.
+        idempotencyKey: `${DEPOSIT_REFUND_IDEMPOTENCY_KEY_PREFIX}:${bookingRequestId}`,
+      }
+    );
   } catch {
     return { success: false, error: DEPOSIT_REFUND_INIT_ERROR_MESSAGE };
   }
