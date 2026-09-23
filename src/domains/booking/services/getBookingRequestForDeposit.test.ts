@@ -50,6 +50,7 @@ describe("getBookingRequestForDeposit", () => {
         depositPaid: true,
         stripePaymentIntentId: "pi_view_123",
         depositRefunded: false,
+        estimatedPrice: 150,
       },
     });
 
@@ -64,7 +65,30 @@ describe("getBookingRequestForDeposit", () => {
       depositPaid: true,
       stripePaymentIntentId: "pi_view_123",
       depositRefunded: false,
+      estimatedPrice: 150,
+      clientEnforcePrecharge: false,
     });
+  });
+
+  it("reflects the client's enforcePrecharge flag", async () => {
+    await prisma.clientProfile.update({
+      where: { id: clientId },
+      data: { enforcePrecharge: true },
+    });
+    const request = await prisma.bookingRequest.create({
+      data: {
+        clientId,
+        artistId,
+        tier: "TIER_2",
+        minPrice: 100,
+        maxPrice: 200,
+        status: "APPROVED",
+      },
+    });
+
+    const result = await getBookingRequestForDeposit(request.id);
+
+    expect(result?.clientEnforcePrecharge).toBe(true);
   });
 
   it("returns null for a request that doesn't exist", async () => {

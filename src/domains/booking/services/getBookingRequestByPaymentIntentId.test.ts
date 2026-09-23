@@ -63,6 +63,8 @@ describe("getBookingRequestByPaymentIntentId", () => {
       depositPaid: false,
       stripePaymentIntentId: "pi_lookup_123",
       depositRefunded: false,
+      estimatedPrice: null,
+      clientEnforcePrecharge: false,
     });
   });
 

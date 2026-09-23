@@ -198,6 +198,16 @@ export interface BookingRequestDepositView {
   // idempotency the same way depositPaid guards confirmDepositPayment's.
   stripePaymentIntentId: string | null;
   depositRefunded: boolean;
+  // Added for the precharge engine (CLAUDE.md 7.4) -- estimatedPrice is
+  // what a flagged client's 50% precharge is computed against;
+  // clientEnforcePrecharge is ClientProfile.enforcePrecharge joined in,
+  // since createDepositPaymentIntent needs it but must never query
+  // ClientProfile itself (CLAUDE.md's Domain Boundary Isolation rule).
+  // Nullable at the DB level only -- every request that reaches
+  // APPROVED via reviewBookingRequest/confirmProposedBooking (4.4)
+  // always has an estimatedPrice set by the time it gets here.
+  estimatedPrice: number | null;
+  clientEnforcePrecharge: boolean;
 }
 
 // Write command (CLAUDE.md 5.4): self-service cancellation from the
