@@ -22,6 +22,7 @@ import { generateResponseMessage } from "./services/generateResponseMessage";
 import { markAppointmentCompleted } from "./services/markAppointmentCompleted";
 import { markAppointmentNoShow } from "./services/markAppointmentNoShow";
 import { rescheduleApprovedBooking } from "./services/rescheduleApprovedBooking";
+import { resolveGuestClientProfile } from "./services/resolveGuestClientProfile";
 import {
   reviewBookingRequest,
   type ReviewBookingRequestResult,
@@ -164,23 +165,17 @@ export async function submitBookingRequest(
       });
     }
   } else {
-    client = await prisma.clientProfile.upsert({
-      where: { instagramHandle: data.instagramHandle },
-      update: {
-        email: data.email,
-        phone: data.phone,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        dateOfBirth,
-      },
-      create: {
-        instagramHandle: data.instagramHandle,
-        email: data.email,
-        phone: data.phone,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        dateOfBirth,
-      },
+    // Redesigned matching for Phase 16 (ClientProfile.email uniqueness):
+    // by-handle first, falling back to a by-email match/merge so the
+    // same person booking under a second Instagram handle doesn't hit
+    // the new unique constraint. See resolveGuestClientProfile.
+    client = await resolveGuestClientProfile({
+      instagramHandle: data.instagramHandle,
+      email: data.email,
+      phone: data.phone,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      dateOfBirth,
     });
   }
 
