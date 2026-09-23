@@ -98,12 +98,15 @@ describe("createDepositPaymentIntent", () => {
     });
 
     expect(result).toEqual({ success: true, clientSecret: "secret_123" });
-    expect(createPaymentIntentMock).toHaveBeenCalledWith({
-      amount: 2000,
-      currency: "gbp",
-      metadata: { bookingRequestId: request.id },
-      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-    });
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      {
+        amount: 2000,
+        currency: "gbp",
+        metadata: { bookingRequestId: request.id },
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      },
+      { idempotencyKey: `deposit-intent:${request.id}` }
+    );
 
     const updated = await prisma.bookingRequest.findUnique({
       where: { id: request.id },
@@ -183,12 +186,15 @@ describe("createDepositPaymentIntent", () => {
     });
 
     expect(result).toEqual({ success: true, clientSecret: "secret_precharge_1" });
-    expect(createPaymentIntentMock).toHaveBeenCalledWith({
-      amount: 10_000, // 50% of £200 = £100
-      currency: "gbp",
-      metadata: { bookingRequestId: request.id },
-      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-    });
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      {
+        amount: 10_000, // 50% of £200 = £100
+        currency: "gbp",
+        metadata: { bookingRequestId: request.id },
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      },
+      { idempotencyKey: `deposit-intent:${request.id}` }
+    );
   });
 
   it("uses the precharge amount when it exceeds the artist's configured deposit", async () => {
@@ -207,12 +213,15 @@ describe("createDepositPaymentIntent", () => {
       clientProfileId: clientId,
     });
 
-    expect(createPaymentIntentMock).toHaveBeenCalledWith({
-      amount: 10_000, // 50% of £200 = £100, greater than the configured £20
-      currency: "gbp",
-      metadata: { bookingRequestId: request.id },
-      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-    });
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      {
+        amount: 10_000, // 50% of £200 = £100, greater than the configured £20
+        currency: "gbp",
+        metadata: { bookingRequestId: request.id },
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      },
+      { idempotencyKey: `deposit-intent:${request.id}` }
+    );
   });
 
   it("keeps the artist's configured deposit when it exceeds the precharge amount", async () => {
@@ -231,12 +240,15 @@ describe("createDepositPaymentIntent", () => {
       clientProfileId: clientId,
     });
 
-    expect(createPaymentIntentMock).toHaveBeenCalledWith({
-      amount: 9_000, // configured £90, greater than 50% of £100 = £50
-      currency: "gbp",
-      metadata: { bookingRequestId: request.id },
-      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-    });
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      {
+        amount: 9_000, // configured £90, greater than 50% of £100 = £50
+        currency: "gbp",
+        metadata: { bookingRequestId: request.id },
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      },
+      { idempotencyKey: `deposit-intent:${request.id}` }
+    );
   });
 
   it("does not apply precharge for an unflagged client even with a high estimate", async () => {
@@ -254,11 +266,14 @@ describe("createDepositPaymentIntent", () => {
       clientProfileId: clientId,
     });
 
-    expect(createPaymentIntentMock).toHaveBeenCalledWith({
-      amount: 2_000, // stays at the configured £20, precharge never applies
-      currency: "gbp",
-      metadata: { bookingRequestId: request.id },
-      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-    });
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      {
+        amount: 2_000, // stays at the configured £20, precharge never applies
+        currency: "gbp",
+        metadata: { bookingRequestId: request.id },
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      },
+      { idempotencyKey: `deposit-intent:${request.id}` }
+    );
   });
 });

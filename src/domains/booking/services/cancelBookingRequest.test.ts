@@ -151,9 +151,10 @@ describe("cancelBookingRequest", () => {
     });
 
     expect(result).toEqual({ success: true });
-    expect(createRefundMock).toHaveBeenCalledWith({
-      payment_intent: "pi_cancel_refund",
-    });
+    expect(createRefundMock).toHaveBeenCalledWith(
+      { payment_intent: "pi_cancel_refund" },
+      { idempotencyKey: `deposit-refund:${requestId}` }
+    );
     const updated = await prisma.bookingRequest.findUnique({
       where: { id: requestId },
     });

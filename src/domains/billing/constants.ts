@@ -17,6 +17,18 @@ export const MIN_ADDON_PRICE = 1;
 // case a deposit should be required regardless.
 export const PRECHARGE_PERCENTAGE = 0.5;
 
+// Stripe idempotency key prefixes (CLAUDE.md 15.1). A dropped response
+// after Stripe already accepted the call (not a failed call -- that's
+// already try/catch'd, see External Side-Effect Safety) could otherwise
+// make a client-side retry create a second PaymentIntent/refund for the
+// same booking. Keyed per booking + action rather than a random value
+// per call, so a genuine retry of the *same* logical operation reuses
+// Stripe's cached result instead of duplicating the side effect. Stripe
+// retains a key for 24h, comfortably longer than any realistic retry
+// window for a dropped response.
+export const DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX = "deposit-intent";
+export const DEPOSIT_REFUND_IDEMPOTENCY_KEY_PREFIX = "deposit-refund";
+
 // Surfaced by createDepositPaymentIntent (CLAUDE.md 7.1.3). Not found
 // and ownership-mismatch share one message deliberately, same
 // precedent as booking's cancelBookingRequest, so a request can't be
