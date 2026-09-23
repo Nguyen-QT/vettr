@@ -69,6 +69,7 @@ describe("updatePendingBookingRequest", () => {
       clientBudgetRange: { minPrice: 150, maxPrice: 250 },
       requestedDate: "2099-08-01",
       requestedTime: "14:00",
+      designReferenceImageUrls: ["https://example.com/existing.jpg"],
     });
 
     expect(result).toEqual({ success: true });
@@ -80,6 +81,33 @@ describe("updatePendingBookingRequest", () => {
     expect(Number(updated?.maxPrice)).toBe(250);
     expect(updated?.requestedStartTime).toEqual(
       combineRequestedDateAndTime("2099-08-01", "14:00")
+    );
+  });
+
+  it("replaces the request's design reference images wholesale", async () => {
+    const requestId = await createRequest("PENDING");
+    await prisma.designReference.create({
+      data: { bookingRequestId: requestId, imageUrl: "https://example.com/old.jpg" },
+    });
+
+    const result = await updatePendingBookingRequest({
+      bookingRequestId: requestId,
+      clientProfileId: clientId,
+      clientBudgetRange: { minPrice: 100, maxPrice: 200 },
+      requestedDate: "2099-08-01",
+      requestedTime: "14:00",
+      designReferenceImageUrls: [
+        "https://example.com/new-1.jpg",
+        "https://example.com/new-2.jpg",
+      ],
+    });
+
+    expect(result).toEqual({ success: true });
+    const references = await prisma.designReference.findMany({
+      where: { bookingRequestId: requestId },
+    });
+    expect(references.map((reference) => reference.imageUrl).sort()).toEqual(
+      ["https://example.com/new-1.jpg", "https://example.com/new-2.jpg"].sort()
     );
   });
 
@@ -103,6 +131,7 @@ describe("updatePendingBookingRequest", () => {
       clientBudgetRange: { minPrice: 100, maxPrice: 200 },
       requestedDate: "2099-08-01",
       requestedTime: "14:00",
+      designReferenceImageUrls: ["https://example.com/existing.jpg"],
     });
 
     expect(result).toEqual({
@@ -120,6 +149,7 @@ describe("updatePendingBookingRequest", () => {
       clientBudgetRange: { minPrice: 100, maxPrice: 200 },
       requestedDate: "2099-08-02",
       requestedTime: "11:00",
+      designReferenceImageUrls: ["https://example.com/existing.jpg"],
     });
 
     expect(result).toEqual({
@@ -137,6 +167,7 @@ describe("updatePendingBookingRequest", () => {
       clientBudgetRange: { minPrice: 100, maxPrice: 200 },
       requestedDate: "2099-08-02",
       requestedTime: "11:00",
+      designReferenceImageUrls: ["https://example.com/existing.jpg"],
     });
 
     expect(result).toEqual({
@@ -152,6 +183,7 @@ describe("updatePendingBookingRequest", () => {
       clientBudgetRange: { minPrice: 100, maxPrice: 200 },
       requestedDate: "2099-08-02",
       requestedTime: "11:00",
+      designReferenceImageUrls: ["https://example.com/existing.jpg"],
     });
 
     expect(result).toEqual({

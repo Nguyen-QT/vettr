@@ -244,6 +244,11 @@ export interface UpdatePendingBookingRequestInput {
   clientBudgetRange: ClientBudgetRange;
   requestedDate: string;
   requestedTime: SlotTime;
+  // Lifts 5.4's original tier/tags/images exclusion for images
+  // specifically (CLAUDE.md 13.2) -- the full replacement set, not a
+  // delta, mirroring how the rest of this input already replaces
+  // notes/budget/time wholesale rather than patching them.
+  designReferenceImageUrls: string[];
 }
 
 export type UpdatePendingBookingRequestResult =
