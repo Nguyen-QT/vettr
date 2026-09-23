@@ -299,6 +299,8 @@ Captured for future scoping into numbered roadmap items — not yet broken down 
 
 - In-App Client/Artist Chat: on-platform messaging tied to a specific `BookingRequest`, so review/follow-up conversation doesn't have to happen off-platform over Instagram DM. Part of why client auth (5.2) is password-based rather than magic-link -- chat needs frequent, low-friction re-entry. Likely still wants email notifications for new messages, possibly with a scoped link straight into the thread.
 
+- Client Cancellation History Visibility for Artists: surfaced while scoping 7.4 -- the artist currently has zero visibility into a client's cancellation/no-show history (`ClientProfile.cancellationCount`/`enforcePrecharge`) when reviewing a request on `RequestCard`, even though 7.4's precharge engine already reacts to that same flag on the billing side. A visible flag/badge would let the artist factor it into their own approve/decline decision, not just the deposit amount.
+
 ## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
 - **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
 - **Atomic Functional Scope:** Claude must treat **every numbered bullet point** (e.g., `2.1`, `2.2`) as a single, isolated, conceptually complete Pull Request. Do not combine or cross-pollinate different numbered tasks into a single run.
