@@ -170,7 +170,12 @@ export function ClientBookingActions({ booking }: ClientBookingActionsProps) {
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
         {booking.status === "PENDING" ? (
-          <Button type="button" variant="outline" size="sm" onClick={startEditing}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => startEditing(booking.designReferenceImageUrls)}
+          >
             Edit
           </Button>
         ) : null}
