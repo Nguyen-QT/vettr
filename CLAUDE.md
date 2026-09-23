@@ -377,6 +377,10 @@ src/
 > Promoted from the Backlog. Sequenced last -- the largest, most speculative lift of everything in this roadmap (its own messaging subsystem, notifications, etc.), and Instagram DM already works as the interim off-platform channel today.
 - [ ] **30.1: In-Platform Messaging** (On-platform messaging tied to a specific `BookingRequest`, so review/follow-up conversation doesn't have to happen off-platform over Instagram DM. Part of why client auth (5.2) is password-based rather than magic-link -- chat needs frequent, low-friction re-entry. Likely still wants email notifications for new messages, possibly with a scoped link straight into the thread).
 
+### 📦 Phase 31: Interactive Moodboard / Canvas Design Tool
+> Surfaced directly by the user: an interactive, Canva-style moodboard tool for clients to dynamically craft or refine their design concepts -- a guided canvas framework, data-driven export, annotation and feedback notes, smart snapping. Sequenced last alongside Phase 30, on the same footing by the user's own judgment and Claude's -- a real canvas engine, a serialization/export data format, and annotation threading is a multi-phase epic in its own right, not a small addition. Likely supersedes/absorbs the smaller Reference Image Annotations (27) and Placement & Canvas Metadata (28) items rather than duplicating them, but that's a call for its own dedicated scoping pass, not decided here -- no sub-task breakdown yet.
+- [ ] **31.1: Moodboard Tool** (Unscoped -- needs its own dedicated Mandatory Task Breakdown Rule pass, likely spanning a canvas UI primitive/library choice, a data model for canvas elements/annotations, an export pipeline, and real-time or save-on-change persistence, before any of this is broken into layers).
+
 ## 🌿 Git & Agent Workflow (Atomic Scope Strategy)
 - **Branch Strategy:** Never execute major code generations or package installations directly on `main`.
 - **Atomic Functional Scope:** Claude must treat **every numbered bullet point** (e.g., `2.1`, `2.2`) as a single, isolated, conceptually complete Pull Request. Do not combine or cross-pollinate different numbered tasks into a single run.
