@@ -179,11 +179,21 @@ export function VisualBookingForm({
             Booking as {initialClientDetails?.firstName}{" "}
             {initialClientDetails?.lastName} ({initialClientDetails?.email})
           </span>
-          <form action={logoutAction}>
-            <Button type="submit" variant="link" className="h-auto p-0 text-sm">
-              Not you? Log out
-            </Button>
-          </form>
+          {/* No nested <form> -- this whole banner already lives inside
+              the wizard's own outer <form>, and HTML forbids a <form>
+              descendant of another <form>. A server action can be
+              invoked directly from a click handler just as well as
+              from a form's action prop. */}
+          <Button
+            type="button"
+            variant="link"
+            className="h-auto p-0 text-sm"
+            onClick={() => {
+              void logoutAction();
+            }}
+          >
+            Not you? Log out
+          </Button>
         </div>
       ) : null}
 

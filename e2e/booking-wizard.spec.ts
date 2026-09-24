@@ -63,6 +63,17 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
     page,
   }) => {
     const fixture = await readFixture();
+
+    // Guards against a real, previously-shipped bug: the "Not you? Log
+    // out" banner used to wrap its button in its own <form>, nested
+    // inside the wizard's own outer <form> -- invalid HTML that Next.js
+    // only flags as a console error/hydration warning, never a thrown
+    // exception a DOM assertion alone would catch.
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrors.push(message.text());
+    });
+
     await loginAsClient(
       page,
       fixture.onboardedClientEmail,
@@ -74,6 +85,10 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
 
     await expect(page.getByText(/Booking as Jamie Rivera/)).toBeVisible();
     await expect(page.getByLabel("First name")).not.toBeVisible();
+
+    expect(
+      consoleErrors.filter((text) => text.includes("cannot be a descendant"))
+    ).toHaveLength(0);
   });
 
   test("going back to a previous step preserves what was already entered", async ({
