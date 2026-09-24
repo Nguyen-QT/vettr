@@ -20,7 +20,7 @@ test.describe("artist business hours settings", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}/hours`);
+    await page.goto(`/artist/${fixture.artistId}/settings/hours`);
     await page.waitForLoadState("networkidle");
 
     await expect(
@@ -38,7 +38,7 @@ test.describe("artist business hours settings", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}/hours`);
+    await page.goto(`/artist/${fixture.artistId}/settings/hours`);
     await page.waitForLoadState("networkidle");
 
     const tuesdayCheckbox = page.getByRole("checkbox", { name: "Tuesday 14:00" });
@@ -61,20 +61,46 @@ test.describe("artist business hours settings", () => {
     ).toBeChecked();
   });
 
-  test("adding a blackout date override shows it in the overrides list", async ({
+  test("adding a single-day blackout override shows it in the overrides list", async ({
     page,
   }) => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}/hours`);
+    await page.goto(`/artist/${fixture.artistId}/settings/blackout-dates`);
     await page.waitForLoadState("networkidle");
 
-    await page.getByLabel("Date").fill("2099-12-25");
+    await page.getByLabel("Start date").fill("2099-12-25");
     await page.getByRole("button", { name: "Save override" }).click();
 
     await expect(
       page.getByText("2099-12-25: Blackout (fully closed)")
+    ).toBeVisible();
+  });
+
+  test("adding a multi-date range override blacks out every date in the range", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsArtist(page, fixture);
+
+    await page.goto(`/artist/${fixture.artistId}/settings/blackout-dates`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel("Start date").fill("2099-11-10");
+    await page
+      .getByLabel("End date (leave blank for a single day)")
+      .fill("2099-11-12");
+    await page.getByRole("button", { name: "Save override" }).click();
+
+    await expect(
+      page.getByText("2099-11-10: Blackout (fully closed)")
+    ).toBeVisible();
+    await expect(
+      page.getByText("2099-11-11: Blackout (fully closed)")
+    ).toBeVisible();
+    await expect(
+      page.getByText("2099-11-12: Blackout (fully closed)")
     ).toBeVisible();
   });
 });
