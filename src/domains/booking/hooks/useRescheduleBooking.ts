@@ -12,12 +12,25 @@ export interface RescheduleBookingFields {
   durationMinutes: number;
 }
 
+export interface UseRescheduleBookingOptions {
+  // Invoked right after a successful save, alongside the existing
+  // setIsEditing(false)/router.refresh() -- lets a caller that doesn't
+  // rely on this hook's own isEditing toggle (CLAUDE.md 19.1.5's
+  // mobile edit screen, driven by useAppointmentCalendar's screen
+  // state instead) still know when to navigate away. Optional and
+  // additive -- existing callers that omit it are unaffected.
+  onSuccess?: () => void;
+}
+
 // Data orchestration (CLAUDE.md 5.5.3): wraps rescheduleApprovedBookingAction
 // with editing/pending/error state for the artist's upcoming-appointments
 // view, same shape as useClientBookingActions (5.4.3) -- calls
 // router.refresh() on success since the booking's new time is the only
 // thing that needs to show, no inline message worth preserving.
-export function useRescheduleBooking(bookingRequestId: string) {
+export function useRescheduleBooking(
+  bookingRequestId: string,
+  options?: UseRescheduleBookingOptions
+) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isEditing, setIsEditing] = useState(false);
@@ -46,6 +59,7 @@ export function useRescheduleBooking(bookingRequestId: string) {
       }
       setIsEditing(false);
       router.refresh();
+      options?.onSuccess?.();
     });
   }
 
