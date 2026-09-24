@@ -28,7 +28,7 @@ test.describe("deposit amounts (artist settings)", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}/hours`);
+    await page.goto(`/artist/${fixture.artistId}/settings/deposits`);
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByLabel("TIER_4")).toHaveValue("40");
