@@ -20,7 +20,7 @@ test.describe("artist runs the day-of checkout flow", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}/appointments`);
+    await page.goto(`/artist/${fixture.artistId}/appointments?tab=needs-resolution`);
     await page.waitForLoadState("networkidle");
 
     const card = page.locator("article", {
@@ -57,7 +57,7 @@ test.describe("artist runs the day-of checkout flow", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}/appointments`);
+    await page.goto(`/artist/${fixture.artistId}/appointments?tab=needs-resolution`);
     await page.waitForLoadState("networkidle");
 
     const card = page.locator("article", {
