@@ -280,9 +280,10 @@ describe("clientBookingInputSchema", () => {
   });
 
   it("rejects a missing paymentMethod", () => {
-    const { paymentMethod: _paymentMethod, ...payloadWithoutPaymentMethod } =
-      validPayload;
-    const result = clientBookingInputSchema.safeParse(payloadWithoutPaymentMethod);
+    const result = clientBookingInputSchema.safeParse({
+      ...validPayload,
+      paymentMethod: undefined,
+    });
     expect(result.success).toBe(false);
   });
 
