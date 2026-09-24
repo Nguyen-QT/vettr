@@ -218,10 +218,10 @@ export default async function globalSetup() {
   // fields that happen to always be present (handle/email/budget).
   await client.query(
     `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "clientNotes", "requestedStartTime", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "clientNotes", "requestedStartTime", "paymentMethod", "updatedAt")
      VALUES
-       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY['fine-line-detail']::text[], ARRAY[]::text[], 'Prefers weekday afternoons.', $6, now()),
-       ($4, 'PENDING', $5, $3, 'TIER_2', 100, 200, ARRAY['geometric-pattern']::text[], ARRAY[]::text[], 'Open to size adjustments.', $6, now())`,
+       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY['fine-line-detail']::text[], ARRAY[]::text[], 'Prefers weekday afternoons.', $6, 'CASH', now()),
+       ($4, 'PENDING', $5, $3, 'TIER_2', 100, 200, ARRAY['geometric-pattern']::text[], ARRAY[]::text[], 'Open to size adjustments.', $6, NULL, now())`,
     [
       approveRequestId,
       approveClientId,

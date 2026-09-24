@@ -8,6 +8,8 @@ import {
   finalizeCheckoutAction,
   removeBillingAddonAction,
 } from "@/domains/billing/actions";
+import { updateBookingPaymentMethodAction } from "@/domains/booking/actions";
+import type { PaymentMethod } from "@/domains/booking/types";
 
 interface UseCheckoutArgs {
   bookingRequestId: string;
@@ -43,6 +45,12 @@ export function useCheckout({ bookingRequestId, artistId }: UseCheckoutArgs) {
 
   const [isFinalizing, startFinalizeTransition] = useTransition();
   const [finalizeError, setFinalizeError] = useState<string | null>(null);
+
+  const [isOverridingPaymentMethod, startOverridePaymentMethodTransition] =
+    useTransition();
+  const [overridePaymentMethodError, setOverridePaymentMethodError] = useState<
+    string | null
+  >(null);
 
   function addAddon(input: { label: string; price: number }) {
     setAddError(null);
@@ -82,6 +90,21 @@ export function useCheckout({ bookingRequestId, artistId }: UseCheckoutArgs) {
     });
   }
 
+  function overridePaymentMethod(paymentMethod: PaymentMethod) {
+    setOverridePaymentMethodError(null);
+    startOverridePaymentMethodTransition(async () => {
+      const result = await updateBookingPaymentMethodAction(
+        bookingRequestId,
+        paymentMethod
+      );
+      if (!result.success) {
+        setOverridePaymentMethodError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return {
     addAddon,
     isAdding,
@@ -92,5 +115,8 @@ export function useCheckout({ bookingRequestId, artistId }: UseCheckoutArgs) {
     finalize,
     isFinalizing,
     finalizeError,
+    overridePaymentMethod,
+    isOverridingPaymentMethod,
+    overridePaymentMethodError,
   };
 }

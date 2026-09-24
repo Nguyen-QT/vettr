@@ -47,6 +47,7 @@ const STEP_FIELDS: Record<number, (keyof ClientBookingFormValues)[]> = {
     "clientNotes",
     "clientBudgetRange",
     "designReferenceImageUrls",
+    "paymentMethod",
   ],
   [DATE_SLOT_STEP]: ["requestedDate", "requestedTime", "clientMaxEndTime"],
   [REVIEW_STEP]: [],

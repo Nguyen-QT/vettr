@@ -69,6 +69,7 @@ export function useVisualBookingForm({
       requestedDate: "",
       requestedTime: DAILY_SLOT_TIME_OPTIONS[0],
       clientMaxEndTime: "",
+      paymentMethod: "CARD" as const,
     },
   });
 

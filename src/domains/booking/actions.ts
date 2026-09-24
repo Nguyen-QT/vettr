@@ -7,6 +7,7 @@ import { REQUEST_NOT_FOUND_ERROR_MESSAGE } from "./constants";
 import {
   clientBookingInputSchema,
   combineRequestedDateAndTime,
+  paymentMethodSchema,
   rescheduleApprovedBookingInputSchema,
   reviewBookingRequestInputSchema,
   updateClientProfileInputSchema,
@@ -27,6 +28,7 @@ import {
   reviewBookingRequest,
   type ReviewBookingRequestResult,
 } from "./services/reviewBookingRequest";
+import { updateBookingPaymentMethod } from "./services/updateBookingPaymentMethod";
 import { updateClientProfile } from "./services/updateClientProfile";
 import { updatePendingBookingRequest } from "./services/updatePendingBookingRequest";
 import { validateComplexity } from "./services/validateComplexity";
@@ -36,6 +38,7 @@ import type {
   MarkAppointmentCompletedResult,
   MarkAppointmentNoShowResult,
   RescheduleApprovedBookingResult,
+  UpdateBookingPaymentMethodResult,
   UpdateClientProfileResult,
   UpdatePendingBookingRequestResult,
 } from "./types";
@@ -417,6 +420,35 @@ export async function markAppointmentCompletedAction(
   }
 
   return markAppointmentCompleted({ bookingRequestId });
+}
+
+// Controller/Action boundary (CLAUDE.md 23.1.3): artist override of a
+// booking's payment method preference, e.g. at final checkout. Derives
+// artistId from the trusted session -- updateBookingPaymentMethod
+// itself re-checks ownership against it, so this layer's only job is
+// supplying a trustworthy id and validating the new value structurally.
+export async function updateBookingPaymentMethodAction(
+  bookingRequestId: string,
+  input: unknown
+): Promise<UpdateBookingPaymentMethodResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  const parsed = paymentMethodSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid payment method.",
+    };
+  }
+
+  return updateBookingPaymentMethod({
+    bookingRequestId,
+    artistId,
+    paymentMethod: parsed.data,
+  });
 }
 
 async function setBookingRequestStatus(

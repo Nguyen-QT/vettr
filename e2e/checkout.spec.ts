@@ -78,4 +78,35 @@ test.describe("artist runs the day-of checkout flow", () => {
     await expect(page.getByText("Touch-up")).not.toBeVisible();
     await expect(page.getByText("No add-ons yet.")).toBeVisible();
   });
+
+  test("overrides the payment method, gated behind a confirmation", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsArtist(page, fixture);
+
+    await page.goto(`/artist/${fixture.artistId}/appointments?tab=needs-resolution`);
+    await page.waitForLoadState("networkidle");
+
+    const card = page.locator("article", {
+      hasText: fixture.pastDueUntouchedClientHandle,
+    });
+    await card.getByRole("link", { name: "Checkout" }).click();
+    await page.waitForLoadState("networkidle");
+
+    // click, not check() -- the radio is controlled by the server-read
+    // payment method and only actually flips once the override is
+    // confirmed below, so a check()-style postcondition wait would time
+    // out on the click itself.
+    await page.getByRole("radio", { name: "Cash" }).click();
+
+    await expect(page.getByText("Change the payment method?")).toBeVisible();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Confirm" })
+      .click();
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("radio", { name: "Cash" })).toBeChecked();
+  });
 });

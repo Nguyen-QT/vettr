@@ -52,6 +52,12 @@ export function AppointmentCard({ appointment, actions }: AppointmentCardProps) 
           <span className="text-sm text-muted-foreground">{appointment.tier}</span>
         </div>
 
+        {appointment.paymentMethod ? (
+          <span className="w-fit rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
+            {appointment.paymentMethod === "CASH" ? "Cash" : "Card"}
+          </span>
+        ) : null}
+
         <p className="text-sm text-muted-foreground">
           {appointment.clientEmail}
           {appointment.clientPhone ? ` · ${appointment.clientPhone}` : ""}
