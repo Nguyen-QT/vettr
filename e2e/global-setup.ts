@@ -90,6 +90,9 @@ export interface E2eFixture {
   // comment near its creation for why.
   imageClientEmail: string;
   imageClientPassword: string;
+  // A dynamically-dated (always "today"), already-started APPROVED
+  // booking for the artist dashboard spec (Phase 22).
+  dashboardTodayClientHandle: string;
 }
 
 // Seeds one throwaway Artist with three BookingRequests -- two PENDING
@@ -464,6 +467,49 @@ export default async function globalSetup() {
     );
   }
 
+  // A dedicated, dynamically-dated (not a fixed 2020/2099 literal like
+  // every other fixture above) APPROVED booking that started earlier
+  // today, for the artist dashboard spec (Phase 22, 22.1.4) to assert
+  // Today's Schedule membership -- including a currently-in-progress
+  // appointment, which getPastDueAppointments already surfaces (every
+  // BOOKED slot has started) rather than getUpcomingAppointments. Never
+  // touched by any other spec.
+  const dashboardTodayClientId = randomUUID();
+  const dashboardTodayRequestId = randomUUID();
+  const dashboardTodayClientHandle = "e2e_client_dashboard_today";
+  const dashboardTodayStartTime = new Date(Date.now() - 60 * 60_000);
+  const dashboardTodayEndTime = new Date(Date.now() + 60 * 60_000);
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [
+      dashboardTodayClientId,
+      dashboardTodayClientHandle,
+      "e2e-client-dashboard-today@example.com",
+    ]
+  );
+  await client.query(
+    `INSERT INTO "BookingRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "estimatedPrice", "updatedAt")
+     VALUES
+       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, 175, now())`,
+    [dashboardTodayRequestId, dashboardTodayClientId, artistId, dashboardTodayStartTime]
+  );
+  await client.query(
+    `INSERT INTO "TimeSlot"
+       (id, "startTime", "endTime", status, "artistId", "bookingRequestId", "updatedAt")
+     VALUES
+       ($1, $2, $3, 'BOOKED', $4, $5, now())`,
+    [
+      randomUUID(),
+      dashboardTodayStartTime,
+      dashboardTodayEndTime,
+      artistId,
+      dashboardTodayRequestId,
+    ]
+  );
+
   // A dedicated APPROVED booking for the upcoming-list cancel spec
   // (CLAUDE.md 5.6.5), separate from rescheduleTestRequestId/
   // bookedSlotRequestId above -- cancelling it must not affect either
@@ -742,6 +788,7 @@ export default async function globalSetup() {
       maxEndTimeClientId,
       flaggedClientId,
       imageClientId,
+      dashboardTodayClientId,
     ],
     bookingRequestIds: [
       approveRequestId,
@@ -760,6 +807,7 @@ export default async function globalSetup() {
       flaggedRequestId,
       imageRemoveRequestId,
       imageRejectRequestId,
+      dashboardTodayRequestId,
     ],
     approveClientHandle,
     declineClientHandle,
@@ -787,6 +835,7 @@ export default async function globalSetup() {
     pastDueCheckoutClientHandle,
     pastDueFinalizeClientHandle,
     cancelUpcomingClientHandle,
+    dashboardTodayClientHandle,
   };
 
   await writeFile(FIXTURE_PATH, JSON.stringify(fixture, null, 2));
