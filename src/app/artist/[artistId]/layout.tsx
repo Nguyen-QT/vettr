@@ -39,6 +39,7 @@ export default async function ArtistDashboardLayout({
             Vettr
           </Link>
           <nav className="flex items-baseline gap-3 text-sm text-muted-foreground">
+            <Link href={`/artist/${artistId}`}>Dashboard</Link>
             <Link
               href={`/artist/${artistId}/requests`}
               className="flex items-baseline gap-1.5"
