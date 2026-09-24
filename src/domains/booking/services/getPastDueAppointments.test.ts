@@ -28,7 +28,8 @@ describe("getPastDueAppointments", () => {
 
   async function createApprovedRequest(
     slots: { startTime: Date; endTime: Date }[],
-    status: "APPROVED" | "PENDING" = "APPROVED"
+    status: "APPROVED" | "PENDING" = "APPROVED",
+    paymentMethod?: "CASH" | "CARD"
   ): Promise<string> {
     const clientId = randomUUID();
     await prisma.clientProfile.create({
@@ -39,7 +40,15 @@ describe("getPastDueAppointments", () => {
       },
     });
     const request = await prisma.bookingRequest.create({
-      data: { clientId, artistId, tier: "TIER_2", minPrice: 100, maxPrice: 200, status },
+      data: {
+        clientId,
+        artistId,
+        tier: "TIER_2",
+        minPrice: 100,
+        maxPrice: 200,
+        status,
+        paymentMethod,
+      },
     });
     for (const slot of slots) {
       await prisma.timeSlot.create({
@@ -64,6 +73,19 @@ describe("getPastDueAppointments", () => {
     const result = await getPastDueAppointments(artistId);
 
     expect(result.map((appointment) => appointment.id)).toContain(requestId);
+  });
+
+  it("surfaces the client's payment method preference", async () => {
+    const pastStart = new Date(Date.now() - 48 * 60 * 60_000);
+    await createApprovedRequest(
+      [{ startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) }],
+      "APPROVED",
+      "CASH"
+    );
+
+    const result = await getPastDueAppointments(artistId);
+
+    expect(result[0]?.paymentMethod).toBe("CASH");
   });
 
   it("excludes an APPROVED request whose slot is still upcoming", async () => {

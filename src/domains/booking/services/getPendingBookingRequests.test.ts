@@ -77,4 +77,39 @@ describe("getPendingBookingRequests", () => {
     expect(result?.clientCancellationCount).toBe(0);
     expect(result?.clientEnforcePrecharge).toBe(false);
   });
+
+  it("surfaces the client's payment method preference", async () => {
+    await prisma.bookingRequest.create({
+      data: {
+        clientId,
+        artistId,
+        tier: "TIER_2",
+        minPrice: 100,
+        maxPrice: 200,
+        status: "PENDING",
+        paymentMethod: "CASH",
+      },
+    });
+
+    const [result] = await getPendingBookingRequests(artistId);
+
+    expect(result?.paymentMethod).toBe("CASH");
+  });
+
+  it("reports null payment method for a request that predates the field", async () => {
+    await prisma.bookingRequest.create({
+      data: {
+        clientId,
+        artistId,
+        tier: "TIER_2",
+        minPrice: 100,
+        maxPrice: 200,
+        status: "PENDING",
+      },
+    });
+
+    const [result] = await getPendingBookingRequests(artistId);
+
+    expect(result?.paymentMethod).toBeNull();
+  });
 });

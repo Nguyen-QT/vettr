@@ -13,10 +13,12 @@ import {
   FieldLegend,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { useConfirmAction } from "@/components/ui/use-confirm-action";
 import { AppointmentCard } from "@/domains/booking/components/AppointmentCard";
-import type { UpcomingAppointmentSummary } from "@/domains/booking/types";
+import { PAYMENT_METHODS } from "@/domains/booking/constants";
+import type { PaymentMethod, UpcomingAppointmentSummary } from "@/domains/booking/types";
 
 import { useCheckout } from "../hooks/useCheckout";
 import type { BillingAddonSummary, FinalBillBreakdown } from "../types";
@@ -55,11 +57,24 @@ export function CheckoutView({
     finalize,
     isFinalizing,
     finalizeError,
+    overridePaymentMethod,
+    isOverridingPaymentMethod,
+    overridePaymentMethodError,
   } = useCheckout({ bookingRequestId, artistId });
 
   const [label, setLabel] = useState("");
   const [price, setPrice] = useState("");
+  const [pendingPaymentMethod, setPendingPaymentMethod] =
+    useState<PaymentMethod | null>(null);
   const finalizeConfirm = useConfirmAction();
+  const overridePaymentMethodConfirm = useConfirmAction();
+
+  function handlePaymentMethodChange(method: PaymentMethod) {
+    setPendingPaymentMethod(method);
+    overridePaymentMethodConfirm.requestConfirmation(() => {
+      overridePaymentMethod(method);
+    });
+  }
 
   function handleAddAddon() {
     const parsedPrice = Number(price);
@@ -76,6 +91,36 @@ export function CheckoutView({
   return (
     <div className="flex flex-col gap-6">
       <AppointmentCard appointment={appointment} actions={null} />
+
+      <Separator />
+
+      <section className="flex flex-col gap-3">
+        <FieldLegend variant="label">Final balance payment method</FieldLegend>
+        <RadioGroup
+          value={appointment.paymentMethod ?? undefined}
+          onValueChange={(value) => handlePaymentMethodChange(value as PaymentMethod)}
+        >
+          {PAYMENT_METHODS.map((method) => (
+            <FieldLabel key={method} htmlFor={`checkout-paymentMethod-${method}`}>
+              <Field orientation="horizontal">
+                <RadioGroupItem
+                  value={method}
+                  id={`checkout-paymentMethod-${method}`}
+                  disabled={isOverridingPaymentMethod}
+                />
+                <FieldContent>{method === "CASH" ? "Cash" : "Card"}</FieldContent>
+              </Field>
+            </FieldLabel>
+          ))}
+        </RadioGroup>
+        <FieldError
+          errors={
+            overridePaymentMethodError
+              ? [{ message: overridePaymentMethodError }]
+              : undefined
+          }
+        />
+      </section>
 
       <Separator />
 
@@ -187,6 +232,16 @@ export function CheckoutView({
         description="This marks the appointment as completed and can't be undone from here."
         confirmLabel="Finalize & complete"
         onConfirm={finalizeConfirm.confirm}
+      />
+      <ConfirmDialog
+        open={overridePaymentMethodConfirm.isOpen}
+        onOpenChange={overridePaymentMethodConfirm.onOpenChange}
+        title="Change the payment method?"
+        description={`Set the final balance payment method to ${
+          pendingPaymentMethod === "CASH" ? "Cash" : "Card"
+        }.`}
+        confirmLabel="Confirm"
+        onConfirm={overridePaymentMethodConfirm.confirm}
       />
     </div>
   );

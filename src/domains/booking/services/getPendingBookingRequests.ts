@@ -41,5 +41,6 @@ export async function getPendingBookingRequests(
     createdAt: request.createdAt,
     clientCancellationCount: request.client.cancellationCount,
     clientEnforcePrecharge: request.client.enforcePrecharge,
+    paymentMethod: request.paymentMethod,
   }));
 }

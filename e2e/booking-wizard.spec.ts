@@ -44,9 +44,12 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
     await page.getByRole("radio", { name: "14:00" }).click();
     await page.getByRole("button", { name: "Next", exact: true }).click();
 
-    // Review step recaps what was entered on earlier steps.
+    // Review step recaps what was entered on earlier steps, including
+    // the payment method preference (CLAUDE.md 23.1) selected on Step 2
+    // by completeServiceCanvasStep.
     await expect(page.getByText("Review your request")).toBeVisible();
     await expect(page.getByText("Wanda Wizard")).toBeVisible();
+    await expect(page.getByText("Final balance payment method")).toBeVisible();
 
     await page.getByRole("button", { name: "Submit request" }).click();
     await page

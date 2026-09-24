@@ -55,6 +55,12 @@ export function RequestCard({ request }: RequestCardProps) {
         <span className="text-sm text-muted-foreground">{request.tier}</span>
       </div>
 
+      {request.paymentMethod ? (
+        <span className="w-fit rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
+          {request.paymentMethod === "CASH" ? "Cash" : "Card"}
+        </span>
+      ) : null}
+
       {cancellationFlag ? (
         <span className="w-fit rounded-full bg-chart-4/20 px-2 py-0.5 text-xs font-medium text-chart-4">
           {cancellationFlag}

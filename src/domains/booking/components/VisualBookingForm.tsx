@@ -29,7 +29,11 @@ import { useConfirmAction } from "@/components/ui/use-confirm-action";
 import { WizardActionBar } from "@/components/ui/wizard-action-bar";
 import { logoutAction } from "@/domains/auth/actions";
 import { BookingProcessExplainer } from "@/domains/booking/components/BookingProcessExplainer";
-import { COMPLEXITY_TIERS, OTHER_TAG_VALUE } from "@/domains/booking/constants";
+import {
+  COMPLEXITY_TIERS,
+  OTHER_TAG_VALUE,
+  PAYMENT_METHODS,
+} from "@/domains/booking/constants";
 import {
   CONTACT_DETAILS_STEP,
   DATE_SLOT_STEP,
@@ -375,6 +379,36 @@ export function VisualBookingForm({
             </Field>
 
             <Field>
+              <FieldLegend variant="label">
+                How will you settle the final balance?
+              </FieldLegend>
+              <Controller
+                control={control}
+                name="paymentMethod"
+                render={({ field }) => (
+                  <RadioGroup value={field.value} onValueChange={field.onChange}>
+                    {PAYMENT_METHODS.map((method) => (
+                      <FieldLabel key={method} htmlFor={`paymentMethod-${method}`}>
+                        <Field orientation="horizontal">
+                          <RadioGroupItem
+                            value={method}
+                            id={`paymentMethod-${method}`}
+                          />
+                          <FieldContent>{method === "CASH" ? "Cash" : "Card"}</FieldContent>
+                        </Field>
+                      </FieldLabel>
+                    ))}
+                  </RadioGroup>
+                )}
+              />
+              <FieldDescription>
+                This only covers the final on-the-day balance -- any deposit is
+                always paid by card.
+              </FieldDescription>
+              <FieldError errors={errors.paymentMethod && [errors.paymentMethod]} />
+            </Field>
+
+            <Field>
               <FieldLegend>Design reference images</FieldLegend>
               <Controller
                 control={control}
@@ -539,6 +573,10 @@ export function VisualBookingForm({
               <SummaryRow
                 label="Budget range"
                 value={`£${watch("clientBudgetRange.minPrice")} – £${watch("clientBudgetRange.maxPrice")}`}
+              />
+              <SummaryRow
+                label="Final balance payment method"
+                value={watch("paymentMethod") === "CASH" ? "Cash" : "Card"}
               />
               <Field>
                 <FieldDescription>Reference images</FieldDescription>

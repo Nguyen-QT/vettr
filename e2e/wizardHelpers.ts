@@ -126,5 +126,9 @@ async function uploadMockDesignReferenceImage(page: Page) {
 export async function completeServiceCanvasStep(page: Page) {
   await page.getByRole("checkbox", { name: "fine-line-detail" }).check();
   await uploadMockDesignReferenceImage(page);
+  // Payment method preference (CLAUDE.md 23.1) is required -- the form
+  // defaults to Card, so this is only explicit for clarity/robustness
+  // against that default ever changing.
+  await page.getByRole("radio", { name: "Card" }).check();
   await page.getByRole("button", { name: "Next", exact: true }).click();
 }

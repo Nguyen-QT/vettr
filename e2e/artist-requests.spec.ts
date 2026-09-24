@@ -22,6 +22,9 @@ test.describe("artist requests approve/decline", () => {
     const card = page.locator("article", { hasText: fixture.approveClientHandle });
 
     await expect(card.getByText("e2e-client-approve@example.com")).toBeVisible();
+    // Payment method preference badge (CLAUDE.md 23.1) -- surfaced early
+    // to the artist, not just revealed at checkout.
+    await expect(card.getByText("Cash", { exact: true })).toBeVisible();
 
     await card.getByLabel("Estimated price (£)").fill("150");
     await card.getByRole("button", { name: "Approve" }).click();
