@@ -42,6 +42,14 @@ const VETTR_CLIENT_ID = "3f044d02-fbd2-48b2-9e87-fda182113b07";
 const JORDAN_CLIENT_ID = "59884c92-a999-4ed8-a9b3-20bff9bb2940";
 const FLAGGED_CLIENT_ID = "caeebfce-4b9d-4070-aae6-03daf8976beb";
 
+// Calendar-review-only clients (CLAUDE.md 19.1.4 follow-up) -- no
+// Account/login, just visual variety across the varied-per-day
+// appointment fixtures below, same posture as e2e/global-setup.ts's
+// login-less pastDueFixtures.
+const CALENDAR_CLIENT_A_ID = "635263a5-7e74-48da-baf3-c3edf9321583";
+const CALENDAR_CLIENT_B_ID = "43545399-807c-49a7-a8f7-7e6e2279caf7";
+const CALENDAR_CLIENT_C_ID = "ec3e5e3c-c289-4e0b-b8d3-5015375dd884";
+
 const REQUEST_IDS = {
   vettrApprovedFuture: "e8c80531-e57e-4ec7-b486-fe054838ad44",
   vettrApprovedPaid: "2d7f07b7-9f51-4d6d-b93d-8717e54841a2",
@@ -50,6 +58,23 @@ const REQUEST_IDS = {
   lunaPending: "6eaa01eb-fe05-487f-aaa5-620645c2c57a",
   lunaApprovedFuture: "6ffce52b-124c-48ee-9a12-27a06017be03",
   lunaDeclined: "2b8ce658-f2b7-49ac-acbe-86636269012b",
+  // Calendar review: varied per-day counts (CLAUDE.md 19.1.4 follow-up).
+  calendarFuture1: "9ad68c99-eeba-45d8-8894-f80a4e26be9b",
+  calendarFuture2a: "7a91fbcc-b474-4361-9b9a-4888127a64d7",
+  calendarFuture2b: "f14ee6de-130f-42e4-9d99-d27916f6e30b",
+  calendarFuture3a: "c7ed5b19-2237-4667-81a6-53ee360689fe",
+  calendarFuture3b: "ea18d285-61a6-4a72-a6a3-39759321325f",
+  calendarFuture3c: "d0ed5744-57a0-451e-8eaf-b52f15ba87f3",
+  calendarPast1: "093a091f-3122-4119-b9a2-eaef291d5a5f",
+  calendarPast2a: "7f2392ca-857f-4495-9bac-5eaff3976746",
+  calendarPast2b: "33adf63c-e30b-40e5-8a82-c1d2fa2b76c5",
+  calendarPast3a: "f651e141-e4fc-495d-96dd-df566770aff5",
+  calendarPast3b: "802c0632-bccc-4897-91d7-a43368331a92",
+  calendarPast3c: "649e1f0a-d825-4f14-a1a8-3b101ecc8d4d",
+  calendarCompleted: "415409a3-d73a-4abd-a222-fe50ca356b22",
+  calendarNoShow: "66037adc-f5c4-478b-8e7f-4eb96cc8c5d6",
+  calendarCancelledByArtist: "22a183d8-f104-4c04-a229-9acb7cd60287",
+  calendarCancelledByClient: "f230b1dc-b13e-48ab-8773-d08ed942b06f",
 };
 
 const TIME_SLOT_IDS = {
@@ -57,6 +82,22 @@ const TIME_SLOT_IDS = {
   vettrApprovedPaid: "7cd53b74-7187-4fc5-bf38-fa9f014d45b8",
   vettrPastDue: "824a3ea4-cd5d-4290-9b83-3fb3bc736d30",
   lunaApprovedFuture: "3368c1cc-2ba2-47cd-8477-6e46a8124d81",
+  calendarFuture1: "fe0231e3-70a0-4f4c-8694-5787dab6af21",
+  calendarFuture2a: "36c0f023-6efd-4d51-b161-77347c246801",
+  calendarFuture2b: "a5696681-b53c-4efa-976d-dd3be306e5fb",
+  calendarFuture3a: "213e5da5-f8b1-426e-aa6e-ce20276ff21f",
+  calendarFuture3b: "c21a9149-a7e3-4f61-a382-34672e105892",
+  calendarFuture3c: "2bbccb72-a4fc-4ed9-b22a-524ca2fa9008",
+  calendarPast1: "8a3841a2-ae04-4c49-9de5-295b7164a347",
+  calendarPast2a: "3fbf1873-15ba-4554-a1d7-1c0afaa8a467",
+  calendarPast2b: "82bbbd64-0d06-4962-bdaf-99722f5c6e96",
+  calendarPast3a: "1de04753-3047-4eba-8313-c68800eea18e",
+  calendarPast3b: "c127176a-91d3-473b-9e9e-9e59f38c0b68",
+  calendarPast3c: "1f426fb5-c2ed-4d72-9ba9-989cc5d13f0f",
+  calendarCompleted: "f622c8a0-7f0c-494f-ac3f-a75fccf04ed1",
+  calendarNoShow: "7e7bc7e7-ae41-4a5e-b990-a0750cdabb7a",
+  calendarCancelledByArtist: "59aa1967-a010-4199-b992-6371fb8569c2",
+  calendarCancelledByClient: "d4826262-96c7-4f09-8a88-1ee85750e90b",
 };
 
 async function main() {
@@ -235,6 +276,23 @@ async function main() {
   );
   console.log("Seeded jordan@vettr.com and flagged@vettr.com client accounts.");
 
+  // Calendar-review clients: no Account/login, just visual variety
+  // across the varied-per-day appointment fixtures below.
+  const calendarReviewClients: Array<{ id: string; handle: string; email: string }> = [
+    { id: CALENDAR_CLIENT_A_ID, handle: "calendar_dev_client_a", email: "calendar-a@vettr.com" },
+    { id: CALENDAR_CLIENT_B_ID, handle: "calendar_dev_client_b", email: "calendar-b@vettr.com" },
+    { id: CALENDAR_CLIENT_C_ID, handle: "calendar_dev_client_c", email: "calendar-c@vettr.com" },
+  ];
+  for (const { id, handle, email } of calendarReviewClients) {
+    await client.query(
+      `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+       VALUES ($1, $2, $3, now())
+       ON CONFLICT (id) DO NOTHING`,
+      [id, handle, email]
+    );
+  }
+  console.log(`Seeded ${calendarReviewClients.length} lightweight client profiles for calendar-review variety.`);
+
   // --- BookingRequests: fixed ids, upsert-by-id so re-running this
   // script doesn't duplicate rows. Dates anchored relative to today so
   // "future"/"past-due" stay correct whenever this is re-run.
@@ -300,13 +358,18 @@ async function main() {
     artistId: string,
     bookingRequestId: string,
     startTime: Date,
-    endTime: Date
+    endTime: Date,
+    // Defaults to "BOOKED", matching every pre-existing call site.
+    // "RELEASED" is for a resolved-cancellation fixture, mirroring
+    // what cancelApprovedBookingAsArtist's real releaseBookedTimeSlots
+    // call leaves behind (CLAUDE.md 7.2.1/7.2.2).
+    status: "BOOKED" | "RELEASED" = "BOOKED"
   ) {
     await client.query(
       `INSERT INTO "TimeSlot" (id, "startTime", "endTime", status, "artistId", "bookingRequestId", "updatedAt")
-       VALUES ($1, $2, $3, 'BOOKED', $4, $5, now())
-       ON CONFLICT (id) DO UPDATE SET "startTime" = $2, "endTime" = $3`,
-      [id, startTime, endTime, artistId, bookingRequestId]
+       VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (id) DO UPDATE SET "startTime" = $2, "endTime" = $3, status = $4`,
+      [id, startTime, endTime, status, artistId, bookingRequestId]
     );
   }
 
@@ -440,6 +503,284 @@ async function main() {
     minPrice: 200,
     maxPrice: 400,
   });
+
+  // --- Calendar review: varied per-day appointment counts (0/1/2/3) --
+  // CLAUDE.md 19.1.4 follow-up. DAILY_TIMES only has 3 fixed slots per
+  // artist per day, and TimeSlot's DB-level exclusion constraint only
+  // allows one BOOKED slot per overlapping range per artist -- so N<=3
+  // per day isn't an arbitrary choice, it's the schema's actual max
+  // for single-slot appointments. A day with fewer than 3 just uses
+  // fewer of the 3 daily times; a day with 0 simply has no fixture
+  // here at all. All on VETTR_ARTIST_ID, the artist the dev logs into.
+  const calendarBookings: Array<{
+    requestKey: keyof typeof REQUEST_IDS;
+    slotKey: keyof typeof TIME_SLOT_IDS;
+    dayOffset: number;
+    hours: number;
+    minutes: number;
+    clientId: string;
+    tier: string;
+    minPrice: number;
+    maxPrice: number;
+    estimatedPrice: number;
+  }> = [
+    // Future (upcoming): +3 days = 1 appointment, +6 days = 2, +9 days = 3.
+    {
+      requestKey: "calendarFuture1",
+      slotKey: "calendarFuture1",
+      dayOffset: 3,
+      hours: 11,
+      minutes: 0,
+      clientId: CALENDAR_CLIENT_A_ID,
+      tier: "TIER_2",
+      minPrice: 50,
+      maxPrice: 100,
+      estimatedPrice: 75,
+    },
+    {
+      requestKey: "calendarFuture2a",
+      slotKey: "calendarFuture2a",
+      dayOffset: 6,
+      hours: 11,
+      minutes: 0,
+      clientId: CALENDAR_CLIENT_B_ID,
+      tier: "TIER_2",
+      minPrice: 50,
+      maxPrice: 100,
+      estimatedPrice: 80,
+    },
+    {
+      requestKey: "calendarFuture2b",
+      slotKey: "calendarFuture2b",
+      dayOffset: 6,
+      hours: 14,
+      minutes: 0,
+      clientId: CALENDAR_CLIENT_C_ID,
+      tier: "TIER_3",
+      minPrice: 100,
+      maxPrice: 200,
+      estimatedPrice: 150,
+    },
+    {
+      requestKey: "calendarFuture3a",
+      slotKey: "calendarFuture3a",
+      dayOffset: 9,
+      hours: 11,
+      minutes: 0,
+      clientId: JORDAN_CLIENT_ID,
+      tier: "TIER_2",
+      minPrice: 50,
+      maxPrice: 100,
+      estimatedPrice: 70,
+    },
+    {
+      requestKey: "calendarFuture3b",
+      slotKey: "calendarFuture3b",
+      dayOffset: 9,
+      hours: 14,
+      minutes: 0,
+      clientId: CALENDAR_CLIENT_A_ID,
+      tier: "TIER_3",
+      minPrice: 100,
+      maxPrice: 200,
+      estimatedPrice: 160,
+    },
+    {
+      requestKey: "calendarFuture3c",
+      slotKey: "calendarFuture3c",
+      dayOffset: 9,
+      hours: 17,
+      minutes: 30,
+      clientId: CALENDAR_CLIENT_B_ID,
+      tier: "TIER_4",
+      minPrice: 200,
+      maxPrice: 400,
+      estimatedPrice: 250,
+    },
+    // Past-due, still APPROVED/unresolved (shows under the artist's
+    // Needs Resolution panel): -3 days = 1, -6 days = 2, -9 days = 3.
+    {
+      requestKey: "calendarPast1",
+      slotKey: "calendarPast1",
+      dayOffset: -3,
+      hours: 11,
+      minutes: 0,
+      clientId: CALENDAR_CLIENT_C_ID,
+      tier: "TIER_2",
+      minPrice: 50,
+      maxPrice: 100,
+      estimatedPrice: 65,
+    },
+    {
+      requestKey: "calendarPast2a",
+      slotKey: "calendarPast2a",
+      dayOffset: -6,
+      hours: 11,
+      minutes: 0,
+      clientId: CALENDAR_CLIENT_A_ID,
+      tier: "TIER_2",
+      minPrice: 50,
+      maxPrice: 100,
+      estimatedPrice: 75,
+    },
+    {
+      requestKey: "calendarPast2b",
+      slotKey: "calendarPast2b",
+      dayOffset: -6,
+      hours: 14,
+      minutes: 0,
+      clientId: JORDAN_CLIENT_ID,
+      tier: "TIER_3",
+      minPrice: 100,
+      maxPrice: 200,
+      estimatedPrice: 140,
+    },
+    {
+      requestKey: "calendarPast3a",
+      slotKey: "calendarPast3a",
+      dayOffset: -9,
+      hours: 11,
+      minutes: 0,
+      clientId: CALENDAR_CLIENT_B_ID,
+      tier: "TIER_2",
+      minPrice: 50,
+      maxPrice: 100,
+      estimatedPrice: 60,
+    },
+    {
+      requestKey: "calendarPast3b",
+      slotKey: "calendarPast3b",
+      dayOffset: -9,
+      hours: 14,
+      minutes: 0,
+      clientId: CALENDAR_CLIENT_C_ID,
+      tier: "TIER_3",
+      minPrice: 100,
+      maxPrice: 200,
+      estimatedPrice: 130,
+    },
+    {
+      requestKey: "calendarPast3c",
+      slotKey: "calendarPast3c",
+      dayOffset: -9,
+      hours: 17,
+      minutes: 30,
+      clientId: FLAGGED_CLIENT_ID,
+      tier: "TIER_4",
+      minPrice: 200,
+      maxPrice: 400,
+      estimatedPrice: 280,
+    },
+  ];
+
+  for (const booking of calendarBookings) {
+    const day = new Date(now.getTime() + booking.dayOffset * 24 * 60 * 60_000);
+    const startTime = atTime(day, booking.hours, booking.minutes);
+    const endTime = new Date(startTime.getTime() + 60 * 60_000);
+    await upsertRequest({
+      id: REQUEST_IDS[booking.requestKey],
+      status: "APPROVED",
+      clientId: booking.clientId,
+      artistId: VETTR_ARTIST_ID,
+      tier: booking.tier,
+      minPrice: booking.minPrice,
+      maxPrice: booking.maxPrice,
+      requestedStartTime: startTime,
+      estimatedPrice: booking.estimatedPrice,
+    });
+    await upsertTimeSlot(
+      TIME_SLOT_IDS[booking.slotKey],
+      VETTR_ARTIST_ID,
+      REQUEST_IDS[booking.requestKey],
+      startTime,
+      endTime
+    );
+  }
+  console.log(
+    `Seeded ${calendarBookings.length} calendar-review BookingRequests across varied per-day counts (future + past-due).`
+  );
+
+  // --- Calendar review: resolved-state fixtures (COMPLETED/NO_SHOW/
+  // CANCELLED_BY_ARTIST/CANCELLED_BY_CLIENT) -- NOTE these will NOT
+  // appear on the artist's calendar: getUpcomingAppointments and
+  // getPastDueAppointments both filter to status: "APPROVED" only, so
+  // a resolved request is invisible to either read regardless of its
+  // TimeSlot. Seeded anyway for DB realism and other views that do
+  // show full history (e.g. getClientBookings, CLAUDE.md 5.2).
+  // COMPLETED/NO_SHOW keep their TimeSlot BOOKED, matching the real
+  // markAppointmentCompleted/markAppointmentNoShow invariant that
+  // neither releases it; the two CANCELLED_BY_* fixtures use RELEASED,
+  // matching cancelApprovedBookingAsArtist's real releaseBookedTimeSlots
+  // call.
+  const calendarResolvedFixtures: Array<{
+    requestKey: keyof typeof REQUEST_IDS;
+    slotKey: keyof typeof TIME_SLOT_IDS;
+    dayOffset: number;
+    status: string;
+    timeSlotStatus: "BOOKED" | "RELEASED";
+    clientId: string;
+  }> = [
+    {
+      requestKey: "calendarCompleted",
+      slotKey: "calendarCompleted",
+      dayOffset: -12,
+      status: "COMPLETED",
+      timeSlotStatus: "BOOKED",
+      clientId: CALENDAR_CLIENT_A_ID,
+    },
+    {
+      requestKey: "calendarNoShow",
+      slotKey: "calendarNoShow",
+      dayOffset: -14,
+      status: "NO_SHOW",
+      timeSlotStatus: "BOOKED",
+      clientId: CALENDAR_CLIENT_B_ID,
+    },
+    {
+      requestKey: "calendarCancelledByArtist",
+      slotKey: "calendarCancelledByArtist",
+      dayOffset: -16,
+      status: "CANCELLED_BY_ARTIST",
+      timeSlotStatus: "RELEASED",
+      clientId: CALENDAR_CLIENT_C_ID,
+    },
+    {
+      requestKey: "calendarCancelledByClient",
+      slotKey: "calendarCancelledByClient",
+      dayOffset: -18,
+      status: "CANCELLED_BY_CLIENT",
+      timeSlotStatus: "RELEASED",
+      clientId: JORDAN_CLIENT_ID,
+    },
+  ];
+
+  for (const fixture of calendarResolvedFixtures) {
+    const day = new Date(now.getTime() + fixture.dayOffset * 24 * 60 * 60_000);
+    const startTime = atTime(day, 11, 0);
+    const endTime = new Date(startTime.getTime() + 60 * 60_000);
+    await upsertRequest({
+      id: REQUEST_IDS[fixture.requestKey],
+      status: fixture.status,
+      clientId: fixture.clientId,
+      artistId: VETTR_ARTIST_ID,
+      tier: "TIER_2",
+      minPrice: 50,
+      maxPrice: 100,
+      requestedStartTime: startTime,
+      estimatedPrice: 75,
+    });
+    await upsertTimeSlot(
+      TIME_SLOT_IDS[fixture.slotKey],
+      VETTR_ARTIST_ID,
+      REQUEST_IDS[fixture.requestKey],
+      startTime,
+      endTime,
+      fixture.timeSlotStatus
+    );
+  }
+  console.log(
+    `Seeded ${calendarResolvedFixtures.length} resolved-state BookingRequests (won't appear on the calendar -- see comment above).`
+  );
 
   console.log(`Seeded ${Object.keys(REQUEST_IDS).length} additional BookingRequests.`);
 
