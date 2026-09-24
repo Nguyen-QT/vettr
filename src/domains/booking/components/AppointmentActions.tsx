@@ -1,55 +1,33 @@
 "use client";
 
-import { useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useConfirmAction } from "@/components/ui/use-confirm-action";
+import { RescheduleForm } from "@/domains/booking/components/RescheduleForm";
 import { useAppointmentLifecycleActions } from "@/domains/booking/hooks/useAppointmentLifecycleActions";
 import { useRescheduleBooking } from "@/domains/booking/hooks/useRescheduleBooking";
 import type { UpcomingAppointmentSummary } from "@/domains/booking/types";
-import {
-  DAILY_SLOT_TIME_OPTIONS,
-  MAX_TOTAL_SERVICE_DURATION_MINUTES,
-  MIN_SLOT_DURATION_MINUTES,
-} from "@/domains/scheduling/constants";
-import type { SlotTime } from "@/domains/scheduling/types";
 
 interface AppointmentActionsProps {
   appointment: UpcomingAppointmentSummary;
+  // CLAUDE.md 19.1.5: on mobile, "Reschedule" navigates to a dedicated
+  // full-screen edit step (useAppointmentCalendar's screen: "edit")
+  // rather than toggling the form in place -- when provided, clicking
+  // Reschedule calls this instead of the component's own startEditing,
+  // and the inline RescheduleForm below is skipped since the mobile
+  // edit screen renders its own. Desktop omits this prop and keeps
+  // today's inline-toggle behavior exactly as before.
+  onStartReschedule?: () => void;
 }
 
-// Local-time getters, matching combineRequestedDateAndTime's own
-// local-time construction (CLAUDE.md: "no timezone handling yet") --
-// same approach as ClientBookingActions.tsx's edit form defaults.
-function toRequestedDateValue(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function toRequestedTimeValue(date: Date): SlotTime {
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const candidate = `${hours}:${minutes}`;
-  return (DAILY_SLOT_TIME_OPTIONS as readonly string[]).includes(candidate)
-    ? (candidate as SlotTime)
-    : DAILY_SLOT_TIME_OPTIONS[0];
-}
-
-// Pure view (CLAUDE.md 5.5.4/5.6.5): artist-initiated reschedule and
-// cancel controls for an upcoming APPROVED appointment -- both apply
-// immediately, no client confirmation step (see rescheduleApprovedBooking's
-// own reasoning). Cancel deliberately lives here rather than on
-// AppointmentLifecycleActions (the past-due list) -- "cancel" only makes
-// sense for a booking that hasn't happened yet.
-export function AppointmentActions({ appointment }: AppointmentActionsProps) {
-  const { isEditing, startEditing, cancelEditing, saveReschedule, isPending, error } =
-    useRescheduleBooking(appointment.id);
+// Pure view (CLAUDE.md 5.5.4/5.6.5, refactored 19.1.5): artist-initiated
+// reschedule and cancel controls for an upcoming APPROVED appointment --
+// both apply immediately, no client confirmation step (see
+// rescheduleApprovedBooking's own reasoning). Cancel deliberately lives
+// here rather than on AppointmentLifecycleActions (the past-due list) --
+// "cancel" only makes sense for a booking that hasn't happened yet.
+export function AppointmentActions({ appointment, onStartReschedule }: AppointmentActionsProps) {
+  const { isEditing, startEditing, cancelEditing } = useRescheduleBooking(appointment.id);
   const {
     cancel,
     isPending: isCancelPending,
@@ -57,24 +35,17 @@ export function AppointmentActions({ appointment }: AppointmentActionsProps) {
   } = useAppointmentLifecycleActions(appointment.id);
 
   const cancelConfirm = useConfirmAction();
-  const rescheduleConfirm = useConfirmAction();
-
-  const defaultDurationMinutes =
-    (appointment.endTime.getTime() - appointment.startTime.getTime()) / 60_000;
-
-  const [requestedDate, setRequestedDate] = useState(() =>
-    toRequestedDateValue(appointment.startTime)
-  );
-  const [requestedTime, setRequestedTime] = useState<SlotTime>(() =>
-    toRequestedTimeValue(appointment.startTime)
-  );
-  const [durationMinutes, setDurationMinutes] = useState(defaultDurationMinutes);
 
   if (!isEditing) {
     return (
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={startEditing}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onStartReschedule ?? startEditing}
+          >
             Reschedule
           </Button>
           <Button
@@ -102,75 +73,6 @@ export function AppointmentActions({ appointment }: AppointmentActionsProps) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <Field>
-        <FieldLabel htmlFor={`reschedule-date-${appointment.id}`}>
-          New date
-        </FieldLabel>
-        <Input
-          id={`reschedule-date-${appointment.id}`}
-          type="date"
-          value={requestedDate}
-          onChange={(event) => setRequestedDate(event.target.value)}
-        />
-      </Field>
-      <RadioGroup
-        value={requestedTime}
-        onValueChange={(value) => setRequestedTime(value as SlotTime)}
-      >
-        {DAILY_SLOT_TIME_OPTIONS.map((time) => (
-          <label key={time} className="flex items-center gap-2 text-sm">
-            <RadioGroupItem
-              value={time}
-              id={`reschedule-time-${appointment.id}-${time}`}
-            />
-            {time}
-          </label>
-        ))}
-      </RadioGroup>
-      <Field>
-        <FieldLabel htmlFor={`reschedule-duration-${appointment.id}`}>
-          Service duration (minutes)
-        </FieldLabel>
-        <Input
-          id={`reschedule-duration-${appointment.id}`}
-          type="number"
-          min={MIN_SLOT_DURATION_MINUTES}
-          max={MAX_TOTAL_SERVICE_DURATION_MINUTES}
-          value={durationMinutes}
-          onChange={(event) => setDurationMinutes(Number(event.target.value))}
-        />
-      </Field>
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          disabled={isPending}
-          onClick={() =>
-            rescheduleConfirm.requestConfirmation(() =>
-              saveReschedule({ requestedDate, requestedTime, durationMinutes })
-            )
-          }
-        >
-          Save new time
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={isPending}
-          onClick={cancelEditing}
-        >
-          Cancel
-        </Button>
-      </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      <ConfirmDialog
-        open={rescheduleConfirm.isOpen}
-        onOpenChange={rescheduleConfirm.onOpenChange}
-        title="Save this new time?"
-        description="This immediately moves the appointment -- the client isn't asked to confirm on-platform."
-        confirmLabel="Save new time"
-        onConfirm={rescheduleConfirm.confirm}
-      />
-    </div>
+    <RescheduleForm appointment={appointment} onCancel={cancelEditing} onSaved={cancelEditing} />
   );
 }

@@ -118,3 +118,91 @@ test.describe("artist calendar (desktop)", () => {
     await expect(page.getByText(/Estimated price/)).toBeVisible();
   });
 });
+
+// CLAUDE.md 19.1.5: the mobile (<1024px) stacked agenda -- list screen
+// (week/month strip + that date's appointments) -> detail screen ->
+// edit screen, with top-left back navigation popping one level at a
+// time. Overrides the viewport rather than adding a whole new
+// Playwright project, since this suite only needs the one breakpoint
+// check alongside the existing desktop coverage above.
+test.describe("artist calendar (mobile)", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("selecting an upcoming appointment slides to detail, then reschedule slides to the edit screen, and back navigates one level at a time", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsArtist(page, fixture);
+
+    await page.goto(`/artist/${fixture.artistId}/calendar`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel("Jump to date").fill(fixture.bookedSlotDate);
+    const dayEntry = page.getByRole("button", {
+      name: new RegExp(`@${fixture.bookedSlotClientHandle}`),
+    });
+    await expect(dayEntry).toBeVisible();
+    await dayEntry.click();
+
+    // Detail screen.
+    await expect(page.getByText(/Estimated price/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reschedule" })).toBeVisible();
+
+    // Edit screen.
+    await page.getByRole("button", { name: "Reschedule" }).click();
+    await expect(page.getByText("Reschedule appointment")).toBeVisible();
+    await expect(page.getByLabel("New date")).toBeVisible();
+
+    // Back from edit returns to detail, not all the way to the list.
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByText(/Estimated price/)).toBeVisible();
+    await expect(page.getByText("Reschedule appointment")).not.toBeVisible();
+
+    // Back from detail returns to the list.
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(dayEntry).toBeVisible();
+  });
+
+  test("selecting a past-due appointment's detail screen shows checkout/no-show actions instead", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsArtist(page, fixture);
+
+    await page.goto(`/artist/${fixture.artistId}/calendar`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel("Jump to date").fill("2020-01-04");
+    const dayEntry = page.getByRole("button", {
+      name: new RegExp(`@${fixture.pastDueUntouchedClientHandle}`),
+    });
+    await expect(dayEntry).toBeVisible();
+    await dayEntry.click();
+
+    await expect(page.getByText(/Estimated price/)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Checkout" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mark no-show" })).toBeVisible();
+    // No Reschedule/edit screen for a past-due appointment.
+    await expect(page.getByRole("button", { name: "Reschedule" })).not.toBeVisible();
+  });
+
+  test("the list screen's week/month toggle switches grids without losing the selected date", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsArtist(page, fixture);
+
+    await page.goto(`/artist/${fixture.artistId}/calendar`);
+    await page.waitForLoadState("networkidle");
+
+    await page.getByLabel("Jump to date").fill(fixture.bookedSlotDate);
+    await page.getByRole("button", { name: "Month" }).click();
+
+    const dayEntry = page.getByRole("button", {
+      name: new RegExp(`@${fixture.bookedSlotClientHandle}`),
+    });
+    await expect(dayEntry).toBeVisible();
+    await dayEntry.click();
+    await expect(page.getByText(/Estimated price/)).toBeVisible();
+  });
+});
