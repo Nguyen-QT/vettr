@@ -260,13 +260,23 @@ async function main() {
     requestedStartTime?: Date;
     depositPaid?: boolean;
     clientMaxEndTime?: Date;
+    // Mandatory on every APPROVED-and-beyond request via the real
+    // reviewBookingRequest flow (CLAUDE.md 4.4) -- omitting these here
+    // for an APPROVED fixture would seed data the app itself can never
+    // actually produce (CLAUDE.md 18.2).
+    estimatedPrice?: number;
+    // Only meaningful alongside depositPaid: true -- the real
+    // confirmDepositPayment flow (CLAUDE.md 7.1.4) always sets these
+    // together.
+    depositAmount?: number;
+    stripePaymentIntentId?: string;
   }) {
     await client.query(
       `INSERT INTO "BookingRequest"
-         (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "depositPaid", "clientMaxEndTime", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, ARRAY[]::text[], ARRAY[]::text[], $8, $9, $10, now())
+         (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "depositPaid", "clientMaxEndTime", "estimatedPrice", "depositAmount", "stripePaymentIntentId", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, ARRAY[]::text[], ARRAY[]::text[], $8, $9, $10, $11, $12, $13, now())
        ON CONFLICT (id) DO UPDATE SET
-         status = $2, "requestedStartTime" = $8, "depositPaid" = $9, "clientMaxEndTime" = $10, "updatedAt" = now()`,
+         status = $2, "requestedStartTime" = $8, "depositPaid" = $9, "clientMaxEndTime" = $10, "estimatedPrice" = $11, "depositAmount" = $12, "stripePaymentIntentId" = $13, "updatedAt" = now()`,
       [
         params.id,
         params.status,
@@ -278,6 +288,9 @@ async function main() {
         params.requestedStartTime ?? null,
         params.depositPaid ?? false,
         params.clientMaxEndTime ?? null,
+        params.estimatedPrice ?? null,
+        params.depositAmount ?? null,
+        params.stripePaymentIntentId ?? null,
       ]
     );
   }
@@ -313,6 +326,7 @@ async function main() {
     maxPrice: 100,
     requestedStartTime: vettrApprovedFutureStart,
     depositPaid: false,
+    estimatedPrice: 75,
   });
   await upsertTimeSlot(
     TIME_SLOT_IDS.vettrApprovedFuture,
@@ -333,6 +347,9 @@ async function main() {
     maxPrice: 400,
     requestedStartTime: vettrApprovedPaidStart,
     depositPaid: true,
+    estimatedPrice: 300,
+    depositAmount: 50,
+    stripePaymentIntentId: "pi_seed_vettr_approved_paid",
   });
   await upsertTimeSlot(
     TIME_SLOT_IDS.vettrApprovedPaid,
@@ -353,6 +370,9 @@ async function main() {
     maxPrice: 200,
     requestedStartTime: vettrPastDueStart,
     depositPaid: true,
+    estimatedPrice: 150,
+    depositAmount: 35,
+    stripePaymentIntentId: "pi_seed_vettr_past_due",
   });
   await upsertTimeSlot(
     TIME_SLOT_IDS.vettrPastDue,
@@ -401,6 +421,7 @@ async function main() {
     maxPrice: 100,
     requestedStartTime: lunaApprovedFutureStart,
     depositPaid: false,
+    estimatedPrice: 75,
   });
   await upsertTimeSlot(
     TIME_SLOT_IDS.lunaApprovedFuture,

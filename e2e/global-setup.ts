@@ -334,9 +334,9 @@ export default async function globalSetup() {
 
   await client.query(
     `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "estimatedPrice", "updatedAt")
      VALUES
-       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, 150, now())`,
     [bookedSlotRequestId, bookedSlotClientId, artistId, bookedSlotStartTime]
   );
 
@@ -365,9 +365,9 @@ export default async function globalSetup() {
 
   await client.query(
     `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "estimatedPrice", "updatedAt")
      VALUES
-       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, 150, now())`,
     [
       rescheduleTestRequestId,
       rescheduleTestClientId,
@@ -450,9 +450,9 @@ export default async function globalSetup() {
     );
     await client.query(
       `INSERT INTO "BookingRequest"
-         (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+         (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "estimatedPrice", "updatedAt")
        VALUES
-         ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+         ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, 150, now())`,
       [pastDueRequestId, pastDueClientId, artistId, startTime]
     );
     await client.query(
@@ -487,9 +487,9 @@ export default async function globalSetup() {
   );
   await client.query(
     `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "requestedStartTime", "estimatedPrice", "updatedAt")
      VALUES
-       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, now())`,
+       ($1, 'APPROVED', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], $4, 150, now())`,
     [cancelUpcomingRequestId, cancelUpcomingClientId, artistId, cancelUpcomingStartTime]
   );
   await client.query(
@@ -592,17 +592,17 @@ export default async function globalSetup() {
   // its own Account/Session.
   await client.query(
     `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "estimatedPrice", "updatedAt")
      VALUES
-       ($1, 'APPROVED', $2, $3, 'TIER_4', 200, 400, ARRAY[]::text[], ARRAY[]::text[], now())`,
+       ($1, 'APPROVED', $2, $3, 'TIER_4', 200, 400, ARRAY[]::text[], ARRAY[]::text[], 300, now())`,
     [depositRequestId, clientLoginProfileId, artistId]
   );
 
   await client.query(
     `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "depositPaid", "depositRefunded", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "estimatedPrice", "depositPaid", "depositAmount", "stripePaymentIntentId", "depositRefunded", "stripeRefundId", "updatedAt")
      VALUES
-       ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'FREESTYLE', 50, 500, ARRAY[]::text[], ARRAY[]::text[], true, true, now())`,
+       ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'FREESTYLE', 50, 500, ARRAY[]::text[], ARRAY[]::text[], 250, true, 100, 'pi_e2e_refunded_deposit', true, 're_e2e_refunded_deposit', now())`,
     [refundedDepositRequestId, clientLoginProfileId, artistId]
   );
 

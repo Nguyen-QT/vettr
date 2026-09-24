@@ -38,7 +38,8 @@ test.describe("artist runs the day-of checkout flow", () => {
 
     await expect(page.getByText("Extra shading")).toBeVisible();
     const totalRow = page.getByText("Total", { exact: true }).locator("xpath=..");
-    await expect(totalRow).toContainText("£15");
+    // Base estimatedPrice (150, CLAUDE.md 18.2's fixture fix) + the £15 add-on.
+    await expect(totalRow).toContainText("£165");
 
     await page.getByRole("button", { name: "Finalize & complete" }).click();
     await page
