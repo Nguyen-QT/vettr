@@ -19,11 +19,12 @@ function getIsDesktopSnapshot() {
 function getIsDesktopServerSnapshot() {
   // CLAUDE.md 19.1's split is a genuinely different interaction model
   // per platform, not one responsive layout -- there is no safe guess
-  // for a server render, so the client re-renders into the correct
-  // branch the instant useSyncExternalStore hydrates with the real
-  // media query result. Defaulting to the mobile branch keeps that
-  // first paint on the simpler, single-column layout either way.
-  return false;
+  // for a server render, and guessing wrong (e.g. defaulting to mobile)
+  // means a desktop visitor's first paint flashes the wrong component
+  // tree before useSyncExternalStore resolves. null means "not yet
+  // determined" -- the view layer should render a neutral loading
+  // state until this becomes a real boolean, not either branch.
+  return null;
 }
 
 export type CalendarViewMode = "day" | "week";
@@ -42,6 +43,17 @@ function isSameCalendarDay(a: Date, b: Date) {
   );
 }
 
+// isSameCalendarDay compares local-timezone calendar days, which is
+// correct for "same day in the artist's own timezone" -- but only if
+// selectedDate itself is always local-midnight. Routing every update
+// through this normalizer means a future caller constructing a date
+// from e.g. new Date("2026-09-24") (UTC midnight, which can land on
+// the previous local day west of UTC) can't silently break that
+// comparison.
+function toLocalMidnight(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 // Domain Hook & Logic (CLAUDE.md 19.1.3): orchestrates the state both
 // the desktop master-detail view (19.1.4) and the mobile stacked
 // agenda (19.1.5) share -- responsive breakpoint, selected date,
@@ -54,6 +66,16 @@ function isSameCalendarDay(a: Date, b: Date) {
 // derived from the same selectedAppointmentId/isEditing state rather
 // than tracked separately, so desktop and mobile can never disagree
 // about what's currently selected.
+//
+// Self-healing selection: if appointments is re-fetched (e.g. after a
+// mutation) and no longer contains the currently selected id, the
+// selection and any in-progress edit are cleared during that same
+// render -- rather than left dangling, which would either show a
+// blank detail panel or, if an appointment with that id ever
+// reappeared later, silently drop the user back into detail/edit for
+// it. This uses React's render-time "adjust state when a prop
+// changes" pattern instead of a useEffect, so there's no extra
+// stale-content frame and no react-hooks/set-state-in-effect trip.
 export function useAppointmentCalendar(appointments: UpcomingAppointmentSummary[]) {
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopBreakpoint,
@@ -65,6 +87,18 @@ export function useAppointmentCalendar(appointments: UpcomingAppointmentSummary[
   const [viewMode, setViewMode] = useState<CalendarViewMode>("week");
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+
+  const [prevAppointments, setPrevAppointments] = useState(appointments);
+  if (appointments !== prevAppointments) {
+    setPrevAppointments(appointments);
+    if (
+      selectedAppointmentId &&
+      !appointments.some((appointment) => appointment.id === selectedAppointmentId)
+    ) {
+      setSelectedAppointmentId(null);
+      setIsEditing(false);
+    }
+  }
 
   const appointmentsForSelectedDate = appointments.filter((appointment) =>
     isSameCalendarDay(appointment.startTime, selectedDate)
@@ -78,6 +112,10 @@ export function useAppointmentCalendar(appointments: UpcomingAppointmentSummary[
     : selectedAppointmentId
       ? "detail"
       : "list";
+
+  function selectDate(date: Date) {
+    setSelectedDate(toLocalMidnight(date));
+  }
 
   function selectAppointment(appointmentId: string | null) {
     setIsEditing(false);
@@ -110,7 +148,7 @@ export function useAppointmentCalendar(appointments: UpcomingAppointmentSummary[
   return {
     isDesktop,
     selectedDate,
-    setSelectedDate,
+    selectDate,
     viewMode,
     setViewMode,
     appointmentsForSelectedDate,
