@@ -22,6 +22,24 @@ export default async function globalTeardown() {
   await client.query(`DELETE FROM "BookingRequest" WHERE id = ANY($1)`, [
     fixture.bookingRequestIds,
   ]);
+  // Also catches any BookingRequest a spec created through the real
+  // submission flow rather than seeding it here (e.g.
+  // booking-wizard.spec.ts's full-wizard submission, CLAUDE.md 17.1.3)
+  // -- not tracked by ID in the fixture, only by the artist it was
+  // submitted against -- along with the fresh guest ClientProfile that
+  // same submission created, which would otherwise be left orphaned.
+  const adHocRequests = await client.query<{ clientId: string }>(
+    `DELETE FROM "BookingRequest" WHERE "artistId" = $1 RETURNING "clientId"`,
+    [fixture.artistId]
+  );
+  const adHocClientIds = adHocRequests.rows
+    .map((row) => row.clientId)
+    .filter((id) => !fixture.clientProfileIds.includes(id));
+  if (adHocClientIds.length > 0) {
+    await client.query(`DELETE FROM "ClientProfile" WHERE id = ANY($1)`, [
+      adHocClientIds,
+    ]);
+  }
   // Account.clientProfileId is ON DELETE SET NULL (CLAUDE.md 5.1.1),
   // same reasoning as the artist Account cleanup below -- must clear
   // any client Account (e.g. one created by the signup spec, 5.2.4)

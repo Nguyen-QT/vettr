@@ -22,7 +22,7 @@ async function loginAsClient(page: Page, email: string, password: string) {
 }
 
 test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
-  test("a guest can navigate the full wizard to the review step, and Submit routes back to fix a missing image", async ({
+  test("a guest can navigate the full wizard and submit a real request", async ({
     page,
   }) => {
     const fixture = await readFixture();
@@ -34,6 +34,10 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
       firstName: "Wanda",
       lastName: "Wizard",
     });
+    // Step 2's own "Next" gate requires at least one design reference
+    // image (CLAUDE.md 17.1) -- completeServiceCanvasStep uploads one
+    // via a mocked UploadThing network flow (see wizardHelpers.ts),
+    // since a real upload can't be driven in this environment.
     await completeServiceCanvasStep(page);
 
     await page.getByLabel("Preferred date").fill("2099-02-02");
@@ -44,16 +48,13 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
     await expect(page.getByText("Review your request")).toBeVisible();
     await expect(page.getByText("Wanda Wizard")).toBeVisible();
 
-    // No image was ever uploaded (real UploadThing uploads are out of
-    // scope for this suite -- see wizardHelpers.ts) -- Submit's
-    // full-schema validation catches the missing image and routes
-    // back to Step 2, where that field's own error actually lives,
-    // rather than failing silently on the review step.
     await page.getByRole("button", { name: "Submit request" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Submit request" })
+      .click();
 
-    await expect(
-      page.getByText("At least one design reference image is required.")
-    ).toBeVisible();
+    await expect(page.getByText("Request submitted.")).toBeVisible();
   });
 
   // A fuller assertion of the same skip-Step-1 behavior (locked-field

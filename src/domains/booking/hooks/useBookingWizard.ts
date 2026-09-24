@@ -46,31 +46,24 @@ const STEP_FIELDS: Record<number, (keyof ClientBookingFormValues)[]> = {
     "aestheticTags",
     "clientNotes",
     "clientBudgetRange",
+    "designReferenceImageUrls",
   ],
   [DATE_SLOT_STEP]: ["requestedDate", "requestedTime", "clientMaxEndTime"],
   [REVIEW_STEP]: [],
 };
 
-// designReferenceImageUrls deliberately isn't in SERVICE_CANVAS_STEP's
-// own gate above -- uploading is asynchronous and can be mid-flight
-// when "Next" is clicked, so gating on it there would block a client
-// who's still waiting on a slow upload from moving on to pick a
-// date/slot in the meantime. It's still a real requirement, enforced
-// by clientBookingInputSchema at final submit -- goToFirstInvalidStep
-// below routes back here if that's what the final validation catches.
-const IMAGE_FIELD_STEP = SERVICE_CANVAS_STEP;
-
 // Reverse lookup from a field name to the step that owns it, built
 // once from STEP_FIELDS -- used by goToFirstInvalidStep to send a
 // client back to wherever a final-submit validation failure actually
 // lives, since the review step doesn't render every field's own error.
+// A safety net for any edge case a step's own gate doesn't already
+// catch, not the primary enforcement mechanism for any one field.
 const FIELD_STEP = new Map<keyof ClientBookingFormValues, number>();
 for (const [step, fields] of Object.entries(STEP_FIELDS)) {
   for (const field of fields) {
     FIELD_STEP.set(field, Number(step));
   }
 }
-FIELD_STEP.set("designReferenceImageUrls", IMAGE_FIELD_STEP);
 
 // A signed-in client only skips Step 1 once every field it collects is
 // already on file (CLAUDE.md 6.1/6.2's per-field lock/prefill) -- a

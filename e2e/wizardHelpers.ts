@@ -45,14 +45,86 @@ export async function completeContactDetailsStep(
   await page.getByRole("button", { name: "Next", exact: true }).click();
 }
 
+const MOCK_UPLOAD_ORIGIN = "https://mock-upload.e2e.test";
+// next.config.ts's images.remotePatterns only allows utfs.io/*.ufs.sh
+// -- the ufsUrl returned to the dropzone (and rendered via next/image
+// once it's added to the form) must resolve on that same allow-listed
+// host, or next/image throws a render-crashing "unconfigured host"
+// error. The actual mock-upload.e2e.test host above is only ever used
+// for the PUT request's own URL, which next/image never touches.
+const MOCK_UFS_URL = "https://utfs.io/f/e2e-fixture-mock-upload.png";
+
+// A 1x1 transparent PNG -- real enough for the dropzone's own
+// client-side file-type/size checks; the actual network upload is
+// mocked below, so the file's content past that point never matters.
+const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+// Intercepts UploadThing's real network flow so a design reference
+// image can be "uploaded" without a real UPLOADTHING_TOKEN or network
+// access -- this environment only has a dummy token (see ci.yml), so
+// an unmocked upload would fail regardless. Mirrors the three calls
+// uploadthing's client SDK actually makes: the presigned-URL request
+// (our own /api/uploadthing route), the HEAD range-check, and the PUT
+// that returns the final { ufsUrl } payload the dropzone reads.
+async function mockImageUploadNetwork(page: Page) {
+  await page.route("**/api/uploadthing**", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { url: `${MOCK_UPLOAD_ORIGIN}/put/mock-key`, key: "mock-key", customId: null },
+      ]),
+    });
+  });
+
+  await page.route(`${MOCK_UPLOAD_ORIGIN}/**`, async (route) => {
+    if (route.request().method() === "HEAD") {
+      await route.fulfill({ status: 200 });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ufsUrl: MOCK_UFS_URL,
+        serverData: {},
+        fileHash: "mock-hash",
+      }),
+    });
+  });
+}
+
+// Uploads one mocked design reference image via the real dropzone
+// input, so the Remove-image control (and Step 2's own "Next" gate on
+// designReferenceImageUrls, CLAUDE.md 17.1) sees a genuine, populated
+// image list rather than an empty one.
+async function uploadMockDesignReferenceImage(page: Page) {
+  await mockImageUploadNetwork(page);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "reference.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(TINY_PNG_BASE64, "base64"),
+  });
+  // Selecting a file only stages it -- the dropzone still needs an
+  // explicit "Upload N file(s)" click to actually start uploading.
+  await page.getByRole("button", { name: /^Upload \d+ file/ }).click();
+  // Waits for the (mocked, effectively instant) upload to actually
+  // resolve and the remove control to render, so the caller's next
+  // step-navigation click doesn't race a still-in-flight upload.
+  await page.getByRole("button", { name: "Remove image" }).waitFor();
+}
+
 // Picks the minimum Step 2 (Service, Budget & Canvas) selection needed
 // to satisfy its own "Next" gate -- the default tier (TIER_2) requires
-// at least one design tag -- and advances to Step 3. Doesn't touch
-// design reference images: that field isn't part of Step 2's gate
-// (see useBookingWizard's IMAGE_FIELD_STEP comment) since a real
-// upload can't be driven in this e2e environment, same "out of scope"
-// boundary this suite already draws elsewhere.
+// at least one design tag, and at least one design reference image is
+// always required -- and advances to Step 3.
 export async function completeServiceCanvasStep(page: Page) {
   await page.getByRole("checkbox", { name: "fine-line-detail" }).check();
+  await uploadMockDesignReferenceImage(page);
   await page.getByRole("button", { name: "Next", exact: true }).click();
 }
