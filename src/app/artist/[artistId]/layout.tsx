@@ -19,7 +19,7 @@ export default async function ArtistDashboardLayout({
             <Link href={`/artist/${artistId}`}>Requests</Link>
             <Link href={`/artist/${artistId}/appointments`}>Upcoming</Link>
             <Link href={`/artist/${artistId}/calendar`}>Calendar</Link>
-            <Link href={`/artist/${artistId}/hours`}>Business hours</Link>
+            <Link href={`/artist/${artistId}/settings/hours`}>Settings</Link>
             <form action={logoutAction}>
               <Button type="submit" variant="link" className="h-auto p-0 text-sm">
                 Log out

@@ -19,7 +19,7 @@ const EMPTY_SETTINGS: ArtistDepositSettings = Object.fromEntries(
 // getArtistDepositSettingsAction/setArtistDepositSettingsAction are
 // fully session-derived (7.1.5). Refetches after a successful mutation
 // rather than updating state optimistically, same precedent as
-// scheduling's useArtistScheduleSettings.
+// scheduling's useWeeklyHoursSettings/useScheduleOverrides.
 export function useArtistDepositSettings() {
   const [settings, setSettingsState] = useState<ArtistDepositSettings>(EMPTY_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
