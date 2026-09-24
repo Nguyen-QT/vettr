@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   DAILY_SLOT_TIME_OPTIONS,
+  MAX_SCHEDULE_OVERRIDE_RANGE_DAYS,
   MAX_TOTAL_SERVICE_DURATION_MINUTES,
   MIN_SLOT_DURATION_MINUTES,
 } from "./constants";
@@ -64,3 +65,35 @@ export const setScheduleOverrideInputSchema = z.object({
   date: z.iso.date("Enter a valid date."),
   availableTimes: availableTimesInputSchema,
 });
+
+// Structural validity only — see services/setScheduleOverrideRange.ts
+// for the upsert itself. The day-count refine assumes both dates are
+// already known to be valid ISO strings (guaranteed by the schema
+// shape above running first) and endDate on or after startDate
+// (guaranteed by the preceding refine, Zod runs .refine chains in
+// declared order).
+export const setScheduleOverrideRangeInputSchema = z
+  .object({
+    artistId: z.string().min(1),
+    startDate: z.iso.date("Enter a valid start date."),
+    endDate: z.iso.date("Enter a valid end date."),
+    availableTimes: availableTimesInputSchema,
+  })
+  .refine((data) => data.endDate >= data.startDate, {
+    message: "The end date must be on or after the start date.",
+    path: ["endDate"],
+  })
+  .refine(
+    (data) => {
+      const rangeDays =
+        (new Date(`${data.endDate}T00:00:00`).getTime() -
+          new Date(`${data.startDate}T00:00:00`).getTime()) /
+          (24 * 60 * 60 * 1000) +
+        1;
+      return rangeDays <= MAX_SCHEDULE_OVERRIDE_RANGE_DAYS;
+    },
+    {
+      message: `A date range override cannot span more than ${MAX_SCHEDULE_OVERRIDE_RANGE_DAYS} days.`,
+      path: ["endDate"],
+    }
+  );
