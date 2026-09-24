@@ -125,6 +125,7 @@ export function VisualBookingForm({
     goToNextStep,
     goToPreviousStep,
     goToStep,
+    goToFirstInvalidStep,
   } = useBookingWizard({ form, initialClientDetails });
 
   const confirmSubmit = useConfirmAction();
@@ -153,7 +154,14 @@ export function VisualBookingForm({
       confirmSubmit.requestConfirmation(() => {
         void onSubmit();
       });
+      return;
     }
+    // The review step doesn't render every field's own FieldError, so
+    // a failure here (most commonly: no design reference image was
+    // ever uploaded, since that isn't gated on Step 2's own "Next")
+    // would otherwise fail silently -- send the client back to
+    // whichever step actually owns the invalid field.
+    goToFirstInvalidStep(form.formState.errors);
   }
 
   return (

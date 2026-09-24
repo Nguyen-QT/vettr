@@ -25,7 +25,7 @@ async function loginAsClient(
 }
 
 test.describe("client onboarding required fields", () => {
-  test("requires first name, last name, and date of birth on submit", async ({
+  test("requires first name, last name, and date of birth to advance past Step 1", async ({
     page,
   }) => {
     const fixture = await readFixture();
@@ -33,7 +33,7 @@ test.describe("client onboarding required fields", () => {
     await page.goto(`/book/${fixture.artistId}`);
     await page.waitForLoadState("networkidle");
 
-    await page.getByRole("button", { name: "Submit request" }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
 
     await expect(page.getByText("First name is required.")).toBeVisible();
     await expect(page.getByText("Last name is required.")).toBeVisible();
@@ -50,14 +50,17 @@ test.describe("client onboarding required fields", () => {
     await page
       .getByLabel("Date of birth")
       .fill(under18.toISOString().slice(0, 10));
-    await page.getByRole("button", { name: "Submit request" }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
 
     await expect(
       page.getByText("You must be at least 18 years old to book.")
     ).toBeVisible();
   });
 
-  test("locks the onboarding fields for a signed-in client who already has them set", async ({
+  // A fully onboarded profile (CLAUDE.md 6.2) skips Step 1 entirely
+  // (CLAUDE.md 17.1) -- there's no "locked" Step 1 to land on, only the
+  // compact "Booking as ..." banner and an immediate landing on Step 2.
+  test("skips Step 1 for a signed-in client who already has onboarding fields set", async ({
     page,
   }) => {
     const fixture = await readFixture();
@@ -70,16 +73,13 @@ test.describe("client onboarding required fields", () => {
     await page.goto(`/book/${fixture.artistId}`);
     await page.waitForLoadState("networkidle");
 
-    const firstName = page.getByLabel("First name");
-    const lastName = page.getByLabel("Last name");
-    const dateOfBirth = page.getByLabel("Date of birth");
-
-    await expect(firstName).toHaveValue("Jamie");
-    await expect(lastName).toHaveValue("Rivera");
-    await expect(dateOfBirth).toHaveValue("2000-01-01");
-    await expect(firstName).toBeDisabled();
-    await expect(lastName).toBeDisabled();
-    await expect(dateOfBirth).toBeDisabled();
+    await expect(
+      page.getByText("Booking as Jamie Rivera (e2e-client-onboarded@example.com)")
+    ).toBeVisible();
+    // Landed straight on Step 2 -- its Tier field is visible immediately,
+    // and none of Step 1's fields are rendered at all to lock.
+    await expect(page.getByText("Tier", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("First name")).not.toBeVisible();
   });
 
   test("leaves the onboarding fields blank and editable for a signed-in client who predates 6.2", async ({
