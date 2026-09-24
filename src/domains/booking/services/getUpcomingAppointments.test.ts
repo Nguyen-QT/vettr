@@ -30,7 +30,11 @@ describe("getUpcomingAppointments", () => {
 
   async function createApprovedRequest(
     slots: { startTime: Date; endTime: Date }[],
-    overrides: { status?: "PENDING" | "APPROVED"; estimatedPrice?: number } = {}
+    overrides: {
+      status?: "PENDING" | "APPROVED";
+      estimatedPrice?: number;
+      paymentMethod?: "CASH" | "CARD";
+    } = {}
   ): Promise<string> {
     const clientId = randomUUID();
     await prisma.clientProfile.create({
@@ -49,6 +53,7 @@ describe("getUpcomingAppointments", () => {
         maxPrice: 200,
         status: overrides.status ?? "APPROVED",
         estimatedPrice: overrides.estimatedPrice ?? 150,
+        paymentMethod: overrides.paymentMethod,
       },
     });
     for (const slot of slots) {
@@ -77,6 +82,22 @@ describe("getUpcomingAppointments", () => {
     expect(result[0].startTime).toEqual(startTime);
     expect(result[0].endTime).toEqual(endTime);
     expect(result[0].estimatedPrice).toBe(150);
+  });
+
+  it("surfaces the client's payment method preference", async () => {
+    await createApprovedRequest(
+      [
+        {
+          startTime: new Date("2099-05-01T15:00:00.000Z"),
+          endTime: new Date("2099-05-01T16:00:00.000Z"),
+        },
+      ],
+      { paymentMethod: "CASH" }
+    );
+
+    const result = await getUpcomingAppointments(artistId);
+
+    expect(result[0].paymentMethod).toBe("CASH");
   });
 
   it("spans the earliest start and latest end across two adjacent slots", async () => {

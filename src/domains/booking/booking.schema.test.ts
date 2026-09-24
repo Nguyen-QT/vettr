@@ -114,6 +114,7 @@ describe("clientBookingInputSchema", () => {
     dateOfBirth: "2000-01-01",
     requestedDate: "2027-01-01",
     requestedTime: "11:00" as const,
+    paymentMethod: "CARD" as const,
   };
 
   const freestylePayload = {
@@ -128,6 +129,7 @@ describe("clientBookingInputSchema", () => {
     dateOfBirth: "2000-01-01",
     requestedDate: "2027-01-01",
     requestedTime: "11:00" as const,
+    paymentMethod: "CARD" as const,
   };
 
   it("accepts the minimum required fields for a non-FREESTYLE tier", () => {
@@ -265,6 +267,29 @@ describe("clientBookingInputSchema", () => {
       ...validPayload,
       requestedDate: "2020-01-01",
       requestedTime: "11:00" as const,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts CASH as a payment method", () => {
+    const result = clientBookingInputSchema.safeParse({
+      ...validPayload,
+      paymentMethod: "CASH",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a missing paymentMethod", () => {
+    const { paymentMethod: _paymentMethod, ...payloadWithoutPaymentMethod } =
+      validPayload;
+    const result = clientBookingInputSchema.safeParse(payloadWithoutPaymentMethod);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an invalid paymentMethod value", () => {
+    const result = clientBookingInputSchema.safeParse({
+      ...validPayload,
+      paymentMethod: "PAYPAL",
     });
     expect(result.success).toBe(false);
   });

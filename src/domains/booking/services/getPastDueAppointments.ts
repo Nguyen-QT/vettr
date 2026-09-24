@@ -58,6 +58,7 @@ export async function getPastDueAppointments(
         ),
         startTime,
         endTime,
+        paymentMethod: request.paymentMethod,
       };
     })
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());

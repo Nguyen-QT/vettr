@@ -10,6 +10,11 @@ export const MAX_DESIGN_REFERENCE_IMAGES = 5;
 
 export const COMPLEXITY_TIERS = ["TIER_2", "TIER_3", "TIER_4", "FREESTYLE"] as const;
 
+// A client's stated preference for settling the final on-the-day balance
+// (CLAUDE.md 23.1) -- deposits stay card-only/Stripe regardless, so this
+// only ever describes the final-bill payment, not the deposit.
+export const PAYMENT_METHODS = ["CASH", "CARD"] as const;
+
 export const OTHER_TAG_VALUE = "OTHER";
 
 // Curated design tags for TIER_2/3/4 requests. Placeholder vocabulary —

@@ -199,6 +199,7 @@ export async function submitBookingRequest(
       clientMaxEndTime: data.clientMaxEndTime
         ? new Date(`${data.requestedDate}T${data.clientMaxEndTime}:00`)
         : null,
+      paymentMethod: data.paymentMethod,
       designReferences: {
         create: data.designReferenceImageUrls.map((imageUrl) => ({
           imageUrl,

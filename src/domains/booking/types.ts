@@ -13,6 +13,11 @@ import type { SlotTime } from "@/domains/scheduling/types";
 
 export type ComplexityTier = "TIER_2" | "TIER_3" | "TIER_4" | "FREESTYLE";
 
+// A client's stated preference for settling the final on-the-day balance
+// (CLAUDE.md 23.1) -- never applies to the deposit itself, which stays
+// card-only/Stripe regardless of this value.
+export type PaymentMethod = "CASH" | "CARD";
+
 export type DesignTag =
   | "fine-line-detail"
   | "custom-illustration"
@@ -70,6 +75,10 @@ export interface ClientBookingInput {
   // Combined with requestedDate into BookingRequest.clientMaxEndTime on
   // submission, same spirit as requestedStartTime above.
   clientMaxEndTime?: string;
+  // Client's stated preference for settling the final on-the-day balance
+  // (CLAUDE.md 23.1). Deposits stay card-only/Stripe regardless of this
+  // value -- see PaymentMethod's own doc comment.
+  paymentMethod: PaymentMethod;
 }
 
 // Requests the artist dashboard shows because they need action:
@@ -109,6 +118,10 @@ export interface PendingBookingRequestSummary {
   // amount billing computes from them.
   clientCancellationCount: number;
   clientEnforcePrecharge: boolean;
+  // Payment method preference (CLAUDE.md 23.1). Nullable at the DB level
+  // only -- every request submitted through the current booking form
+  // always has one; a row predating this feature stays null.
+  paymentMethod: PaymentMethod | null;
 }
 
 // Read-shaped projection of an APPROVED BookingRequest with a future
@@ -133,6 +146,10 @@ export interface UpcomingAppointmentSummary {
   designReferenceImageUrls: string[];
   startTime: Date;
   endTime: Date;
+  // Payment method preference (CLAUDE.md 23.1), overridable by the
+  // artist at final checkout. Nullable at the DB level only -- see
+  // PendingBookingRequestSummary's identical field.
+  paymentMethod: PaymentMethod | null;
 }
 
 // Mirrors Prisma's RequestStatus enum. Unlike ActionableRequestStatus
@@ -305,6 +322,22 @@ export interface MarkAppointmentCompletedInput {
 }
 
 export type MarkAppointmentCompletedResult =
+  | { success: true }
+  | { success: false; error: string };
+
+// Write command (CLAUDE.md 23.1): artist overrides a booking's payment
+// method preference, e.g. at final checkout when circumstances change on
+// the day. Ownership-checked internally against artistId, unlike the
+// reschedule/cancel/no-show/completed writes above whose ownership check
+// lives in the Controller/Action layer -- both are equally valid
+// defenses against the same class of mismatch.
+export interface UpdateBookingPaymentMethodInput {
+  bookingRequestId: string;
+  artistId: string;
+  paymentMethod: PaymentMethod;
+}
+
+export type UpdateBookingPaymentMethodResult =
   | { success: true }
   | { success: false; error: string };
 

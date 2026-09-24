@@ -17,6 +17,7 @@ import {
   MIN_DESIGN_REFERENCE_IMAGES,
   MIN_MAX_END_TIME_GAP_MINUTES,
   OTHER_TAG_VALUE,
+  PAYMENT_METHODS,
 } from "./constants";
 
 // Combines the form's separate date/time-of-day fields into the single
@@ -75,6 +76,10 @@ export const designReferenceImagesSchema = z
   );
 
 export const complexityTierSchema = z.enum(COMPLEXITY_TIERS);
+
+// Payment method preference (CLAUDE.md 23.1) -- required at intake;
+// deposits stay card-only/Stripe regardless of this value.
+export const paymentMethodSchema = z.enum(PAYMENT_METHODS);
 
 export const requestedDateSchema = z.iso.date("Enter a valid date.");
 
@@ -216,6 +221,7 @@ export const clientBookingInputSchema = z
     requestedDate: requestedDateSchema,
     requestedTime: requestedTimeSchema,
     clientMaxEndTime: clientMaxEndTimeSchema,
+    paymentMethod: paymentMethodSchema,
   })
   .superRefine((data, ctx) => {
     const requestedStartTime = combineRequestedDateAndTime(
