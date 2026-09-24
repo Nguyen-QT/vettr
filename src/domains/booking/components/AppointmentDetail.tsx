@@ -1,5 +1,9 @@
-import Image from "next/image";
+"use client";
 
+import Image from "next/image";
+import { useState } from "react";
+
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { Separator } from "@/components/ui/separator";
 import type { UpcomingAppointmentSummary } from "@/domains/booking/types";
 
@@ -30,6 +34,7 @@ function formatEstimatedPrice(estimatedPrice: number | null) {
 export function AppointmentDetail({ appointment }: AppointmentDetailProps) {
   const instagramUrl = `https://instagram.com/${appointment.clientInstagramHandle}`;
   const tags = [...appointment.designTags, ...appointment.aestheticTags];
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -74,18 +79,34 @@ export function AppointmentDetail({ appointment }: AppointmentDetailProps) {
         <>
           <Separator />
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {appointment.designReferenceImageUrls.map((url) => (
+            {appointment.designReferenceImageUrls.map((url, index) => (
               <li key={url}>
-                <Image
-                  src={url}
-                  alt="Design reference"
-                  width={300}
-                  height={300}
-                  className="h-auto w-full rounded-md object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(index)}
+                  className="block w-full cursor-zoom-in"
+                >
+                  <Image
+                    src={url}
+                    alt="Design reference"
+                    width={300}
+                    height={300}
+                    className="h-auto w-full rounded-md object-cover"
+                  />
+                </button>
               </li>
             ))}
           </ul>
+          <ImageLightbox
+            images={appointment.designReferenceImageUrls}
+            index={lightboxIndex ?? 0}
+            onIndexChange={setLightboxIndex}
+            open={lightboxIndex !== null}
+            onOpenChange={(open) => {
+              if (!open) setLightboxIndex(null);
+            }}
+            alt="Design reference"
+          />
         </>
       ) : null}
     </div>

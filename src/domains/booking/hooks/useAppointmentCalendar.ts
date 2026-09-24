@@ -35,7 +35,7 @@ export type CalendarViewMode = "day" | "week";
 // navigating between screens.
 export type CalendarScreen = "list" | "detail" | "edit";
 
-function isSameCalendarDay(a: Date, b: Date) {
+export function isSameCalendarDay(a: Date, b: Date) {
   return (
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -76,7 +76,7 @@ function toLocalMidnight(date: Date) {
 // it. This uses React's render-time "adjust state when a prop
 // changes" pattern instead of a useEffect, so there's no extra
 // stale-content frame and no react-hooks/set-state-in-effect trip.
-export function useAppointmentCalendar(appointments: UpcomingAppointmentSummary[]) {
+export function useAppointmentCalendar<T extends UpcomingAppointmentSummary>(appointments: T[]) {
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopBreakpoint,
     getIsDesktopSnapshot,
