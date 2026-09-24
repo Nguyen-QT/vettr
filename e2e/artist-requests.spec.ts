@@ -13,12 +13,12 @@ async function readFixture(): Promise<E2eFixture> {
   return JSON.parse(raw);
 }
 
-test.describe("artist dashboard approve/decline", () => {
+test.describe("artist requests approve/decline", () => {
   test("approving a request shows the response message", async ({ page }) => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}`);
+    await page.goto(`/artist/${fixture.artistId}/requests`);
     const card = page.locator("article", { hasText: fixture.approveClientHandle });
 
     await expect(card.getByText("e2e-client-approve@example.com")).toBeVisible();
@@ -40,7 +40,7 @@ test.describe("artist dashboard approve/decline", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}`);
+    await page.goto(`/artist/${fixture.artistId}/requests`);
     const card = page.locator("article", { hasText: fixture.declineClientHandle });
 
     await card.getByRole("button", { name: "Decline" }).click();
@@ -61,7 +61,7 @@ test.describe("artist dashboard approve/decline", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}`);
+    await page.goto(`/artist/${fixture.artistId}/requests`);
     const card = page.locator("article", {
       hasText: fixture.freestylePendingClientHandle,
     });
@@ -75,7 +75,7 @@ test.describe("artist dashboard approve/decline", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}`);
+    await page.goto(`/artist/${fixture.artistId}/requests`);
     const card = page.locator("article", {
       hasText: fixture.awaitingConfirmationClientHandle,
     });

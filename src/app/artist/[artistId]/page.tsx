@@ -1,33 +1,11 @@
-import { RequestCard } from "@/domains/booking/components/RequestCard";
-import { getPendingBookingRequests } from "@/domains/booking/services/getPendingBookingRequests";
-
-interface ArtistDashboardPageProps {
-  params: Promise<{ artistId: string }>;
-}
-
-export default async function ArtistDashboardPage({
-  params,
-}: ArtistDashboardPageProps) {
-  const { artistId } = await params;
-  const pendingRequests = await getPendingBookingRequests(artistId);
-
-  if (pendingRequests.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-12 text-center">
-        <p className="text-sm font-medium">Nothing needs your attention</p>
-        <p className="text-sm text-muted-foreground">
-          New booking requests from clients, and any awaiting your booking
-          confirmation, will show up here.
-        </p>
-      </div>
-    );
-  }
-
+// Placeholder pending Phase 22's next sub-task (22.1.4), which replaces
+// this with the real dashboard (today's schedule, urgent action items,
+// quick stats). The former pending-requests body that used to live here
+// moved to /artist/[artistId]/requests (22.1.3).
+export default function ArtistDashboardPage() {
   return (
-    <div className="flex flex-col gap-3">
-      {pendingRequests.map((request) => (
-        <RequestCard key={request.id} request={request} />
-      ))}
+    <div className="flex flex-col items-center gap-2 py-12 text-center">
+      <p className="text-sm font-medium">Dashboard coming soon</p>
     </div>
   );
 }
