@@ -29,19 +29,29 @@ function DialogBackdrop({ className, ...props }: DialogPrimitive.Backdrop.Props)
   )
 }
 
+const DIALOG_CONTENT_SIZE_CLASSES = {
+  default: "max-w-lg",
+  lg: "max-w-3xl max-h-[85vh] overflow-y-auto",
+} as const
+
 function DialogContent({
   className,
   children,
   showClose = true,
+  size = "default",
   ...props
-}: DialogPrimitive.Popup.Props & { showClose?: boolean }) {
+}: DialogPrimitive.Popup.Props & {
+  showClose?: boolean
+  size?: keyof typeof DIALOG_CONTENT_SIZE_CLASSES
+}) {
   return (
     <DialogPortal>
       <DialogBackdrop />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-6 shadow-lg duration-200 data-[ending-style]:animate-out data-[ending-style]:fade-out-0 data-[ending-style]:zoom-out-95 data-[starting-style]:animate-in data-[starting-style]:fade-in-0 data-[starting-style]:zoom-in-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-card p-6 shadow-lg duration-200 data-[ending-style]:animate-out data-[ending-style]:fade-out-0 data-[ending-style]:zoom-out-95 data-[starting-style]:animate-in data-[starting-style]:fade-in-0 data-[starting-style]:zoom-in-95",
+          DIALOG_CONTENT_SIZE_CLASSES[size],
           className
         )}
         {...props}
