@@ -7,6 +7,7 @@ import {
   confirmTimeSlotInputSchema,
   getAvailableSlotsInputSchema,
   setScheduleOverrideInputSchema,
+  setScheduleOverrideRangeInputSchema,
   setWeeklyHoursInputSchema,
 } from "./scheduling.schema";
 import { confirmTimeSlot } from "./services/confirmTimeSlot";
@@ -15,6 +16,7 @@ import {
   type AvailableSlot,
 } from "./services/getAvailableSlots";
 import { setScheduleOverride } from "./services/setScheduleOverride";
+import { setScheduleOverrideRange } from "./services/setScheduleOverrideRange";
 import { setWeeklyHours } from "./services/setWeeklyHours";
 import type { ConfirmTimeSlotResult, SlotTime } from "./types";
 
@@ -123,6 +125,25 @@ export async function setScheduleOverrideAction(
   }
 
   await setScheduleOverride(parsed.data);
+  return { success: true };
+}
+
+// Controller/Action boundary (CLAUDE.md 20.1): validates structurally,
+// then hands off to the range upsert. Powers the Blackout Dates
+// settings sub-view's date-range picker.
+export async function setScheduleOverrideRangeAction(
+  input: unknown
+): Promise<ScheduleMutationResult> {
+  const parsed = setScheduleOverrideRangeInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid schedule override range.",
+    };
+  }
+
+  await setScheduleOverrideRange(parsed.data);
   return { success: true };
 }
 
