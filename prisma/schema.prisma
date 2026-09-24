@@ -110,6 +110,18 @@ model Artist {
   bio       String?
   location  String?
 
+  // Stripe Connect Express account (CLAUDE.md 24.1) -- lets a card
+  // deposit route to this artist's own bank account instead of only
+  // ever landing in the platform's single Stripe balance.
+  // stripeConnectAccountId is null until onboarding is started; the two
+  // capability flags default false and are kept in sync by the
+  // webhook's account.updated case, the same idempotent
+  // reconciliation-backstop pattern as confirmDepositPayment/
+  // confirmDepositRefund.
+  stripeConnectAccountId      String?
+  stripeConnectChargesEnabled Boolean @default(false)
+  stripeConnectPayoutsEnabled Boolean @default(false)
+
   account             Account?
   bookingRequests     BookingRequest[]
   timeSlots           TimeSlot[]
