@@ -51,6 +51,15 @@ enum AccountRole {
   CLIENT
 }
 
+// A client's stated preference for how they'll settle the final on-the-day
+// balance (CLAUDE.md 23.1) -- deposits stay card-only/Stripe regardless,
+// since there's no such thing as a cash deposit. Artist-overridable at
+// final checkout if plans change on the day.
+enum PaymentMethod {
+  CASH
+  CARD
+}
+
 // Shared login identity for both roles (CLAUDE.md 5.1/5.2) -- one auth
 // codepath regardless of whether the account is an artist or a client.
 // Exactly one of artistId/clientProfileId is set, matching role; that
@@ -271,6 +280,13 @@ model BookingRequest {
   stripeRefundId  String?
 
   clientNotes String?
+
+  // Client's stated preference for settling the final on-the-day balance
+  // (CLAUDE.md 23.1). Nullable at the DB level only, same precedent as
+  // requestedStartTime/estimatedPrice above -- booking.schema.ts enforces
+  // it as required for every new submission. Overridable by the artist at
+  // checkout when circumstances change on the day.
+  paymentMethod PaymentMethod?
 
   // Optional, purely advisory (CLAUDE.md 6.3) -- a client-flagged "must
   // be finished by" time for the artist to weigh when deciding
