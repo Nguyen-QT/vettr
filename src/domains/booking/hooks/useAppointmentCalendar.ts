@@ -27,7 +27,7 @@ function getIsDesktopServerSnapshot() {
   return null;
 }
 
-export type CalendarViewMode = "day" | "week";
+export type CalendarViewMode = "day" | "week" | "month";
 
 // The mobile slide-in stack (CLAUDE.md 19.1's Mobile note) has exactly
 // these three screens; the desktop persistent panel doesn't use this
@@ -35,7 +35,7 @@ export type CalendarViewMode = "day" | "week";
 // navigating between screens.
 export type CalendarScreen = "list" | "detail" | "edit";
 
-function isSameCalendarDay(a: Date, b: Date) {
+export function isSameCalendarDay(a: Date, b: Date) {
   return (
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -76,7 +76,7 @@ function toLocalMidnight(date: Date) {
 // it. This uses React's render-time "adjust state when a prop
 // changes" pattern instead of a useEffect, so there's no extra
 // stale-content frame and no react-hooks/set-state-in-effect trip.
-export function useAppointmentCalendar(appointments: UpcomingAppointmentSummary[]) {
+export function useAppointmentCalendar<T extends UpcomingAppointmentSummary>(appointments: T[]) {
   const isDesktop = useSyncExternalStore(
     subscribeToDesktopBreakpoint,
     getIsDesktopSnapshot,
@@ -114,7 +114,22 @@ export function useAppointmentCalendar(appointments: UpcomingAppointmentSummary[
       : "list";
 
   function selectDate(date: Date) {
-    setSelectedDate(toLocalMidnight(date));
+    const normalized = toLocalMidnight(date);
+    setSelectedDate(normalized);
+    // Navigating to a different date invalidates a selected appointment
+    // that isn't on it -- otherwise the detail panel keeps showing an
+    // appointment from a date the artist has since navigated away from.
+    if (
+      selectedAppointmentId &&
+      !appointments.some(
+        (appointment) =>
+          appointment.id === selectedAppointmentId &&
+          isSameCalendarDay(appointment.startTime, normalized)
+      )
+    ) {
+      setSelectedAppointmentId(null);
+      setIsEditing(false);
+    }
   }
 
   function selectAppointment(appointmentId: string | null) {
