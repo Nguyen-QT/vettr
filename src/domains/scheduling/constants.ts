@@ -16,6 +16,12 @@ export const MAX_SLOT_DURATION_MINUTES = 180;
 // typically only FREESTYLE services ever exceed a single slot.
 export const MAX_TOTAL_SERVICE_DURATION_MINUTES = MAX_SLOT_DURATION_MINUTES * 2;
 
+// Upper bound on a single date-range override (CLAUDE.md 20.1), enforced
+// at the schema layer (setScheduleOverrideRangeInputSchema) -- keeps a
+// single write bounded to a sane number of upserts rather than an
+// unbounded multi-year range.
+export const MAX_SCHEDULE_OVERRIDE_RANGE_DAYS = 90;
+
 // Surfaced by confirmTimeSlot when the database's overlap-exclusion
 // constraint (see prisma/migrations) rejects a concurrently-booked slot.
 export const SLOT_CONFLICT_ERROR_MESSAGE =
