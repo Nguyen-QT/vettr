@@ -14,10 +14,10 @@ async function readFixture(): Promise<E2eFixture> {
 }
 
 // CLAUDE.md 18.1: selecting an AppointmentCard on the upcoming list
-// expands a detail dialog with the full booking. bookedSlotRequestId
-// (the fixture behind bookedSlotClientHandle) has no estimatedPrice
-// set, which doubles as coverage for "estimated price always shown"
-// -- the dialog surfaces that gap explicitly instead of hiding it.
+// expands a detail dialog with the full booking, including the
+// estimated price (CLAUDE.md 18.2 gave bookedSlotRequestId a real
+// estimatedPrice, matching the real reviewBookingRequest invariant
+// that every APPROVED request has one).
 test.describe("appointment detail dialog", () => {
   test("expands an appointment card into the full detail on selection", async ({ page }) => {
     const fixture = await readFixture();
@@ -30,7 +30,7 @@ test.describe("appointment detail dialog", () => {
     await card.getByRole("button", { name: "View appointment detail" }).click();
 
     await expect(page.getByText("Appointment detail")).toBeVisible();
-    await expect(page.getByText("Estimated price: Not yet set")).toBeVisible();
+    await expect(page.getByText("Estimated price: £150")).toBeVisible();
 
     await page.getByRole("button", { name: "Close" }).click();
     await expect(page.getByText("Appointment detail")).not.toBeVisible();
