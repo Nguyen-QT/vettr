@@ -52,6 +52,19 @@ const STEP_FIELDS: Record<number, (keyof ClientBookingFormValues)[]> = {
   [REVIEW_STEP]: [],
 };
 
+// Reverse lookup from a field name to the step that owns it, built
+// once from STEP_FIELDS -- used by goToFirstInvalidStep to send a
+// client back to wherever a final-submit validation failure actually
+// lives, since the review step doesn't render every field's own error.
+// A safety net for any edge case a step's own gate doesn't already
+// catch, not the primary enforcement mechanism for any one field.
+const FIELD_STEP = new Map<keyof ClientBookingFormValues, number>();
+for (const [step, fields] of Object.entries(STEP_FIELDS)) {
+  for (const field of fields) {
+    FIELD_STEP.set(field, Number(step));
+  }
+}
+
 // A signed-in client only skips Step 1 once every field it collects is
 // already on file (CLAUDE.md 6.1/6.2's per-field lock/prefill) -- a
 // client who signed up before 6.2 and is still missing e.g. a date of
@@ -118,6 +131,23 @@ export function useBookingWizard({ form, initialClientDetails }: UseBookingWizar
     setCurrentStep(step);
   }
 
+  // Called after a final-submit form.trigger() comes back invalid --
+  // jumps to whichever step owns the first errored field, so its
+  // FieldError becomes visible again instead of failing silently on
+  // the review step, which doesn't render every field's own error.
+  // Always allowed regardless of furthestStep: an earlier step has, by
+  // definition, already been reached.
+  function goToFirstInvalidStep(errors: Partial<Record<string, unknown>>): boolean {
+    for (const fieldName of Object.keys(errors)) {
+      const step = FIELD_STEP.get(fieldName as keyof ClientBookingFormValues);
+      if (step !== undefined) {
+        setCurrentStep(step);
+        return true;
+      }
+    }
+    return false;
+  }
+
   return {
     stepLabels: BOOKING_WIZARD_STEP_LABELS,
     currentStep,
@@ -127,5 +157,6 @@ export function useBookingWizard({ form, initialClientDetails }: UseBookingWizar
     goToNextStep,
     goToPreviousStep,
     goToStep,
+    goToFirstInvalidStep,
   };
 }
