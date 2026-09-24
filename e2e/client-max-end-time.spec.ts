@@ -98,7 +98,7 @@ test.describe("client max end time", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}`);
+    await page.goto(`/artist/${fixture.artistId}/requests`);
     const card = page.locator("article", {
       hasText: fixture.maxEndTimeClientHandle,
     });

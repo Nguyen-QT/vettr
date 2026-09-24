@@ -20,7 +20,7 @@ test.describe("cancellation history flag on RequestCard", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}`);
+    await page.goto(`/artist/${fixture.artistId}/requests`);
     const card = page.locator("article", { hasText: fixture.flaggedClientHandle });
 
     await expect(card.getByText("2 cancellations · Deposit required")).toBeVisible();
@@ -32,7 +32,7 @@ test.describe("cancellation history flag on RequestCard", () => {
     const fixture = await readFixture();
     await loginAsArtist(page, fixture);
 
-    await page.goto(`/artist/${fixture.artistId}`);
+    await page.goto(`/artist/${fixture.artistId}/requests`);
     const card = page.locator("article", { hasText: fixture.approveClientHandle });
 
     await expect(card.getByText(/cancellation/)).toHaveCount(0);

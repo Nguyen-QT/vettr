@@ -35,9 +35,14 @@ export default async function ArtistDashboardLayout({
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 bg-background">
         <div className="mx-auto flex w-full max-w-lg items-baseline justify-between px-4 py-3 lg:max-w-6xl">
-          <span className="text-base font-semibold">Vettr</span>
+          <Link href={`/artist/${artistId}`} className="text-base font-semibold">
+            Vettr
+          </Link>
           <nav className="flex items-baseline gap-3 text-sm text-muted-foreground">
-            <Link href={`/artist/${artistId}`} className="flex items-baseline gap-1.5">
+            <Link
+              href={`/artist/${artistId}/requests`}
+              className="flex items-baseline gap-1.5"
+            >
               Requests
               <NavCountBadge count={pendingRequests.length} />
             </Link>
