@@ -45,7 +45,7 @@ export default async function ArtistDashboardLayout({
               href={`/artist/${artistId}/appointments`}
               className="flex items-baseline gap-1.5"
             >
-              Upcoming
+              Appointments
               <NavCountBadge count={pastDueAppointments.length} />
             </Link>
             <Link href={`/artist/${artistId}/calendar`}>Calendar</Link>

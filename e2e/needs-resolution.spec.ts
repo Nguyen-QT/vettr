@@ -102,7 +102,7 @@ test.describe("artist resolves a past-due appointment", () => {
     await expect(card.getByRole("button", { name: "Cancel" })).toHaveCount(0);
   });
 
-  test("shows count badges on the nav's Requests and Upcoming links", async ({
+  test("shows count badges on the nav's Requests and Appointments links", async ({
     page,
   }) => {
     const fixture = await readFixture();
@@ -117,7 +117,7 @@ test.describe("artist resolves a past-due appointment", () => {
     const requestsLink = page.getByRole("link", { name: /Requests/ });
     await expect(requestsLink.getByText(/^\d+$/)).toBeVisible();
 
-    const upcomingLink = page.getByRole("link", { name: /Upcoming/ });
-    await expect(upcomingLink.getByText(/^\d+$/)).toBeVisible();
+    const appointmentsLink = page.getByRole("link", { name: /Appointments/ });
+    await expect(appointmentsLink.getByText(/^\d+$/)).toBeVisible();
   });
 });
