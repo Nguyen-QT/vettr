@@ -48,3 +48,15 @@ export interface SetScheduleOverrideInput {
   date: string;
   availableTimes: SlotTime[];
 }
+
+// Write command (CLAUDE.md 20.1): the same upsert as
+// SetScheduleOverrideInput, applied across every date in a continuous
+// inclusive range (e.g. blocking out an extended break in one action)
+// rather than one date at a time. startDate/endDate are "YYYY-MM-DD",
+// the same convention as SetScheduleOverrideInput.date.
+export interface SetScheduleOverrideRangeInput {
+  artistId: string;
+  startDate: string;
+  endDate: string;
+  availableTimes: SlotTime[];
+}
