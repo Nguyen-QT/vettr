@@ -51,6 +51,23 @@ function addDays(date: Date, amount: number) {
   return next;
 }
 
+// The 1st of the target month, not a day-count shift -- avoids
+// Date.setMonth's day-overflow surprises (e.g. Jan 31 + 1 month
+// silently landing in early March) and matches typical calendar UX
+// where prev/next-month buttons move the displayed month itself, not
+// a specific day.
+function addMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+// The fixed 6-week (42-day) grid every month renders into, starting
+// on the Monday on/before the 1st -- a constant cell count regardless
+// of the month's length or starting weekday, so the grid never
+// reflows between months.
+function startOfMonthGrid(date: Date) {
+  return startOfWeek(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
 // Local-date input value, same construction as AppointmentActions'
 // toRequestedDateValue -- avoids a UTC-parsed round trip through the
 // native <input type="date"> shifting the day in negative-UTC-offset
@@ -121,13 +138,18 @@ export function ArtistCalendarView({ artistId, appointments }: ArtistCalendarVie
     );
   }
 
-  const weekStart = startOfWeek(selectedDate);
   const visibleDays =
-    viewMode === "week"
-      ? Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))
-      : [selectedDate];
+    viewMode === "month"
+      ? Array.from({ length: 42 }, (_, index) => addDays(startOfMonthGrid(selectedDate), index))
+      : viewMode === "week"
+        ? Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(selectedDate), index))
+        : [selectedDate];
 
   function shiftSelectedDate(amount: number) {
+    if (viewMode === "month") {
+      selectDate(addMonths(selectedDate, amount));
+      return;
+    }
     selectDate(addDays(selectedDate, viewMode === "week" ? amount * 7 : amount));
   }
 
@@ -187,12 +209,34 @@ export function ArtistCalendarView({ artistId, appointments }: ArtistCalendarVie
             >
               Week
             </Button>
+            <Button
+              type="button"
+              variant={viewMode === "month" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("month")}
+            >
+              Month
+            </Button>
           </div>
         </div>
 
-        <div className={cn("grid gap-2", viewMode === "week" ? "grid-cols-7" : "grid-cols-1")}>
+        {viewMode === "month" ? (
+          <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
+            {visibleDays.slice(0, 7).map((day) => (
+              <span key={day.toDateString()}>{WEEKDAY_FORMAT.format(day)}</span>
+            ))}
+          </div>
+        ) : null}
+
+        <div
+          className={cn(
+            "grid gap-2",
+            viewMode === "week" ? "grid-cols-7" : viewMode === "month" ? "grid-cols-7 gap-1" : "grid-cols-1"
+          )}
+        >
           {visibleDays.map((day) => {
             const isSelected = isSameCalendarDay(day, selectedDate);
+            const isOutsideMonth = viewMode === "month" && day.getMonth() !== selectedDate.getMonth();
             const count = appointmentCountForDay(day);
             return (
               <button
@@ -201,7 +245,8 @@ export function ArtistCalendarView({ artistId, appointments }: ArtistCalendarVie
                 onClick={() => selectDate(day)}
                 className={cn(
                   "relative flex flex-col items-center gap-1 overflow-hidden rounded-lg border p-2 text-sm",
-                  isSelected ? "border-primary" : "border-border bg-card"
+                  isSelected ? "border-primary" : "border-border bg-card",
+                  isOutsideMonth ? "text-muted-foreground/60" : null
                 )}
               >
                 {isSelected ? (
@@ -211,9 +256,11 @@ export function ArtistCalendarView({ artistId, appointments }: ArtistCalendarVie
                     transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
                   />
                 ) : null}
-                <span className="relative text-xs text-muted-foreground">
-                  {WEEKDAY_FORMAT.format(day)}
-                </span>
+                {viewMode !== "month" ? (
+                  <span className="relative text-xs text-muted-foreground">
+                    {WEEKDAY_FORMAT.format(day)}
+                  </span>
+                ) : null}
                 <span className="relative font-medium">{day.getDate()}</span>
                 {count > 0 ? (
                   <span className="relative rounded-full bg-primary px-1.5 text-xs text-primary-foreground">

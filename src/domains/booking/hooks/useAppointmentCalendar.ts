@@ -27,7 +27,7 @@ function getIsDesktopServerSnapshot() {
   return null;
 }
 
-export type CalendarViewMode = "day" | "week";
+export type CalendarViewMode = "day" | "week" | "month";
 
 // The mobile slide-in stack (CLAUDE.md 19.1's Mobile note) has exactly
 // these three screens; the desktop persistent panel doesn't use this
@@ -114,7 +114,22 @@ export function useAppointmentCalendar<T extends UpcomingAppointmentSummary>(app
       : "list";
 
   function selectDate(date: Date) {
-    setSelectedDate(toLocalMidnight(date));
+    const normalized = toLocalMidnight(date);
+    setSelectedDate(normalized);
+    // Navigating to a different date invalidates a selected appointment
+    // that isn't on it -- otherwise the detail panel keeps showing an
+    // appointment from a date the artist has since navigated away from.
+    if (
+      selectedAppointmentId &&
+      !appointments.some(
+        (appointment) =>
+          appointment.id === selectedAppointmentId &&
+          isSameCalendarDay(appointment.startTime, normalized)
+      )
+    ) {
+      setSelectedAppointmentId(null);
+      setIsEditing(false);
+    }
   }
 
   function selectAppointment(appointmentId: string | null) {
