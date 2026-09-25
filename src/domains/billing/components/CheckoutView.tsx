@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { BackNav } from "@/components/ui/back-nav";
+import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Field,
@@ -211,12 +211,10 @@ export function CheckoutView({
       <FieldError errors={finalizeError ? [{ message: finalizeError }] : undefined} />
 
       <div className="flex items-center justify-between gap-3">
-        <Link
+        <BackNav
           href={`/artist/${artistId}/appointments`}
-          className={buttonVariants({ variant: "outline" })}
-        >
-          Back
-        </Link>
+          label="Back"
+        />
         <Button
           type="button"
           disabled={isAddonMutating || isFinalizing}
