@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BackNav } from "@/components/ui/back-nav";
 import { Separator } from "@/components/ui/separator";
 
 interface ArtistSettingsLayoutProps {
@@ -19,6 +20,7 @@ export default async function ArtistSettingsLayout({
 
   return (
     <div className="flex flex-col gap-4">
+      <BackNav href={`/artist/${artistId}`} label="Dashboard" />
       <nav className="flex flex-wrap gap-3 text-sm text-muted-foreground">
         <Link href={`/artist/${artistId}/settings/hours`}>
           Business hours
