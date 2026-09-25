@@ -477,8 +477,43 @@ export default async function globalSetup() {
   const dashboardTodayClientId = randomUUID();
   const dashboardTodayRequestId = randomUUID();
   const dashboardTodayClientHandle = "e2e_client_dashboard_today";
-  const dashboardTodayStartTime = new Date(Date.now() - 60 * 60_000);
-  const dashboardTodayEndTime = new Date(Date.now() + 60 * 60_000);
+  // Clamped to stay within today's UTC calendar bounds rather than a
+  // bare now-1h/now+1h offset -- that naive version could itself land
+  // on "yesterday"/"tomorrow" whenever setup happens to run within an
+  // hour of UTC midnight, and separately, the isToday() check this
+  // fixture exists to exercise runs later, at whatever moment the
+  // dashboard spec actually renders the page -- a UTC-midnight
+  // rollover between the two moments made the fixture's own startTime
+  // disagree with "today" as measured at assertion time. Clamping
+  // shrinks that remaining race down to the (much smaller) gap between
+  // this setup step and the dashboard spec actually running, rather
+  // than eliminating it outright, since only mocking the clock could
+  // do that.
+  // Local time, not UTC -- this needs to agree with isToday()'s own
+  // date.toDateString() comparison, which reads the Next.js server
+  // process's local timezone (the same host/process this script runs
+  // in, both in CI and locally), not necessarily UTC.
+  const now = new Date();
+  const todayStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    0,
+    1
+  ).getTime();
+  const todayEnd = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    23,
+    59
+  ).getTime();
+  const dashboardTodayStartTime = new Date(
+    Math.max(now.getTime() - 60 * 60_000, todayStart)
+  );
+  const dashboardTodayEndTime = new Date(
+    Math.min(now.getTime() + 60 * 60_000, todayEnd)
+  );
 
   await client.query(
     `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
