@@ -39,7 +39,7 @@ describe("deleteSession", () => {
 
   it("removes the session row so it can no longer be found", async () => {
     const session = await prisma.session.create({
-      data: { accountId, expiresAt: new Date(Date.now() + 60_000) },
+      data: { accountId, expiresAt: new Date(Date.now() + 60_000), activeRole: "ARTIST" },
     });
 
     await deleteSession(session.id);

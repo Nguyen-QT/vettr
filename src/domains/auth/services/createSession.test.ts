@@ -40,9 +40,10 @@ describe("createSession", () => {
 
   it("creates a session row tied to the account with a future expiry", async () => {
     const before = Date.now();
-    const session = await createSession(accountId);
+    const session = await createSession(accountId, "ARTIST");
 
     expect(session.accountId).toBe(accountId);
+    expect(session.activeRole).toBe("ARTIST");
     expect(session.expiresAt.getTime()).toBeGreaterThan(before);
     expect(session.expiresAt.getTime()).toBeLessThanOrEqual(
       before + SESSION_DURATION_MS + 1000
