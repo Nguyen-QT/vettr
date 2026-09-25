@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 
+import { BackNav } from "@/components/ui/back-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -262,16 +263,7 @@ interface MobileScreenHeaderProps {
 function MobileScreenHeader({ title, onBack }: MobileScreenHeaderProps) {
   return (
     <div className="flex items-center gap-2 border-b border-border pb-2">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Back"
-        autoFocus
-        onClick={onBack}
-      >
-        <ChevronLeftIcon />
-      </Button>
+      <BackNav onClick={onBack} autoFocus />
       <h2 className="text-sm font-medium">{title}</h2>
     </div>
   );
