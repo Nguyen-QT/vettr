@@ -1,3 +1,4 @@
+import { BackNav } from "@/components/ui/back-nav";
 import { ArtistDirectoryCard } from "@/domains/directory/components/ArtistDirectoryCard";
 import { getArtistDirectory } from "@/domains/directory/services/getArtistDirectory";
 
@@ -6,6 +7,7 @@ export default async function ArtistsDirectoryPage() {
 
   return (
     <main className="mx-auto w-full max-w-lg flex-1 px-4 py-4 pb-[env(safe-area-inset-bottom)]">
+      <BackNav href="/" className="mb-3" />
       <h1 className="mb-3 text-lg font-semibold">Find an artist</h1>
       {artists.length === 0 ? (
         <p className="text-sm text-muted-foreground">
