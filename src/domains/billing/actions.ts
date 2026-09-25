@@ -7,14 +7,18 @@ import {
   setArtistDepositSettingInputSchema,
 } from "./billing.schema";
 import { addBillingAddon } from "./services/addBillingAddon";
+import { createConnectOnboardingLink } from "./services/createConnectOnboardingLink";
 import { createDepositPaymentIntent } from "./services/createDepositPaymentIntent";
 import { finalizeCheckout } from "./services/finalizeCheckout";
+import { getArtistConnectStatus } from "./services/getArtistConnectStatus";
 import { getArtistDepositSettings } from "./services/getArtistDepositSettings";
 import { removeBillingAddon } from "./services/removeBillingAddon";
 import { setArtistDepositSettings } from "./services/setArtistDepositSettings";
 import type {
   AddBillingAddonResult,
+  ArtistConnectStatus,
   ArtistDepositSettings,
+  CreateConnectOnboardingLinkResult,
   CreateDepositPaymentIntentResult,
   FinalizeCheckoutResult,
   RemoveBillingAddonResult,
@@ -153,4 +157,34 @@ export async function finalizeCheckoutAction(
   }
 
   return finalizeCheckout(bookingRequestId, artistId);
+}
+
+// Controller/Action boundary (CLAUDE.md 24.1.3): fully session-derived,
+// no id param -- an artist is always starting/resuming their own
+// Connect onboarding, same posture as getArtistDepositSettingsAction
+// above.
+export async function createConnectOnboardingLinkAction(): Promise<CreateConnectOnboardingLinkResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  return createConnectOnboardingLink(artistId);
+}
+
+export type GetArtistConnectStatusResult =
+  | { success: true; status: ArtistConnectStatus }
+  | { success: false; error: string };
+
+// Controller/Action boundary (CLAUDE.md 24.1.3): fully session-derived,
+// no id param -- an artist is always reading their own Connect status,
+// same posture as getArtistDepositSettingsAction above.
+export async function getArtistConnectStatusAction(): Promise<GetArtistConnectStatusResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  const status = await getArtistConnectStatus(artistId);
+  return { success: true, status };
 }
