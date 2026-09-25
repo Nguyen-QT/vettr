@@ -39,7 +39,7 @@ describe("getSessionWithAccount", () => {
 
   it("returns the session and linked account details for a valid session", async () => {
     const session = await prisma.session.create({
-      data: { accountId, expiresAt: new Date(Date.now() + 60_000) },
+      data: { accountId, expiresAt: new Date(Date.now() + 60_000), activeRole: "ARTIST" },
     });
 
     const result = await getSessionWithAccount(session.id);
@@ -56,7 +56,7 @@ describe("getSessionWithAccount", () => {
 
   it("returns null for an expired session", async () => {
     const session = await prisma.session.create({
-      data: { accountId, expiresAt: new Date(Date.now() - 60_000) },
+      data: { accountId, expiresAt: new Date(Date.now() - 60_000), activeRole: "ARTIST" },
     });
 
     await expect(getSessionWithAccount(session.id)).resolves.toBeNull();

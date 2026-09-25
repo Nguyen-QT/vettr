@@ -24,7 +24,7 @@ export async function loginArtist(input: LoginInput): Promise<LoginResult> {
     return { success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE };
   }
 
-  const session = await createSession(account.id);
+  const session = await createSession(account.id, account.role);
 
   return {
     success: true,

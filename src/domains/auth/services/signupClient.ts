@@ -40,7 +40,7 @@ export async function signupClient(input: LoginInput): Promise<ClientAuthResult>
     },
   });
 
-  const session = await createSession(account.id);
+  const session = await createSession(account.id, account.role);
 
   return {
     success: true,

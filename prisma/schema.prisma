@@ -92,6 +92,14 @@ model Session {
 
   account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   accountId String
+
+  // Per-session effective role (CLAUDE.md 26.1.1.1) -- distinct from
+  // Account.role, which is the account's permanent home role. A dual-role
+  // account can hold concurrent sessions acting as different roles, so
+  // "which role is this session currently viewing as" can't live on
+  // Account itself, and must be server-trusted (not a client-readable
+  // cookie) since src/proxy.ts uses it as an authorization gate.
+  activeRole AccountRole
 }
 
 model Artist {
