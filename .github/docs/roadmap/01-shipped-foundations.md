@@ -36,3 +36,6 @@ This ledger tracks the high-level completions, core technical parameters, and cr
 
 ### 📦 Phase 24: Artist Bank Payouts via Stripe Connect
 - **Completed:** Onboarded artists as Stripe Connect Express accounts. Updated `Artist` schemas to capture connected account tokens and dynamic capability flags. Built the foundational domain workflows inside a fresh `billing` service container, integrating Connect status syncs, webhook update triggers, onboarding link parameters, and custom payment intent generation blocks. Deployed accompanying state orchestration hooks (`useArtistConnectOnboarding`) and view panels.
+
+### 📦 Phase 25: Universal Back Navigation 
+- **Completed:** Audited every client/artist sub-page, form view, modal overlay, and drawer layer for a consistent, structured parent back navigation control. Replaced scattered layout links with a shared navigation primitive. Standardizes on `ChevronLeftIcon` (lucide-react), matching the one existing back pattern already in the app (the calendar's mobile stack). Also adds a shared `src/app/client/layout.tsx`, mirroring `ArtistDashboardLayout`, since no shared client-side layout exists today.

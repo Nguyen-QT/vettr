@@ -7,18 +7,24 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 
 ---
 
-### 📦 Phase 25: Universal Back Navigation ◄ CURRENT FOCUS
-- [x] **25.1: Universal Back Navigation** (Audit every client/artist sub-page, form view, modal overlay, and drawer layer for a consistent, structured parent back navigation control. Replace scattered layout links with a shared navigation primitive. Scope confirmed with the user: back controls go on true sub-pages/drill-downs only -- settings sub-pages, checkout, client profile, login/signup, `/book/[artistId]`, `/artists`, and the calendar's mobile stack -- not on the artist's top-level tab pages (dashboard/requests/appointments/calendar root), which already have persistent tab nav covering "where do I go." Standardizes on `ChevronLeftIcon` (lucide-react), matching the one existing back pattern already in the app (the calendar's mobile stack). Also adds a shared `src/app/client/layout.tsx`, mirroring `ArtistDashboardLayout`, since no shared client-side layout exists today -- `/client/page.tsx` hand-rolls its own header inline and login/signup/profile render bare `<main>`), decomposed per the Mandatory Task Breakdown Rule:
-  - [x] 25.1.1: UI Primitive & Config (a shared `BackNav` component, `src/components/ui/back-nav.tsx` -- ghost icon button + `ChevronLeftIcon` + optional adjacent label, in two modes: `href` for page-to-page `<Link>` back navigation, and `onClick` for in-page stack navigation, supporting the `autoFocus` behavior the calendar's mobile stack already relies on. Zero business logic, no page wiring).
-  - [x] 25.1.2: View & Route -- Calendar Mobile Stack (refactor `ArtistCalendarView.tsx`'s local `MobileScreenHeader` to render via `BackNav`'s `onClick` mode instead of its own duplicated markup; no behavior change).
-  - [x] 25.1.3: View & Route -- Client Area (new `src/app/client/layout.tsx` mirroring `ArtistDashboardLayout`'s shell -- wordmark link to `/client`, logout form; `/client/page.tsx` drops its inline header; `BackNav` added to `/client/profile/page.tsx` (back to `/client`, replacing its existing one-off `Link`), `/client/login/page.tsx` and `/client/signup/page.tsx` (back to `/`); e2e spec updates for any assertions on the old inline header markup).
-  - [x] 25.1.4: View & Route -- Artist Settings, Checkout & Login (`BackNav` added to `src/app/artist/[artistId]/settings/layout.tsx` (back to `/artist/[artistId]`, shown once for all four settings sub-pages); `CheckoutView.tsx`'s existing one-off "Back" `Link` replaced with `BackNav` (same target); `BackNav` added to `/artist/login/page.tsx` (back to `/`); e2e spec updates as needed).
-  - [x] 25.1.5: View & Route -- Booking Entry Points (`BackNav` added to `/book/[artistId]/page.tsx` (back to `/artists`) and `/artists/page.tsx` (back to `/`); e2e spec updates as needed).
-
----
-
-### 📦 Phase 26: Unified Dual-Role Accounts & Explicit Role-Switching
+### 📦 Phase 26: Unified Dual-Role Accounts & Explicit Role-Switching ◄ CURRENT FOCUS
 > Resolves the identity collision where `Account.email @unique` blocks an artist from booking as a client under the same email profile.
 - [ ] **26.1: Dual-Role Core Engine Setup**
   - **Prerequisite Architecture pass:** Enforce the design constraint that an artist's linked client identity must use a standard `ClientProfile` row so precharge models apply naturally.
-  - **Unscoped Execution Plane:** Propose and execute the 6-layer *Mandatory Task Breakdown Rule* pass (Data Gateway through View layer) targeting session validation shifts, `SessionWithAccount` role mutations, role-switch server actions, and route protection updates inside `src/proxy.ts` before writing code.
+  - **Architecture decision (confirmed):** `Account.role` stays the account's permanent home role; a new `Session.activeRole` column holds the per-session effective role (dual-role accounts may hold concurrent sessions in different roles; `activeRole` must stay server-trusted for `src/proxy.ts` gating, so it lives in the DB, not a client-readable cookie). Becoming dual-role is an explicit "Become a client" settings action (never automatic, never auto-switches into the new role afterward). Shared Instagram-handle/18+ validation primitives move to `src/lib/clientProfileValidation.ts`; the `ClientProfile` find-or-link matching logic stays auth-owned (not shared with booking's guest-checkout `resolveGuestClientProfile`, whose overwrite-on-repeat-visit semantics are wrong for a one-time authenticated link).
+  - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **26.1.1.1** Data Gateway — add `Session.activeRole AccountRole` column + migration (backfill from `Account.role`). No app code.
+    - [ ] **26.1.2.1** Domain Service — extract shared `ClientProfile` validation primitives (Instagram regex, 18+ age gate) to `src/lib/clientProfileValidation.ts`; re-point `booking/constants.ts` + `booking.schema.ts` at it (behavior-preserving).
+    - [ ] **26.1.2.2** Domain Service — `createSession` accepts optional `activeRole` (defaults to account's `role`).
+    - [ ] **26.1.2.3** Domain Service — surface `activeRole` on `SessionWithAccount`/`getSessionWithAccount`; `logoutAction` redirect keyed off `activeRole` instead of `role`.
+    - [ ] **26.1.2.4** Domain Service — `linkOrCreateClientProfileForAccount` service (mocked-Prisma unit test).
+    - [ ] **26.1.2.5** Domain Service — `switchActiveRole` service (mocked-Prisma unit test).
+    - [ ] **26.1.3.1** Controller/Action — `becomeClientAction` (+ Zod schema in `auth.schema.ts`).
+    - [ ] **26.1.3.2** Controller/Action — `switchActiveRoleAction` (+ Zod schema), redirects to `/artist/{artistId}` or `/client`.
+    - [ ] **26.1.3.3** Controller/Action — `src/proxy.ts` route guards read `session.activeRole` instead of `session.role`.
+    - [ ] **26.1.4.1** UI Primitive — `BecomeClientForm` component.
+    - [ ] **26.1.4.2** UI Primitive — `RoleSwitcher` component (toggle link, shown only when both roles are linked).
+    - [ ] **26.1.5.1** Domain Hook — `useBecomeClient` hook.
+    - [ ] **26.1.5.2** Domain Hook — `useSwitchActiveRole` hook.
+    - [ ] **26.1.6.1** View & Route — `/artist/[artistId]/settings/become-client` page + settings nav link.
+    - [ ] **26.1.6.2** View & Route — wire `RoleSwitcher` into artist dashboard layout and client portal layout.
