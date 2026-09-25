@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { buttonVariants } from "@/components/ui/button";
+import { BackNav } from "@/components/ui/back-nav";
 import { getCurrentSession } from "@/domains/auth/actions";
 import { ClientProfileForm } from "@/domains/booking/components/ClientProfileForm";
 import { getClientProfileContactDetails } from "@/domains/booking/services/getClientProfileContactDetails";
@@ -22,10 +21,8 @@ export default async function ClientProfilePage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-4 px-4 py-4">
-      <Link href="/client" className={buttonVariants({ variant: "outline" })}>
-        Back
-      </Link>
+    <div className="flex flex-col gap-4">
+      <BackNav href="/client" />
       <h1 className="text-lg font-semibold">Your profile</h1>
       <ClientProfileForm initialDetails={details} />
     </div>
