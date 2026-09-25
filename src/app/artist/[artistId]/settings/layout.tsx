@@ -29,6 +29,9 @@ export default async function ArtistSettingsLayout({
         <Link href={`/artist/${artistId}/settings/deposits`}>
           Deposit amounts
         </Link>
+        <Link href={`/artist/${artistId}/settings/payouts`}>
+          Payouts
+        </Link>
       </nav>
       <Separator />
       {children}
