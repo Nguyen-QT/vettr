@@ -49,6 +49,7 @@ describe("getSessionWithAccount", () => {
       expiresAt: session.expiresAt,
       accountId,
       role: "ARTIST",
+      activeRole: "ARTIST",
       artistId,
       clientProfileId: null,
     });

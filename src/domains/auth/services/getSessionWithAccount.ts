@@ -20,6 +20,7 @@ export async function getSessionWithAccount(
     expiresAt: session.expiresAt,
     accountId: session.account.id,
     role: session.account.role,
+    activeRole: session.activeRole,
     artistId: session.account.artistId,
     clientProfileId: session.account.clientProfileId,
   };

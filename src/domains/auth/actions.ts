@@ -115,8 +115,10 @@ export async function loginClientAction(
 // Bound directly to a logout <form> (artist dashboard layout, 5.1.5;
 // client dashboard, 5.2.4), so it redirects itself rather than
 // returning a result for a client hook to act on -- looks up the
-// session's own role first so an artist lands on /artist/login and a
-// client lands on /client/login, rather than one hardcoded path.
+// session's activeRole first (not the account's home role, since a
+// dual-role account may be logging out of a session in either role) so
+// an artist session lands on /artist/login and a client session lands
+// on /client/login, rather than one hardcoded path.
 export async function logoutAction(): Promise<void> {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -127,7 +129,9 @@ export async function logoutAction(): Promise<void> {
   }
 
   cookieStore.delete(SESSION_COOKIE_NAME);
-  redirect(session?.role === "CLIENT" ? CLIENT_LOGIN_PATH : ARTIST_LOGIN_PATH);
+  redirect(
+    session?.activeRole === "CLIENT" ? CLIENT_LOGIN_PATH : ARTIST_LOGIN_PATH
+  );
 }
 
 // Controller/Action boundary (CLAUDE.md 5.2.4): reads the session
