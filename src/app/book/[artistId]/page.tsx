@@ -1,3 +1,4 @@
+import { BackNav } from "@/components/ui/back-nav";
 import { getCurrentSession } from "@/domains/auth/actions";
 import { BookingProcessExplainer } from "@/domains/booking/components/BookingProcessExplainer";
 import { VisualBookingForm } from "@/domains/booking/components/VisualBookingForm";
@@ -25,6 +26,7 @@ export default async function BookPage({ params }: BookPageProps) {
 
   return (
     <main>
+      <BackNav href="/artists" />
       <h1>Request a booking</h1>
       <BookingProcessExplainer />
       <VisualBookingForm
