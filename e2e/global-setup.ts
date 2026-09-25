@@ -609,8 +609,8 @@ export default async function globalSetup() {
   );
 
   await client.query(
-    `INSERT INTO "Session" (id, "expiresAt", "accountId")
-     VALUES ($1, $2, $3)`,
+    `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
+     VALUES ($1, $2, $3, 'ARTIST')`,
     [authenticatedSessionId, sessionExpiresAt, artistAccountId]
   );
 
