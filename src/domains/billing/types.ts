@@ -105,3 +105,18 @@ export type GetFinalBillTotalResult =
 export type FinalizeCheckoutResult =
   | { success: true }
   | { success: false; error: string };
+
+// Stripe Connect Express onboarding (CLAUDE.md 24.1) -- connected is
+// true once stripeConnectAccountId is set, regardless of whether
+// Stripe has finished enabling charges/payouts for it yet; the two
+// capability flags are what actually gate deposit routing in
+// createDepositPaymentIntent.
+export interface ArtistConnectStatus {
+  connected: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+}
+
+export type CreateConnectOnboardingLinkResult =
+  | { success: true; url: string }
+  | { success: false; error: string };

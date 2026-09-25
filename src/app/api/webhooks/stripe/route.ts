@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { confirmDepositPayment } from "@/domains/billing/services/confirmDepositPayment";
 import { confirmDepositRefund } from "@/domains/billing/services/confirmDepositRefund";
+import { syncArtistConnectAccountStatus } from "@/domains/billing/services/syncArtistConnectAccountStatus";
 import { stripe } from "@/lib/stripe";
 
 // Route Handler (CLAUDE.md 7.1.5, refund handling added 7.3.3-fix):
@@ -57,6 +58,15 @@ export async function POST(request: NextRequest) {
         if (refund.status === "succeeded" && typeof refund.payment_intent === "string") {
           await confirmDepositRefund(refund.payment_intent, refund.id);
         }
+        break;
+      }
+      case "account.updated": {
+        const account = event.data.object;
+        await syncArtistConnectAccountStatus(
+          account.id,
+          account.charges_enabled,
+          account.payouts_enabled
+        );
         break;
       }
       default:

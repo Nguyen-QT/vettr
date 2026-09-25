@@ -1,5 +1,6 @@
 import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
 import { recordDepositPaymentIntent } from "@/domains/booking/services/recordDepositPaymentIntent";
+import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 
 import {
@@ -16,6 +17,20 @@ import type {
   CreateDepositPaymentIntentResult,
 } from "../types";
 import { getArtistDepositSettings } from "./getArtistDepositSettings";
+
+// Stripe Connect deposit routing (CLAUDE.md 24.1.2): the connected
+// account id only if it's actually charges-enabled -- Stripe rejects
+// on_behalf_of/transfer_data against an account that isn't, so an
+// onboarded-but-not-yet-approved artist must fall back to null (today's
+// platform-only routing) rather than erroring the whole deposit.
+async function getChargeableConnectAccountId(artistId: string): Promise<string | null> {
+  const artist = await prisma.artist.findUnique({
+    where: { id: artistId },
+    select: { stripeConnectAccountId: true, stripeConnectChargesEnabled: true },
+  });
+
+  return artist?.stripeConnectChargesEnabled ? artist.stripeConnectAccountId : null;
+}
 
 // Domain Service (CLAUDE.md 7.1.3, migrated in 7.2.4): creates the
 // Stripe PaymentIntent a client pays to secure an already-APPROVED
@@ -70,6 +85,16 @@ export async function createDepositPaymentIntent(
     return { success: false, error: DEPOSIT_NOT_CONFIGURED_ERROR_MESSAGE };
   }
 
+  // Stripe Connect deposit routing (CLAUDE.md 24.1.2): once the
+  // artist's connected account has charges enabled, the deposit routes
+  // straight to their own balance via transfer_data/on_behalf_of
+  // instead of only ever landing in the platform's account. Falls back
+  // to today's platform-only behavior for an artist who hasn't
+  // onboarded (or onboarded but isn't charges-enabled yet) -- deposit
+  // collection was never gated on Connect existing, so this must never
+  // block a payment, only change where the money ends up.
+  const artistConnectAccountId = await getChargeableConnectAccountId(request.artistId);
+
   const paymentIntent = await stripe.paymentIntents.create(
     {
       amount: Math.round(depositAmount * 100),
@@ -85,6 +110,12 @@ export async function createDepositPaymentIntent(
       // unmocked Stripe test-mode call in 14.1.2's integration test; the
       // mocked unit suite can't see this since it stubs the API entirely.
       automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      ...(artistConnectAccountId
+        ? {
+            on_behalf_of: artistConnectAccountId,
+            transfer_data: { destination: artistConnectAccountId },
+          }
+        : {}),
     },
     {
       // Idempotency Keys on Deposit/Refund Calls (CLAUDE.md 15.1): a

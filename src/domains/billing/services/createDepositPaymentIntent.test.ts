@@ -251,6 +251,74 @@ describe("createDepositPaymentIntent", () => {
     );
   });
 
+  it("routes the deposit to the artist's connected account once charges are enabled", async () => {
+    await prisma.artistDepositSetting.create({
+      data: { artistId, tier: "TIER_2", depositAmount: 20 },
+    });
+    await prisma.artist.update({
+      where: { id: artistId },
+      data: {
+        stripeConnectAccountId: "acct_connected",
+        stripeConnectChargesEnabled: true,
+      },
+    });
+    const request = await createRequest("APPROVED");
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_connect_1",
+      client_secret: "secret_connect_1",
+    });
+
+    await createDepositPaymentIntent({
+      bookingRequestId: request.id,
+      clientProfileId: clientId,
+    });
+
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      {
+        amount: 2000,
+        currency: "gbp",
+        metadata: { bookingRequestId: request.id },
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+        on_behalf_of: "acct_connected",
+        transfer_data: { destination: "acct_connected" },
+      },
+      { idempotencyKey: `deposit-intent:${request.id}` }
+    );
+  });
+
+  it("stays platform-only for a connected account that isn't charges-enabled yet", async () => {
+    await prisma.artistDepositSetting.create({
+      data: { artistId, tier: "TIER_2", depositAmount: 20 },
+    });
+    await prisma.artist.update({
+      where: { id: artistId },
+      data: {
+        stripeConnectAccountId: "acct_pending",
+        stripeConnectChargesEnabled: false,
+      },
+    });
+    const request = await createRequest("APPROVED");
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_connect_2",
+      client_secret: "secret_connect_2",
+    });
+
+    await createDepositPaymentIntent({
+      bookingRequestId: request.id,
+      clientProfileId: clientId,
+    });
+
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      {
+        amount: 2000,
+        currency: "gbp",
+        metadata: { bookingRequestId: request.id },
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      },
+      { idempotencyKey: `deposit-intent:${request.id}` }
+    );
+  });
+
   it("does not apply precharge for an unflagged client even with a high estimate", async () => {
     await prisma.artistDepositSetting.create({
       data: { artistId, tier: "TIER_2", depositAmount: 20 },
