@@ -4,6 +4,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { loginAsArtist } from "./authHelpers";
+import { refreshDashboardTodayAppointment } from "./dbHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -50,6 +51,12 @@ test.describe("artist dashboard", () => {
     page,
   }) => {
     const fixture = await readFixture();
+    // Re-anchor the fixture's booked window to the actual current
+    // moment right before rendering -- see dbHelpers.ts for why the
+    // value global-setup.ts computed at the start of the whole e2e run
+    // can no longer be trusted to still be "today" by the time this
+    // specific spec executes.
+    await refreshDashboardTodayAppointment(fixture.dashboardTodayClientHandle);
     await loginAsArtist(page, fixture);
 
     await page.goto(`/artist/${fixture.artistId}`);
