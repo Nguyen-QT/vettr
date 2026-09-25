@@ -82,3 +82,10 @@ export const CHECKOUT_REQUEST_NOT_APPROVED_ERROR_MESSAGE =
   "Checkout is only available for an approved booking.";
 export const CHECKOUT_ADDON_NOT_FOUND_ERROR_MESSAGE =
   "This addon could not be found.";
+
+// Surfaced by createConnectOnboardingLink (CLAUDE.md 24.1.2) when the
+// Connect account link request itself fails -- distinct from a Stripe
+// API error thrown outright (caught and reported separately), this is
+// the "call succeeded but returned nothing usable" case.
+export const CONNECT_ONBOARDING_LINK_INIT_ERROR_MESSAGE =
+  "Something went wrong starting Stripe onboarding. Please try again.";
