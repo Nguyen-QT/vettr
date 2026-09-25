@@ -401,7 +401,7 @@ src/
   - [x] 24.1.1: Data Gateway (`Artist` gains `stripeConnectAccountId` (nullable String), `stripeConnectChargesEnabled`/`stripeConnectPayoutsEnabled` (booleans, default false), migration only).
   - [x] 24.1.2: Domain Service (`billing` gains `createArtistConnectAccount(artistId)`, `createConnectOnboardingLink(artistId)`, `getArtistConnectStatus(artistId)`; `createDepositPaymentIntent` updated to route to the artist's connected account via `transfer_data.destination`/`on_behalf_of` once charges are enabled, falling back to today's platform-only behavior otherwise; the Stripe webhook route gains an `account.updated` case syncing the two capability flags, same idempotent reconciliation-backstop pattern as `confirmDepositPayment`/`confirmDepositRefund`; unit tests mocking the Connect SDK calls).
   - [x] 24.1.3: Controller/Action (`createConnectOnboardingLinkAction`, `getArtistConnectStatusAction`, ownership-checked via session `artistId`; webhook route gains a thin dispatch addition only).
-  - [ ] 24.1.4: Domain Hook & Logic (`useArtistConnectOnboarding` orchestrating start/resume-onboarding state and a status refresh).
+  - [x] 24.1.4: Domain Hook & Logic (`useArtistConnectOnboarding` orchestrating start/resume-onboarding state and a status refresh).
   - [ ] 24.1.5: View & Route (a "Payouts" section under `/artist/[artistId]/settings/` showing connect status and a button redirecting to Stripe's hosted onboarding link -- a deliberate exception to the in-app Elements pattern used for client deposits, since Connect onboarding is inherently Stripe-hosted; e2e coverage limited to UI-state rendering, same limitation already flagged for Stripe test-mode flows in 7.1.9/14.1).
 
 ### 📦 Phase 25: Universal Back Navigation
