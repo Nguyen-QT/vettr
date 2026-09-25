@@ -26,6 +26,7 @@ export interface SessionWithAccount {
   expiresAt: Date;
   accountId: string;
   role: "ARTIST" | "CLIENT";
+  activeRole: "ARTIST" | "CLIENT";
   artistId: string | null;
   clientProfileId: string | null;
 }

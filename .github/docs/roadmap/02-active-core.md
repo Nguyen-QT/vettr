@@ -13,10 +13,10 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Prerequisite Architecture pass:** Enforce the design constraint that an artist's linked client identity must use a standard `ClientProfile` row so precharge models apply naturally.
   - **Architecture decision (confirmed):** `Account.role` stays the account's permanent home role; a new `Session.activeRole` column holds the per-session effective role (dual-role accounts may hold concurrent sessions in different roles; `activeRole` must stay server-trusted for `src/proxy.ts` gating, so it lives in the DB, not a client-readable cookie). Becoming dual-role is an explicit "Become a client" settings action (never automatic, never auto-switches into the new role afterward). Shared Instagram-handle/18+ validation primitives move to `src/lib/clientProfileValidation.ts`; the `ClientProfile` find-or-link matching logic stays auth-owned (not shared with booking's guest-checkout `resolveGuestClientProfile`, whose overwrite-on-repeat-visit semantics are wrong for a one-time authenticated link).
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **26.1.1.1** Data Gateway — add `Session.activeRole AccountRole` column + migration (backfill from `Account.role`). No app code.
-    - [ ] **26.1.2.1** Domain Service — extract shared `ClientProfile` validation primitives (Instagram regex, 18+ age gate) to `src/lib/clientProfileValidation.ts`; re-point `booking/constants.ts` + `booking.schema.ts` at it (behavior-preserving).
-    - [ ] **26.1.2.2** Domain Service — `createSession` accepts optional `activeRole` (defaults to account's `role`).
-    - [ ] **26.1.2.3** Domain Service — surface `activeRole` on `SessionWithAccount`/`getSessionWithAccount`; `logoutAction` redirect keyed off `activeRole` instead of `role`.
+    - [x] **26.1.1.1** Data Gateway — add `Session.activeRole AccountRole` column + migration (backfill from `Account.role`). No app code.
+    - [x] **26.1.2.1** Domain Service — extract shared `ClientProfile` validation primitives (Instagram regex, 18+ age gate) to `src/lib/clientProfileValidation.ts`; re-point `booking/constants.ts` + `booking.schema.ts` at it (behavior-preserving).
+    - [x] **26.1.2.2** Domain Service — `createSession` accepts `activeRole` (required; caller passes the account's role — landed as required, not optional/defaulted, in PR #202).
+    - [x] **26.1.2.3** Domain Service — surface `activeRole` on `SessionWithAccount`/`getSessionWithAccount`; `logoutAction` redirect keyed off `activeRole` instead of `role`.
     - [ ] **26.1.2.4** Domain Service — `linkOrCreateClientProfileForAccount` service (mocked-Prisma unit test).
     - [ ] **26.1.2.5** Domain Service — `switchActiveRole` service (mocked-Prisma unit test).
     - [ ] **26.1.3.1** Controller/Action — `becomeClientAction` (+ Zod schema in `auth.schema.ts`).
