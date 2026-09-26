@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { dateOfBirthSchema, instagramHandleSchema } from "@/lib/clientProfileValidation";
 import { MIN_PASSWORD_LENGTH } from "./constants";
 
 // Structural validity only -- see services/loginArtist.ts for the
@@ -22,4 +23,17 @@ export const signupInputSchema = z.object({
       MIN_PASSWORD_LENGTH,
       `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
     ),
+});
+
+// Structural validity only -- see services/linkOrCreateClientProfileForAccount.ts for the
+// actual lookup and linking/creation. This is a new flow that only
+// applies to existing logged-in artists, so no email or password is
+// needed here -- the account is already known from the session.
+// instagramHandle and dateOfBirth are reused from the shared validation module, not redefined.
+export const becomeClientInputSchema = z.object({
+  instagramHandle: instagramHandleSchema,
+  phone: z.string().trim().min(1).optional(),
+  firstName: z.string().trim().min(1).optional(),
+  lastName: z.string().trim().min(1).optional(),
+  dateOfBirth: dateOfBirthSchema.optional(),
 });
