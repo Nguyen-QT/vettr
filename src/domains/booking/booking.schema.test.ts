@@ -107,7 +107,7 @@ describe("clientBookingInputSchema", () => {
   });
 
   it("rejects a missing email", () => {
-    const { email: _email, ...payloadWithoutEmail } = validPayload;
+    const { email: _, ...payloadWithoutEmail } = validPayload;
     const result = clientBookingInputSchema.safeParse(payloadWithoutEmail);
     expect(result.success).toBe(false);
   });
@@ -259,7 +259,7 @@ describe("clientBookingInputSchema", () => {
   });
 
   it("rejects a missing firstName", () => {
-    const { firstName: _firstName, ...payloadWithoutFirstName } = validPayload;
+    const { firstName: _, ...payloadWithoutFirstName } = validPayload;
     const result = clientBookingInputSchema.safeParse(payloadWithoutFirstName);
     expect(result.success).toBe(false);
   });
