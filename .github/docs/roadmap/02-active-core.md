@@ -17,8 +17,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **26.1.2.1** Domain Service — extract shared `ClientProfile` validation primitives (Instagram regex, 18+ age gate) to `src/lib/clientProfileValidation.ts`; re-point `booking/constants.ts` + `booking.schema.ts` at it (behavior-preserving).
     - [x] **26.1.2.2** Domain Service — `createSession` accepts `activeRole` (required; caller passes the account's role — landed as required, not optional/defaulted, in PR #202).
     - [x] **26.1.2.3** Domain Service — surface `activeRole` on `SessionWithAccount`/`getSessionWithAccount`; `logoutAction` redirect keyed off `activeRole` instead of `role`.
-    - [ ] **26.1.2.4** Domain Service — `linkOrCreateClientProfileForAccount` service (mocked-Prisma unit test).
-    - [ ] **26.1.2.5** Domain Service — `switchActiveRole` service (mocked-Prisma unit test).
+    - [x] **26.1.2.4** Domain Service — `linkOrCreateClientProfileForAccount` service (mocked-Prisma unit test).
+    - [x] **26.1.2.5** Domain Service — `switchActiveRole` service (mocked-Prisma unit test).
     - [ ] **26.1.3.1** Controller/Action — `becomeClientAction` (+ Zod schema in `auth.schema.ts`).
     - [ ] **26.1.3.2** Controller/Action — `switchActiveRoleAction` (+ Zod schema), redirects to `/artist/{artistId}` or `/client`.
     - [ ] **26.1.3.3** Controller/Action — `src/proxy.ts` route guards read `session.activeRole` instead of `session.role`.
