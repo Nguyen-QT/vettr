@@ -1,10 +1,5 @@
 import type { ClientBudgetRange, ComplexityTier } from "./types";
 
-// Real Instagram handle rules: 1-30 chars, letters/digits/periods/
-// underscores, and must start and end on an alphanumeric character.
-export const INSTAGRAM_HANDLE_REGEX =
-  /^[a-zA-Z0-9](?:[a-zA-Z0-9._]{0,28}[a-zA-Z0-9])?$/;
-
 export const MIN_DESIGN_REFERENCE_IMAGES = 1;
 export const MAX_DESIGN_REFERENCE_IMAGES = 5;
 
@@ -82,12 +77,6 @@ export const STRIKE_THRESHOLD = 1;
 
 export const APPOINTMENT_NOT_YET_DUE_ERROR_MESSAGE =
   "This appointment hasn't happened yet.";
-
-// Client Onboarding Required Fields (CLAUDE.md 6.2): minimum age to
-// submit an booking request, matching typical legal minimums for
-// tattoo/piercing services -- confirm the actual age-of-consent rules
-// for wherever Vettr operates before launch.
-export const MIN_CLIENT_AGE_YEARS = 18;
 
 // Client Max End Time (CLAUDE.md 6.3): the minimum gap, in minutes,
 // required between the requested start time and the client's "must be
