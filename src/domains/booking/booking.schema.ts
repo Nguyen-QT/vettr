@@ -6,14 +6,16 @@ import {
   MIN_SLOT_DURATION_MINUTES,
 } from "@/domains/scheduling/constants";
 import type { SlotTime } from "@/domains/scheduling/types";
+import {
+  dateOfBirthSchema,
+  instagramHandleSchema,
+} from "@/lib/clientProfileValidation";
 
 import {
   AESTHETIC_TAG_OPTIONS,
   COMPLEXITY_TIERS,
   DESIGN_TAG_OPTIONS,
-  INSTAGRAM_HANDLE_REGEX,
   MAX_DESIGN_REFERENCE_IMAGES,
-  MIN_CLIENT_AGE_YEARS,
   MIN_DESIGN_REFERENCE_IMAGES,
   MIN_MAX_END_TIME_GAP_MINUTES,
   OTHER_TAG_VALUE,
@@ -49,18 +51,6 @@ export const reviewBookingRequestInputSchema = z.object({
     ),
   estimatedPrice: z.number().positive("Enter an estimated price."),
 });
-
-export const instagramHandleSchema = z
-  .string()
-  .trim()
-  .transform((value) => (value.startsWith("@") ? value.slice(1) : value))
-  .pipe(
-    z
-      .string()
-      .min(1, "Instagram handle is required.")
-      .max(30, "Instagram handle must be 30 characters or fewer.")
-      .regex(INSTAGRAM_HANDLE_REGEX, "Enter a valid Instagram handle.")
-  );
 
 // Visual Enforcement (CLAUDE.md): every request must carry at least one
 // high-resolution design reference image.
@@ -118,18 +108,6 @@ export const clientLastNameSchema = z
   .trim()
   .min(1, "Last name is required.")
   .max(100);
-
-export const dateOfBirthSchema = z
-  .iso.date("Enter a valid date of birth.")
-  .refine(
-    (value) => {
-      const dob = new Date(`${value}T00:00:00`);
-      const cutoff = new Date();
-      cutoff.setFullYear(cutoff.getFullYear() - MIN_CLIENT_AGE_YEARS);
-      return dob.getTime() <= cutoff.getTime();
-    },
-    `You must be at least ${MIN_CLIENT_AGE_YEARS} years old to book.`
-  );
 
 export const clientBudgetRangeSchema = z
   .object({
