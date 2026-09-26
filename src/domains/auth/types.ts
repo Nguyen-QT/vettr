@@ -42,4 +42,18 @@ export type SwitchActiveRoleResult =
       artistId: string | null;
       clientProfileId: string | null;
     }
+// "Become a client" input (CLAUDE.md 26.1.2.4) -- instagramHandle is
+// required (CLAUDE.md's visual-screening mandate applies to any
+// ClientProfile), the rest is optional onboarding detail the account
+// may already have supplied via a prior guest booking.
+export interface LinkOrCreateClientProfileInput {
+  instagramHandle: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: Date;
+}
+
+export type LinkOrCreateClientProfileResult =
+  | { success: true; clientProfileId: string }
   | { success: false; error: string };

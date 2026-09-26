@@ -1,7 +1,6 @@
----
 globs: ["**/docs/roadmap/04-future-epics.md"]
 ---
-# 🗺️ Future Epics & Long-Term Strategic Backlog (Phases 34–43)
+# 🗺️ Future Epics & Long-Term Strategic Backlog (Phases 34–44)
 
 This tracking file contains large-lift feature sets, complex multi-domain subsystems, and speculative architecture designs. All items listed here require a rigorous, individual *Mandatory Task Breakdown Rule* pass to map out concrete technical layers before execution begins.
 
@@ -53,3 +52,7 @@ This tracking file contains large-lift feature sets, complex multi-domain subsys
 - **Status:** Unscoped.
 - **Objectives:** Implement platform SaaS fee collection routing rules charged natively to the artist profile. 
 - **Hard Prerequisite:** Requires a complete, standalone migration refactoring the Stripe Connect gateway from Accounts v1 to Accounts v2 to leverage unified Account customer mapping variables before subscription billing code may be initiated.
+
+### 📦 Phase 44: Domain Testing Architecture & Test Layer Migration
+- **Status:** Unscoped.
+- **Objectives:** Migrate all existing domain tests to use a lightweight, mocked Prisma layer for fast unit testing, while establishing a dedicated real-database integration and E2E testing framework to validate complex multi-domain database constraints and transaction boundary guarantees.
