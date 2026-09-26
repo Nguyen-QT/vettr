@@ -37,3 +37,9 @@ export const becomeClientInputSchema = z.object({
   lastName: z.string().trim().min(1).optional(),
   dateOfBirth: dateOfBirthSchema.optional(),
 });
+
+// Structural validity only -- see services/switchActiveRole.ts for the
+// actual check that the account is linked to the target role.
+export const switchActiveRoleInputSchema = z.object({
+  targetRole: z.enum(["ARTIST", "CLIENT"]),
+});
