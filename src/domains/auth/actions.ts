@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { loginInputSchema, signupInputSchema } from "./auth.schema";
+import { becomeClientInputSchema, loginInputSchema, signupInputSchema } from "./auth.schema";
 import {
   ARTIST_LOGIN_PATH,
   CLIENT_LOGIN_PATH,
@@ -11,6 +11,7 @@ import {
 } from "./constants";
 import { deleteSession } from "./services/deleteSession";
 import { getSessionWithAccount } from "./services/getSessionWithAccount";
+import { linkOrCreateClientProfileForAccount } from "./services/linkOrCreateClientProfileForAccount";
 import { loginArtist } from "./services/loginArtist";
 import { loginClient } from "./services/loginClient";
 import { signupClient } from "./services/signupClient";
@@ -83,6 +84,38 @@ export async function signupClientAction(
   }
 
   await setSessionCookie(result.sessionId, result.expiresAt);
+  return { success: true, clientProfileId: result.clientProfileId };
+}
+
+// Controller/Action boundary (CLAUDE.md 26.1.3.1): validates structurally, derives accountId 
+// from the server-side session (never from client input, per .claude/rules/validation.md), 
+// delegates to linkOrCreateClientProfileForAccount, and — unlike login/signup — does not touch
+// the session cookie (switching activeRole is 26.1.3.2's job).
+export async function becomeClientAction(input: unknown): Promise<ClientAuthActionResult> {
+  const session = await getCurrentSession();
+  if (!session) {
+    return { success: false, error: "You must be logged in to do this." };
+  }
+
+  const parsed = becomeClientInputSchema.safeParse(input);
+  
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid become client request.",
+    };
+  }
+  
+  const serviceInput = {
+    ...parsed.data,
+    dateOfBirth: parsed.data.dateOfBirth ? new Date(parsed.data.dateOfBirth) : undefined,
+  };
+  
+  const result = await linkOrCreateClientProfileForAccount(session.accountId, serviceInput);
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
   return { success: true, clientProfileId: result.clientProfileId };
 }
 
