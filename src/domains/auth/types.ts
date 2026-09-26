@@ -43,6 +43,7 @@ export type SwitchActiveRoleResult =
       clientProfileId: string | null;
     }
   | { success: false; error: string };
+  
 // "Become a client" input (CLAUDE.md 26.1.2.4) -- instagramHandle is
 // required (CLAUDE.md's visual-screening mandate applies to any
 // ClientProfile), the rest is optional onboarding detail the account

@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { becomeClientInputSchema, loginInputSchema, signupInputSchema } from "./auth.schema";
+import { becomeClientInputSchema, loginInputSchema, signupInputSchema, switchActiveRoleInputSchema } from "./auth.schema";
 import {
   ARTIST_LOGIN_PATH,
   CLIENT_LOGIN_PATH,
@@ -15,6 +15,7 @@ import { linkOrCreateClientProfileForAccount } from "./services/linkOrCreateClie
 import { loginArtist } from "./services/loginArtist";
 import { loginClient } from "./services/loginClient";
 import { signupClient } from "./services/signupClient";
+import { switchActiveRole } from "./services/switchActiveRole";
 import type { SessionWithAccount } from "./types";
 
 // Never includes the raw sessionId -- that only ever lives in the
@@ -26,6 +27,8 @@ export type LoginActionResult =
 export type ClientAuthActionResult =
   | { success: true; clientProfileId: string }
   | { success: false; error: string };
+
+export type SwitchActiveRoleActionResult = { success: false; error: string };
 
 async function setSessionCookie(sessionId: string, expiresAt: Date) {
   const cookieStore = await cookies();
@@ -117,6 +120,31 @@ export async function becomeClientAction(input: unknown): Promise<ClientAuthActi
   }
 
   return { success: true, clientProfileId: result.clientProfileId };
+}
+
+// Controller/Action boundary (CLAUDE.md 26.1.3.2): validates structurally, derives sessionId from
+// the server-side session (never from client input, per .claude/rules/validation.md), delegates to
+// switchActiveRole, and redirects to the appropriate dashboard on success.
+export async function switchActiveRoleAction(input: unknown): Promise<SwitchActiveRoleActionResult> {
+  const session = await getCurrentSession();
+  if (!session) {
+    return { success: false, error: "You must be logged in to do this." };
+  }
+
+  const parsed = switchActiveRoleInputSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid switch role request.",
+    };
+  }
+
+  const result = await switchActiveRole(session.sessionId, parsed.data.targetRole);
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }  
+  
+  redirect(result.activeRole === "CLIENT" ? "/client" : `/artist/${result.artistId}`);
 }
 
 // Controller/Action boundary (CLAUDE.md 5.2.2): mirrors loginAction,
