@@ -32,6 +32,17 @@ export const NO_BOOKING_FOUND_ERROR_MESSAGE =
 export const ACCOUNT_ALREADY_EXISTS_ERROR_MESSAGE =
   "An account already exists for this email. Try logging in instead.";
 
+// linkOrCreateClientProfileForAccount (CLAUDE.md 26.1.2.4) is a one-time
+// link -- an account that's already dual-role has nothing left to link.
+export const ACCOUNT_ALREADY_HAS_CLIENT_PROFILE_ERROR_MESSAGE =
+  "This account is already linked to a client profile.";
+
+// Surfaced when the ClientProfile matched by instagramHandle or email is
+// already claimed by a different Account -- never silently steal
+// someone else's linked profile.
+export const CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE =
+  "That client profile is already linked to another account.";
+
 // httpOnly session cookie name (CLAUDE.md 5.1.3) -- its value is a
 // Session row's id, the same opaque cuid loginArtist returns.
 export const SESSION_COOKIE_NAME = "vettr_session";
