@@ -30,3 +30,16 @@ export interface SessionWithAccount {
   artistId: string | null;
   clientProfileId: string | null;
 }
+
+// switchActiveRole (CLAUDE.md 26.1.2.5) -- a session may only switch into
+// a role its account is actually linked to, so the caller (the future
+// switchActiveRoleAction, 26.1.3.2) needs both ids back to know which
+// route to redirect into.
+export type SwitchActiveRoleResult =
+  | {
+      success: true;
+      activeRole: "ARTIST" | "CLIENT";
+      artistId: string | null;
+      clientProfileId: string | null;
+    }
+  | { success: false; error: string };
