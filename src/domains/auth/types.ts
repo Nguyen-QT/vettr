@@ -59,3 +59,23 @@ export interface LinkOrCreateClientProfileInput {
 export type LinkOrCreateClientProfileResult =
   | { success: true; clientProfileId: string }
   | { success: false; error: string };
+
+
+export interface BecomeClientFormValues {
+  instagramHandle: string;
+  phone: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string; // "" when unset
+}
+
+export type BecomeClientFormField = keyof BecomeClientFormValues;
+
+export interface BecomeClientFormProps {
+  values: BecomeClientFormValues;
+  onFieldChange: (field: BecomeClientFormField, value: string) => void;
+  errors?: Partial<Record<BecomeClientFormField, { message?: string } | undefined>>;
+  serverError?: string;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  isPending?: boolean;
+}
