@@ -22,8 +22,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **26.1.3.1** Controller/Action — `becomeClientAction` (+ Zod schema in `auth.schema.ts`).
     - [x] **26.1.3.2** Controller/Action — `switchActiveRoleAction` (+ Zod schema), redirects to `/artist/{artistId}` or `/client`.
     - [x] **26.1.3.3** Controller/Action — `src/proxy.ts` route guards read `session.activeRole` instead of `session.role`.
-    - [ ] **26.1.4.1** UI Primitive — `BecomeClientForm` component.
-    - [ ] **26.1.4.2** UI Primitive — `RoleSwitcher` component (toggle link, shown only when both roles are linked).
+    - [x] **26.1.4.1** UI Primitive — `BecomeClientForm` component.
+    - [x] **26.1.4.2** UI Primitive — `RoleSwitcher` component (toggle link, shown only when both roles are linked).
     - [ ] **26.1.5.1** Domain Hook — `useBecomeClient` hook.
     - [ ] **26.1.5.2** Domain Hook — `useSwitchActiveRole` hook.
     - [ ] **26.1.6.1** View & Route — `/artist/[artistId]/settings/become-client` page + settings nav link.

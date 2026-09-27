@@ -79,3 +79,10 @@ export interface BecomeClientFormProps {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   isPending?: boolean;
 }
+
+export interface RoleSwitcherProps {
+  activeRole: "ARTIST" | "CLIENT";
+  isVisible: boolean;
+  onSwitch: (targetRole: "ARTIST" | "CLIENT") => void;
+  isPending?: boolean;
+}
