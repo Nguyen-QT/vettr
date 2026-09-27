@@ -30,7 +30,7 @@ const NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE =
 
 async function requireClientProfileId(): Promise<string | null> {
   const session = await getCurrentSession();
-  if (!session || session.role !== "CLIENT" || !session.clientProfileId) {
+  if (!session || session.activeRole !== "CLIENT" || !session.clientProfileId) {
     return null;
   }
   return session.clientProfileId;
@@ -38,7 +38,7 @@ async function requireClientProfileId(): Promise<string | null> {
 
 async function requireArtistId(): Promise<string | null> {
   const session = await getCurrentSession();
-  if (!session || session.role !== "ARTIST" || !session.artistId) {
+  if (!session || session.activeRole !== "ARTIST" || !session.artistId) {
     return null;
   }
   return session.artistId;
