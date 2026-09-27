@@ -52,7 +52,7 @@ export default async function proxy(request: NextRequest) {
   const artistId = pathname.match(/^\/artist\/([^/]+)/)?.[1];
   if (artistId) {
     const session = await getSessionFromRequest(request);
-    if (!session || session.role !== "ARTIST" || session.artistId !== artistId) {
+    if (!session || session.activeRole !== "ARTIST" || session.artistId !== artistId) {
       return redirectToLogin(request, ARTIST_LOGIN_PATH);
     }
     return NextResponse.next();
@@ -60,7 +60,7 @@ export default async function proxy(request: NextRequest) {
 
   if (pathname.startsWith("/client")) {
     const session = await getSessionFromRequest(request);
-    if (!session || session.role !== "CLIENT") {
+    if (!session || session.activeRole !== "CLIENT") {
       return redirectToLogin(request, CLIENT_LOGIN_PATH);
     }
     return NextResponse.next();
