@@ -30,7 +30,7 @@ export const signupInputSchema = z.object({
 // applies to existing logged-in artists, so no email or password is
 // needed here -- the account is already known from the session.
 // instagramHandle and dateOfBirth are reused from the shared validation module, not redefined.
-export const becomeClientInputSchema = z.object({
+export const setUpClientProfileInputSchema = z.object({
   instagramHandle: instagramHandleSchema,
   phone: z.string().trim().min(1).optional(),
   firstName: z.string().trim().min(1).optional(),

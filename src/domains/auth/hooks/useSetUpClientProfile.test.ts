@@ -2,45 +2,45 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useBecomeClient } from "./useBecomeClient";
+import { useSetUpClientProfile } from "./useSetUpClientProfile";
 
-const becomeClientActionMock = vi.fn();
+const setUpClientProfileActionMock = vi.fn();
 
 vi.mock("@/domains/auth/actions", () => ({
-  becomeClientAction: (...args: unknown[]) => becomeClientActionMock(...args),
+  setUpClientProfileAction: (...args: unknown[]) => setUpClientProfileActionMock(...args),
 }));
 
-function submit(result: { current: ReturnType<typeof useBecomeClient> }) {
+function submit(result: { current: ReturnType<typeof useSetUpClientProfile> }) {
   const event = { preventDefault: vi.fn() } as unknown as React.FormEvent<HTMLFormElement>;
   return act(async () => {
     await result.current.onSubmit(event);
   });
 }
 
-describe("useBecomeClient", () => {
+describe("useSetUpClientProfile", () => {
   beforeEach(() => {
-    becomeClientActionMock.mockReset();
+    setUpClientProfileActionMock.mockReset();
   });
 
   it("rejects an empty instagramHandle without calling the action", async () => {
-    const { result } = renderHook(() => useBecomeClient());
+    const { result } = renderHook(() => useSetUpClientProfile());
 
     await submit(result);
 
     expect(result.current.errors.instagramHandle?.message).toBe("Instagram handle is required.");
-    expect(becomeClientActionMock).not.toHaveBeenCalled();
+    expect(setUpClientProfileActionMock).not.toHaveBeenCalled();
   });
 
   it("sends blank optional fields as undefined, not empty strings", async () => {
-    becomeClientActionMock.mockResolvedValue({ success: true, clientProfileId: "client_1" });
-    const { result } = renderHook(() => useBecomeClient());
+    setUpClientProfileActionMock.mockResolvedValue({ success: true, clientProfileId: "client_1" });
+    const { result } = renderHook(() => useSetUpClientProfile());
 
     act(() => {
       result.current.onFieldChange("instagramHandle", "vettr_hq");
     });
     await submit(result);
 
-    expect(becomeClientActionMock).toHaveBeenCalledWith({
+    expect(setUpClientProfileActionMock).toHaveBeenCalledWith({
       instagramHandle: "vettr_hq",
       phone: undefined,
       firstName: undefined,
@@ -50,8 +50,8 @@ describe("useBecomeClient", () => {
   });
 
   it("sets isSuccess and clientProfileId, and clears isPending, on a successful result", async () => {
-    becomeClientActionMock.mockResolvedValue({ success: true, clientProfileId: "client_1" });
-    const { result } = renderHook(() => useBecomeClient());
+    setUpClientProfileActionMock.mockResolvedValue({ success: true, clientProfileId: "client_1" });
+    const { result } = renderHook(() => useSetUpClientProfile());
 
     act(() => {
       result.current.onFieldChange("instagramHandle", "vettr_hq");
@@ -64,8 +64,8 @@ describe("useBecomeClient", () => {
   });
 
   it("sets serverError and clears isPending, leaving isSuccess false, on a failed result", async () => {
-    becomeClientActionMock.mockResolvedValue({ success: false, error: "Handle already linked." });
-    const { result } = renderHook(() => useBecomeClient());
+    setUpClientProfileActionMock.mockResolvedValue({ success: false, error: "Handle already linked." });
+    const { result } = renderHook(() => useSetUpClientProfile());
 
     act(() => {
       result.current.onFieldChange("instagramHandle", "vettr_hq");
@@ -78,8 +78,8 @@ describe("useBecomeClient", () => {
   });
 
   it("clears a stale serverError once the user edits a field again", async () => {
-    becomeClientActionMock.mockResolvedValue({ success: false, error: "Handle already linked." });
-    const { result } = renderHook(() => useBecomeClient());
+    setUpClientProfileActionMock.mockResolvedValue({ success: false, error: "Handle already linked." });
+    const { result } = renderHook(() => useSetUpClientProfile());
 
     act(() => {
       result.current.onFieldChange("instagramHandle", "vettr_hq");
@@ -95,8 +95,8 @@ describe("useBecomeClient", () => {
   });
 
   it("clears a stale isSuccess once the user edits a field again after success", async () => {
-    becomeClientActionMock.mockResolvedValue({ success: true, clientProfileId: "client_1" });
-    const { result } = renderHook(() => useBecomeClient());
+    setUpClientProfileActionMock.mockResolvedValue({ success: true, clientProfileId: "client_1" });
+    const { result } = renderHook(() => useSetUpClientProfile());
 
     act(() => {
       result.current.onFieldChange("instagramHandle", "vettr_hq");
@@ -113,12 +113,12 @@ describe("useBecomeClient", () => {
 
   it("ignores a resubmit while a submission is already pending", async () => {
     let resolveAction: (value: { success: true; clientProfileId: string }) => void = () => {};
-    becomeClientActionMock.mockReturnValue(
+    setUpClientProfileActionMock.mockReturnValue(
       new Promise((resolve) => {
         resolveAction = resolve;
       })
     );
-    const { result } = renderHook(() => useBecomeClient());
+    const { result } = renderHook(() => useSetUpClientProfile());
 
     act(() => {
       result.current.onFieldChange("instagramHandle", "vettr_hq");
@@ -142,6 +142,6 @@ describe("useBecomeClient", () => {
       await firstSubmit;
     });
 
-    expect(becomeClientActionMock).toHaveBeenCalledTimes(1);
+    expect(setUpClientProfileActionMock).toHaveBeenCalledTimes(1);
   });
 });

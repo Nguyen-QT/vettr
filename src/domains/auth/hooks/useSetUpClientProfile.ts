@@ -3,11 +3,11 @@
 import { useState } from "react";
 import type { ZodError } from "zod";
 
-import { becomeClientAction } from "@/domains/auth/actions";
-import { becomeClientInputSchema } from "@/domains/auth/auth.schema";
-import type { BecomeClientFormField, BecomeClientFormValues } from "@/domains/auth/types";
+import { setUpClientProfileAction } from "@/domains/auth/actions";
+import { setUpClientProfileInputSchema } from "@/domains/auth/auth.schema";
+import type { SetUpClientProfileFormField, SetUpClientProfileFormValues } from "@/domains/auth/types";
 
-const EMPTY_VALUES: BecomeClientFormValues = {
+const EMPTY_VALUES: SetUpClientProfileFormValues = {
 	instagramHandle: "",
 	phone: "",
 	firstName: "",
@@ -15,7 +15,7 @@ const EMPTY_VALUES: BecomeClientFormValues = {
 	dateOfBirth: "",
 };
 
-function toSchemaInput(value: BecomeClientFormValues) {
+function toSchemaInput(value: SetUpClientProfileFormValues) {
 	return {
 		instagramHandle: value.instagramHandle,
 		phone: value.phone.trim() === "" ? undefined : value.phone,
@@ -29,20 +29,20 @@ function toSchemaInput(value: BecomeClientFormValues) {
 // By converting this array into a record keyed by field name (result["firstName"]), the form component
 // can look up field errors in $O(1)$ constant time - only the highest priority error for each field is
 // returned, preventing flickering of multiple error messages for the same field:
-function mapZodErrors(error: ZodError): Partial<Record<BecomeClientFormField, { message: string }>> {
-	const result: Partial<Record<BecomeClientFormField, { message: string }>> = {};
+function mapZodErrors(error: ZodError): Partial<Record<SetUpClientProfileFormField, { message: string }>> {
+	const result: Partial<Record<SetUpClientProfileFormField, { message: string }>> = {};
 	for (const issue of error.issues) {
 		const field = issue.path[0];
 		if (typeof field === "string" && !(field in result)) {
-			result[field as BecomeClientFormField] = { message: issue.message };
+			result[field as SetUpClientProfileFormField] = { message: issue.message };
 		}
 	}
 	return result;
 }
 
-export function useBecomeClient() {
-	const [values, setValues] = useState<BecomeClientFormValues>(EMPTY_VALUES);
-	const [errors, setErrors] = useState<Partial<Record<BecomeClientFormField, { message?: string }>>>({});
+export function useSetUpClientProfile() {
+	const [values, setValues] = useState<SetUpClientProfileFormValues>(EMPTY_VALUES);
+	const [errors, setErrors] = useState<Partial<Record<SetUpClientProfileFormField, { message?: string }>>>({});
 	const [serverError, setServerError] = useState<string | undefined>(undefined);
 	const [isPending, setIsPending] = useState(false);
 	const [isSuccess, setIsSuccess] = useState(false);
@@ -51,7 +51,7 @@ export function useBecomeClient() {
 	// This is cheap, avoids re-render churn from a fresh Zod pass on every keystroke, and gives immediate
 	// error-dismissal feedback once the user starts fixing a field — a common, low-risk UX affordance that
 	// doesn't contradict "validate on submit."
-	function onFieldChange(field: BecomeClientFormField, value: string) {
+	function onFieldChange(field: SetUpClientProfileFormField, value: string) {
 		setValues((prev) => ({ ...prev, [field]: value }));
 		setErrors((prev) => {
 			if (!prev[field]) return prev;
@@ -71,7 +71,7 @@ export function useBecomeClient() {
 		setIsSuccess(false);
 
 		const candidate = toSchemaInput(values);
-		const parsed = becomeClientInputSchema.safeParse(candidate);
+		const parsed = setUpClientProfileInputSchema.safeParse(candidate);
 
 		if (!parsed.success) {
 			setErrors(mapZodErrors(parsed.error));
@@ -81,7 +81,7 @@ export function useBecomeClient() {
 		setErrors({});
 		setIsPending(true);
 
-		const result = await becomeClientAction(parsed.data);
+		const result = await setUpClientProfileAction(parsed.data);
 
 		setIsPending(false);
 

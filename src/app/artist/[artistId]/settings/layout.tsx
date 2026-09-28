@@ -23,16 +23,19 @@ export default async function ArtistSettingsLayout({
       <BackNav href={`/artist/${artistId}`} label="Dashboard" />
       <nav className="flex flex-wrap gap-3 text-sm text-muted-foreground">
         <Link href={`/artist/${artistId}/settings/hours`}>
-          Business hours
+          Business Hours
         </Link>
         <Link href={`/artist/${artistId}/settings/blackout-dates`}>
-          Blackout dates
+          Blackout Dates
         </Link>
         <Link href={`/artist/${artistId}/settings/deposits`}>
-          Deposit amounts
+          Deposit Amounts
         </Link>
         <Link href={`/artist/${artistId}/settings/payouts`}>
           Payouts
+        </Link>
+        <Link href={`/artist/${artistId}/settings/set-up-client-profile`}>
+          Set Up Client Profile
         </Link>
       </nav>
       <Separator />
