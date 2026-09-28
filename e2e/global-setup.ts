@@ -95,6 +95,66 @@ export interface E2eFixture {
   dashboardTodayClientHandle: string;
 }
 
+// Every literal email this file seeds -- for both the one fixture Artist
+// and every fixture ClientProfile -- follows "e2e-*@example.com" (e.g.
+// "e2e-fixture-artist@example.com", "e2e-client-approve@example.com").
+const E2E_FIXTURE_EMAIL_PATTERN = "e2e-%@example.com";
+
+// Self-healing guard against a previous run's global-teardown never having
+// run (Ctrl-C, a hung test getting killed, a webServer startup timeout, a
+// crash mid-run) -- teardown only deletes rows it can find via
+// e2e/.fixture.json, which it also deletes on success, so an aborted prior
+// run leaves fixture rows behind with no record of their ids. Without this,
+// every subsequent globalSetup() would fail forever on the same unique-key
+// collisions below until someone manually cleans up.
+//
+// Matches by the shared email pattern rather than walking relationships
+// from one known artist: a prior run can crash after creating some
+// ClientProfile rows but before/after the BookingRequest rows that would
+// otherwise link them back to that artist (e.g. this task's own
+// set-up-client-profile.spec.ts links a ClientProfile to the fixture
+// artist's Account directly, with no BookingRequest involved at all), so
+// only a scan for every row matching the fixture's own naming convention
+// reliably finds all of it. Deletes in the same FK order global-teardown.ts
+// already uses.
+async function cleanupStaleE2eFixtures(client: Client) {
+  await client.query(
+    `DELETE FROM "BookingRequest"
+     WHERE "clientId" IN (SELECT id FROM "ClientProfile" WHERE email LIKE $1)
+        OR "artistId" IN (SELECT id FROM "Artist" WHERE email LIKE $1)`,
+    [E2E_FIXTURE_EMAIL_PATTERN]
+  );
+  await client.query(
+    `DELETE FROM "Account"
+     WHERE email LIKE $1
+        OR "clientProfileId" IN (SELECT id FROM "ClientProfile" WHERE email LIKE $1)
+        OR "artistId" IN (SELECT id FROM "Artist" WHERE email LIKE $1)`,
+    [E2E_FIXTURE_EMAIL_PATTERN]
+  );
+  await client.query(
+    `DELETE FROM "ArtistWeeklyHours" WHERE "artistId" IN (SELECT id FROM "Artist" WHERE email LIKE $1)`,
+    [E2E_FIXTURE_EMAIL_PATTERN]
+  );
+  await client.query(
+    `DELETE FROM "ArtistScheduleOverride" WHERE "artistId" IN (SELECT id FROM "Artist" WHERE email LIKE $1)`,
+    [E2E_FIXTURE_EMAIL_PATTERN]
+  );
+  await client.query(
+    `DELETE FROM "TierReferenceImage" WHERE "artistId" IN (SELECT id FROM "Artist" WHERE email LIKE $1)`,
+    [E2E_FIXTURE_EMAIL_PATTERN]
+  );
+  await client.query(
+    `DELETE FROM "ArtistDepositSetting" WHERE "artistId" IN (SELECT id FROM "Artist" WHERE email LIKE $1)`,
+    [E2E_FIXTURE_EMAIL_PATTERN]
+  );
+  await client.query(`DELETE FROM "ClientProfile" WHERE email LIKE $1`, [
+    E2E_FIXTURE_EMAIL_PATTERN,
+  ]);
+  await client.query(`DELETE FROM "Artist" WHERE email LIKE $1`, [
+    E2E_FIXTURE_EMAIL_PATTERN,
+  ]);
+}
+
 // Seeds one throwaway Artist with three BookingRequests -- two PENDING
 // (one per approve/decline spec) and one already AWAITING_SLOT_CONFIRMATION
 // (for the confirm-booking spec) -- so no spec ever touches another's row.
@@ -106,6 +166,8 @@ export default async function globalSetup() {
 
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
+
+  await cleanupStaleE2eFixtures(client);
 
   const artistId = randomUUID();
   const approveClientId = randomUUID();
