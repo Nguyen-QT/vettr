@@ -61,7 +61,7 @@ export type LinkOrCreateClientProfileResult =
   | { success: false; error: string };
 
 
-export interface BecomeClientFormValues {
+export interface SetUpClientProfileFormValues {
   instagramHandle: string;
   phone: string;
   firstName: string;
@@ -69,12 +69,12 @@ export interface BecomeClientFormValues {
   dateOfBirth: string; // "" when unset
 }
 
-export type BecomeClientFormField = keyof BecomeClientFormValues;
+export type SetUpClientProfileFormField = keyof SetUpClientProfileFormValues;
 
-export interface BecomeClientFormProps {
-  values: BecomeClientFormValues;
-  onFieldChange: (field: BecomeClientFormField, value: string) => void;
-  errors?: Partial<Record<BecomeClientFormField, { message?: string } | undefined>>;
+export interface SetUpClientProfileFormProps {
+  values: SetUpClientProfileFormValues;
+  onFieldChange: (field: SetUpClientProfileFormField, value: string) => void;
+  errors?: Partial<Record<SetUpClientProfileFormField, { message?: string } | undefined>>;
   serverError?: string;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   isPending?: boolean;

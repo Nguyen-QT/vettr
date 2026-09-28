@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { becomeClientInputSchema, loginInputSchema, signupInputSchema, switchActiveRoleInputSchema } from "./auth.schema";
+import { setUpClientProfileInputSchema, loginInputSchema, signupInputSchema, switchActiveRoleInputSchema } from "./auth.schema";
 import {
   ARTIST_LOGIN_PATH,
   CLIENT_LOGIN_PATH,
@@ -94,18 +94,18 @@ export async function signupClientAction(
 // from the server-side session (never from client input, per .claude/rules/validation.md), 
 // delegates to linkOrCreateClientProfileForAccount, and — unlike login/signup — does not touch
 // the session cookie (switching activeRole is 26.1.3.2's job).
-export async function becomeClientAction(input: unknown): Promise<ClientAuthActionResult> {
+export async function setUpClientProfileAction(input: unknown): Promise<ClientAuthActionResult> {
   const session = await getCurrentSession();
   if (!session) {
     return { success: false, error: "You must be logged in to do this." };
   }
 
-  const parsed = becomeClientInputSchema.safeParse(input);
+  const parsed = setUpClientProfileInputSchema.safeParse(input);
   
   if (!parsed.success) {
     return {
       success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid become client request.",
+      error: parsed.error.issues[0]?.message ?? "Invalid set up client profile request.",
     };
   }
   

@@ -1,6 +1,6 @@
 "use client";
 
-import { BecomeClientFormProps } from "../types";
+import { SetUpClientProfileFormProps } from "../types";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -8,14 +8,14 @@ import { Input } from "@/components/ui/input";
 // Pure view (CLAUDE.md 26.1.4.1): renders whatever values/errors/pending
 // state it's given via props and makes no decisions of its own. State
 // ownership and the server action call are wired in by a later hook/page.
-export function BecomeClientForm({
+export function SetUpClientProfileForm({
   values,
   onFieldChange,
   errors,
   serverError,
   onSubmit,
   isPending = false,
-}: BecomeClientFormProps) {
+}: SetUpClientProfileFormProps) {
   return (
     <form onSubmit={onSubmit}>
       <FieldGroup>
