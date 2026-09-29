@@ -73,6 +73,11 @@ model Account {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  // Account-scoped login lockout (27.1). A locked account still gets the
+  // generic invalid-credentials error, never a distinct "locked" message.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
   artist   Artist? @relation(fields: [artistId], references: [id])
   artistId String? @unique
 
