@@ -21,6 +21,12 @@ export type ClientAuthResult =
   | { success: true; sessionId: string; expiresAt: Date; clientProfileId: string }
   | { success: false; error: string };
 
+// sendVerificationEmail (CLAUDE.md 27.3.2.3) -- no user-facing `error`
+// field: the caller (signupClient/resendVerificationCode) always
+// proceeds to the same pending-verification/generic result either way,
+// so a failed send is only ever surfaced as "use the resend button".
+export type SendVerificationEmailResult = { success: true } | { success: false };
+
 export interface SessionWithAccount {
   sessionId: string;
   expiresAt: Date;
