@@ -78,6 +78,14 @@ model Account {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
 
+  // Email verification before session issuance (27.3). Code is stored as a
+  // sha256 hash only; attempts counter invalidates the code at the cap.
+  emailVerifiedAt                DateTime?
+  emailVerificationCodeHash      String?
+  emailVerificationCodeExpiresAt DateTime?
+  emailVerificationCodeSentAt    DateTime?
+  emailVerificationAttempts      Int       @default(0)
+
   artist   Artist? @relation(fields: [artistId], references: [id])
   artistId String? @unique
 
