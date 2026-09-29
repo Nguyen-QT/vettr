@@ -57,8 +57,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
       - [x] **27.3.1.1** Data Gateway — add `Account.emailVerifiedAt DateTime?`, `Account.emailVerificationCodeHash String?`, `Account.emailVerificationCodeExpiresAt DateTime?`, `Account.emailVerificationCodeSentAt DateTime?`, `Account.emailVerificationAttempts Int @default(0)` + migration. No app code, no backfill.
       - [x] **27.3.2.1** Domain Service — add `resend` npm dependency; `src/lib/resend.ts` singleton wrapper; add `RESEND_API_KEY`/`EMAIL_FROM` dummy env values to the `test` job in `.github/workflows/ci.yml`.
-      - [ ] **27.3.2.2** Domain Service — `services/generateEmailVerificationCode.ts` (pure helper: `crypto.randomInt` 6-digit code, sha256 hash, expiry timestamp; unit test).
-      - [ ] **27.3.2.3** Domain Service — `services/sendVerificationEmail.ts` (try/catch-wrapped `resend.emails.send`, per architecture.md §6; test-mode capture-sink branch for e2e; unit test with mocked `@/lib/resend`).
+      - [x] **27.3.2.2** Domain Service — `services/generateEmailVerificationCode.ts` (pure helper: `crypto.randomInt` 6-digit code, sha256 hash, expiry timestamp; unit test).
+      - [x] **27.3.2.3** Domain Service — `services/sendVerificationEmail.ts` (try/catch-wrapped `resend.emails.send`, per architecture.md §6; test-mode capture-sink branch for e2e; unit test with mocked `@/lib/resend`).
       - [ ] **27.3.2.4** Domain Service — modify `signupClient.ts`: generate+persist code, call `sendVerificationEmail`, remove `createSession`, return the new pending-verification result shape; extend `signupClient.test.ts`.
       - [ ] **27.3.2.5** Domain Service — `services/verifyEmailCode.ts` (hash/expiry/attempt-count validation, `timingSafeEqual`, code invalidation after max attempts, `createSession` on success; unit tests: correct/wrong/expired/max-attempts/already-verified/unknown-email).
       - [ ] **27.3.2.6** Domain Service — `services/resendVerificationCode.ts` (cooldown-gated regenerate+resend, generic result regardless of account state; unit test).
