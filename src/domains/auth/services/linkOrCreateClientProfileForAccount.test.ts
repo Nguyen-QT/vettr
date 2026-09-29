@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+
+import { Prisma } from "@/generated/prisma/client";
 
 import {
   ACCOUNT_ALREADY_HAS_CLIENT_PROFILE_ERROR_MESSAGE,
   CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE,
+  SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
 } from "../constants";
 
 // First mocked-Prisma unit test in this domain (CLAUDE.md 26.1.2.4) --
@@ -46,8 +49,15 @@ function mockAccount(clientProfileId: string | null) {
 }
 
 describe("linkOrCreateClientProfileForAccount", () => {
+  let consoleErrorSpy: MockInstance<typeof console.error>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   it("returns failure without any writes when the account already has a linked ClientProfile", async () => {
@@ -195,5 +205,70 @@ describe("linkOrCreateClientProfileForAccount", () => {
       error: CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE,
     });
     expect(mockTx.account.update).not.toHaveBeenCalled();
+  });
+
+  it("returns the generic error instead of throwing on an unexpected failure", async () => {
+    mockTx.account.findUniqueOrThrow.mockRejectedValue(new Error("connection lost"));
+
+    const result = await linkOrCreateClientProfileForAccount(ACCOUNT_ID, {
+      instagramHandle: "any_handle",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
+    });
+    expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy.mock.calls[0]?.[0]).toContain("Unexpected failure");
+  });
+
+  // Concurrent submits can both pass the "no match" lookup and collide
+  // on create -- P2002 must get the same generic result, split in the
+  // log only.
+  it("returns the same generic error on a P2002 unique conflict, distinguishing it only in the log", async () => {
+    mockAccount(null);
+    mockTx.clientProfile.findUnique.mockResolvedValue(null);
+    mockTx.clientProfile.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      })
+    );
+
+    const result = await linkOrCreateClientProfileForAccount(ACCOUNT_ID, {
+      instagramHandle: "raced_handle",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
+    });
+    expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("unique conflict"),
+      "P2002"
+    );
+  });
+
+  it("never logs the account email or submitted instagram handle", async () => {
+    mockAccount(null);
+    mockTx.clientProfile.findUnique.mockResolvedValue(null);
+    mockTx.clientProfile.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      })
+    );
+
+    await linkOrCreateClientProfileForAccount(ACCOUNT_ID, {
+      instagramHandle: "private_handle",
+    });
+
+    const logged = consoleErrorSpy.mock.calls.flat().map(String).join(" ");
+    expect(logged).toContain(ACCOUNT_ID);
+    expect(logged).not.toContain(ACCOUNT_EMAIL);
+    expect(logged).not.toContain("private_handle");
   });
 });
