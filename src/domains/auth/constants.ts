@@ -43,6 +43,13 @@ export const ACCOUNT_ALREADY_HAS_CLIENT_PROFILE_ERROR_MESSAGE =
 export const CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE =
   "That client profile is already linked to another account.";
 
+// Deliberately generic and retry-oriented -- covers both a P2002 unique
+// collision (ambiguous: self double-submit vs. a genuine two-user race)
+// and any unexpected DB failure. A retry self-corrects via the service's
+// existing lookup logic either way.
+export const SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong setting up your client profile. Please try again.";
+
 // httpOnly session cookie name (CLAUDE.md 5.1.3) -- its value is a
 // Session row's id, the same opaque cuid loginArtist returns.
 export const SESSION_COOKIE_NAME = "vettr_session";
