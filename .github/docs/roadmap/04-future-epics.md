@@ -1,25 +1,11 @@
 ---
 globs: ["**/docs/roadmap/04-future-epics.md"]
 ---
-# 🗺️ Future Epics & Long-Term Strategic Backlog (Phases 27, 28, 32–36, 41–48)
+# 🗺️ Future Epics & Long-Term Strategic Backlog (Phases 32–36, 41–48, 51)
 
-This tracking file contains large-lift feature sets, complex multi-domain subsystems, security/infra hardening, and speculative architecture designs. All items listed here require a rigorous, individual *Mandatory Task Breakdown Rule* pass to map out concrete technical layers before execution begins. Phase numbers reflect global priority rank across the entire unstarted backlog (see `03-polish-and-config.md` for the lower-lift/cosmetic phases interleaved between these).
+This tracking file contains large-lift feature sets, complex multi-domain subsystems, security/infra hardening, and speculative architecture designs. All items listed here require a rigorous, individual *Mandatory Task Breakdown Rule* pass to map out concrete technical layers before execution begins. Phase numbers reflect global priority rank across the entire unstarted backlog (see `03-polish-and-config.md` for the lower-lift/cosmetic phases interleaved between these; Phases 27, 28, and 50 have been promoted into `02-active-core.md`).
 
 ---
-
-### 📦 Phase 27: Auth Session Security & Lifecycle Hardening
-- **Status:** Unscoped.
-- **Objectives:** Gaps surfaced during review of the Phase 26 dual-role/session work, ordered by priority for production risk:
-  - **27.1** Login throttling/lockout — `loginArtist`/`loginClient` do scrypt-verify with no rate limit or attempt counter; no backstop against credential stuffing beyond hash cost. Highest priority: active, unmitigated attack surface.
-  - **27.2** Defensive error isolation on internal DB paths — `linkOrCreateClientProfileForAccount` uses `findUniqueOrThrow` inside a transaction; the calling action (`setUpClientProfileAction`, the actual name in code — the roadmap's `becomeClientAction` label in Phase 26 doesn't match `actions.ts`, worth reconciling when Phase 26 closes) doesn't catch it, so an edge-case failure bubbles as an uncaught 500. Apply the same try/catch isolation discipline architecture.md §6 requires for Stripe calls to this internal DB path.
-  - **27.3** Email verification before session issuance — `signupClient` grants a session immediately on account creation with no proof of email ownership.
-  - **27.4** Session TTL/cleanup — session rows are created on every login/signup and never pruned; `switchActiveRole`/`getSessionWithAccount` only filter expired rows at read time — no sweep/cron job exists. Growth/scale risk, not an active exploit.
-  - **27.5** Audit trail on security-relevant events — role switches, failed logins, and "become a client" links aren't logged anywhere; given CLAUDE.md's cancellation/precharge flagging requirements on `ClientProfile`, an audit trail on identity/role changes belongs at this level. Lowest urgency of the five: compliance/forensics value, not a live gap.
-  - **Callout:** once Phase 26's remaining item (`26.1.6.2`) lands, verify the existing "Become a client" + `RoleSwitcher` dual-role design already covers an artist booking as a client with another artist — this was a note from refinement, not a confirmed gap.
-
-### 📦 Phase 28: Domain Testing Architecture & Test Layer Migration
-- **Status:** Unscoped.
-- **Objectives:** Migrate all existing domain tests to use a lightweight, mocked Prisma layer for fast unit testing, while establishing a dedicated real-database integration and E2E testing framework to validate complex multi-domain database constraints and transaction boundary guarantees. Extended scope, priority-ordered: (1) controller/action-layer (`actions.ts`) test coverage — the thin action layer doing session-check + validation + redirect branching is currently untested despite testing.md's edge-case mandate, and it directly wraps the security-sensitive paths in Phase 27 above; (2) hook-level unit tests using `@testing-library/react`'s `renderHook` for every domain hook (none currently exist, despite every service having a `.test.ts`).
 
 ### 📦 Phase 32: Trusted Client Deposit Exemption Engine
 - **Status:** Scoped.
@@ -76,3 +62,7 @@ This tracking file contains large-lift feature sets, complex multi-domain subsys
 ### 📦 Phase 48: Interactive Moodboard / Canvas Design Tool
 - **Status:** Unscoped.
 - **Objectives:** A highly interactive concept visualization builder featuring canvas serialization, structural concept tagging, and coordinate snap frameworks. This layer represents a multi-phase infrastructure epic that will likely absorb the basic annotation schemas of Phases 46–47.
+
+### 📦 Phase 51: Client-to-Artist Dual-Role Direction
+- **Status:** Unscoped.
+- **Objectives:** Phase 26's dual-role design is one-directional by construction — `becomeClientAction`/`RoleSwitcher` let an existing artist account also operate as a client, but there is no equivalent path for an existing client account to gain artist access. Confirmed during Phase 26 closeout: `src/domains/auth/actions.ts` only exports `loginArtist`, no `signupArtist` — artist accounts are provisioned out-of-band (curated onboarding), not self-serve like `signupClient`. `Account.artistId`/`clientProfileId` are already direction-agnostic nullable unique FKs, so the data model needs no change; this is purely an onboarding-flow decision. Before scoping, resolve whether artist access should stay admin/business-curated (an internal "grant artist access to this client account" tool, no public signup) or become self-serve (a public `signupArtist`-equivalent flow, raising the same vetting/quality-control questions the business presumably wanted by not exposing artist signup in the first place).
