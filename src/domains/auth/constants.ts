@@ -27,6 +27,11 @@ export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 export const LOGIN_LOCKOUT_DURATION_MS = 1000 * 60 * 15; // 15 minutes
 
+// How long an emailed verification code (CLAUDE.md 27.3) stays valid.
+// Short-lived by design -- the code is only 6 digits, so a tight window
+// plus the attempt cap is what makes sha256 (not scrypt) storage safe.
+export const EMAIL_VERIFICATION_CODE_EXPIRY_MS = 1000 * 60 * 15; // 15 minutes
+
 // signupClient (CLAUDE.md 5.2) only links an *existing* ClientProfile
 // found by email -- it never creates one. A client who's never booked
 // has nothing to link an account to yet.
