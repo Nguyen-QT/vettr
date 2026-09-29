@@ -27,4 +27,4 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **26.1.5.1** Domain Hook — `useBecomeClient` hook.
     - [x] **26.1.5.2** Domain Hook — `useSwitchActiveRole` hook.
     - [x] **26.1.6.1** View & Route — `/artist/[artistId]/settings/become-client` page + settings nav link.
-    - [ ] **26.1.6.2** View & Route — wire `RoleSwitcher` into artist dashboard layout and client portal layout.
+    - [x] **26.1.6.2** View & Route — wire `RoleSwitcher` into artist dashboard layout and client portal layout.

@@ -72,6 +72,16 @@ export interface E2eFixture {
   // dashboard shows it.
   clientLoginEmail: string;
   clientLoginPassword: string;
+  // A dedicated Artist/ClientProfile/Account/Session, entirely separate
+  // from artistId/artistAccountId above, whose Account is linked to both
+  // (CLAUDE.md 26.1.6.2's RoleSwitcher spec) -- deliberately its own
+  // Artist rather than reusing the shared fixture artist, since
+  // set-up-client-profile.spec.ts links clientProfileId onto
+  // artistAccountId mid-suite and this fixture must stay dual-role from
+  // the start regardless of spec run order.
+  dualRoleArtistId: string;
+  dualRoleClientProfileId: string;
+  dualRoleSessionId: string;
   // An existing ClientProfile's email with no Account linked yet, for
   // the signup spec to exercise the real signupClient check against --
   // reuses freestylePendingClientId, which nothing else ever links an
@@ -676,6 +686,51 @@ export default async function globalSetup() {
     [authenticatedSessionId, sessionExpiresAt, artistAccountId]
   );
 
+  // A fully separate dual-role Artist/ClientProfile/Account/Session
+  // (CLAUDE.md 26.1.6.2) -- RoleSwitcher only shows when a session's
+  // Account has both artistId and clientProfileId set, which no other
+  // fixture Account has from the start (see dualRoleArtistId's comment
+  // on E2eFixture above for why this can't reuse artistAccountId).
+  const dualRoleArtistId = randomUUID();
+  const dualRoleClientProfileId = randomUUID();
+  const dualRoleAccountId = randomUUID();
+  const dualRoleSessionId = randomUUID();
+
+  await client.query(
+    `INSERT INTO "Artist" (id, name, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, $4, now())`,
+    [
+      dualRoleArtistId,
+      "E2E Dual-Role Fixture Artist",
+      "e2e_fixture_dual_role_artist",
+      "e2e-fixture-dual-role-artist@example.com",
+    ]
+  );
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [dualRoleClientProfileId, "e2e_client_dual_role", "e2e-client-dual-role@example.com"]
+  );
+
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "artistId", "clientProfileId", "updatedAt")
+     VALUES ($1, $2, $3, 'ARTIST', $4, $5, now())`,
+    [
+      dualRoleAccountId,
+      "e2e-dual-role-login@example.com",
+      hashPasswordForFixture("e2e-test-password-123"),
+      dualRoleArtistId,
+      dualRoleClientProfileId,
+    ]
+  );
+
+  await client.query(
+    `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
+     VALUES ($1, $2, $3, 'ARTIST')`,
+    [dualRoleSessionId, sessionExpiresAt, dualRoleAccountId]
+  );
+
   // A dedicated ClientProfile + Account for the client login spec
   // (5.2.4), with its own booking so the dashboard has something to
   // show once logged in.
@@ -918,6 +973,9 @@ export default async function globalSetup() {
     artistLoginEmail,
     artistLoginPassword,
     authenticatedSessionId,
+    dualRoleArtistId,
+    dualRoleClientProfileId,
+    dualRoleSessionId,
     clientLoginEmail,
     clientLoginPassword,
     clientSignupEmail,

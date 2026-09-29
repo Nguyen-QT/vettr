@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { logoutAction } from "@/domains/auth/actions";
+import { getCurrentSession, logoutAction } from "@/domains/auth/actions";
+import { RoleSwitcherContainer } from "@/domains/auth/components/RoleSwitcherContainer";
 import { getPastDueAppointments } from "@/domains/booking/services/getPastDueAppointments";
 import { getPendingBookingRequests } from "@/domains/booking/services/getPendingBookingRequests";
 
@@ -26,10 +27,12 @@ export default async function ArtistDashboardLayout({
   children,
 }: LayoutProps<"/artist/[artistId]">) {
   const { artistId } = await params;
-  const [pendingRequests, pastDueAppointments] = await Promise.all([
+  const [pendingRequests, pastDueAppointments, session] = await Promise.all([
     getPendingBookingRequests(artistId),
     getPastDueAppointments(artistId),
+    getCurrentSession(),
   ]);
+  const isDualRole = !!session?.artistId && !!session?.clientProfileId;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -56,6 +59,10 @@ export default async function ArtistDashboardLayout({
             </Link>
             <Link href={`/artist/${artistId}/calendar`}>Calendar</Link>
             <Link href={`/artist/${artistId}/settings/hours`}>Settings</Link>
+            <RoleSwitcherContainer
+              activeRole={session?.activeRole ?? "ARTIST"}
+              isVisible={isDualRole}
+            />
             <form action={logoutAction}>
               <Button type="submit" variant="link" className="h-auto p-0 text-sm">
                 Log out
