@@ -28,14 +28,16 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vettr_test?schema=public
       # Non-secret placeholders -- nothing in the unit test suite makes
-      # a real Stripe/UploadThing call (Stripe is mocked at the module
-      # boundary per-test), these just need to be non-empty strings so
-      # nothing throws at module-load time.
+      # a real Stripe/UploadThing/Resend call (Stripe and Resend are
+      # mocked at the module boundary per-test), these just need to be
+      # non-empty strings so nothing throws at module-load time.
       STRIPE_SECRET_KEY: sk_test_dummy
       STRIPE_PUBLISHABLE_KEY: pk_test_dummy
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_dummy
       STRIPE_WEBHOOK_SECRET: whsec_dummy
       UPLOADTHING_TOKEN: dummy_uploadthing_token
+      RESEND_API_KEY: re_dummy
+      EMAIL_FROM: "Vettr <noreply@example.com>"
 
     steps:
       - uses: actions/checkout@v4
