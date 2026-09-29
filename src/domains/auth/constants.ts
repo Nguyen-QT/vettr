@@ -20,6 +20,13 @@ export const INVALID_CREDENTIALS_ERROR_MESSAGE = "Incorrect email or password.";
 // itself never rejects on length (see INVALID_CREDENTIALS_ERROR_MESSAGE).
 export const MIN_PASSWORD_LENGTH = 8;
 
+// How many failed login attempts are allowed before a temporary lockout
+// is enforced. The lockout is a rolling window, so a user who fails
+// to log in 5 times in a row will be locked out for 15 minutes, but
+// if they wait 15 minutes and try again, the counter resets.
+export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+export const LOGIN_LOCKOUT_DURATION_MS = 1000 * 60 * 15; // 15 minutes
+
 // signupClient (CLAUDE.md 5.2) only links an *existing* ClientProfile
 // found by email -- it never creates one. A client who's never booked
 // has nothing to link an account to yet.
