@@ -42,7 +42,9 @@ test.describe("client signup, login, and dashboard", () => {
     await expect(page).toHaveURL(/\/client\/login/);
   });
 
-  test("signs up with an email that has a prior booking and reaches the dashboard", async ({
+  // Signup no longer issues a session (27.3.2.4) -- re-enabled and routed
+  // through /client/verify-email in 27.3.6.1.
+  test.fixme("signs up with an email that has a prior booking and reaches the dashboard", async ({
     page,
   }) => {
     const fixture = await readFixture();
