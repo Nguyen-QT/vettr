@@ -86,7 +86,9 @@ export async function signupClientAction(
     return { success: false, error: result.error };
   }
 
-  await setSessionCookie(result.sessionId, result.expiresAt);
+  // Interim shim (27.3.2.4): signupClient no longer issues a session, so
+  // no cookie is set here. 27.3.3.2 carries the pending-verification
+  // outcome through this action's result type properly.
   return { success: true, clientProfileId: result.clientProfileId };
 }
 

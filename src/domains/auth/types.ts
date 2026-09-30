@@ -15,10 +15,17 @@ export type LoginResult =
   | { success: true; sessionId: string; expiresAt: Date; artistId: string }
   | { success: false; error: string };
 
-// signupClient/loginClient share this shape (CLAUDE.md 5.2) -- both
-// end in an authenticated session for a specific ClientProfile.
+// loginClient's result (CLAUDE.md 5.2) -- ends in an authenticated
+// session for a specific ClientProfile.
 export type ClientAuthResult =
   | { success: true; sessionId: string; expiresAt: Date; clientProfileId: string }
+  | { success: false; error: string };
+
+// signupClient (CLAUDE.md 27.3.2.4) -- deliberately no session fields:
+// a fresh signup only ever gets a session via verifyEmailCode, after
+// proving ownership of the email.
+export type SignupClientResult =
+  | { success: true; pendingVerification: true; clientProfileId: string }
   | { success: false; error: string };
 
 // sendVerificationEmail (CLAUDE.md 27.3.2.3) -- no user-facing `error`
