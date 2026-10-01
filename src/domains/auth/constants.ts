@@ -32,6 +32,21 @@ export const LOGIN_LOCKOUT_DURATION_MS = 1000 * 60 * 15; // 15 minutes
 // plus the attempt cap is what makes sha256 (not scrypt) storage safe.
 export const EMAIL_VERIFICATION_CODE_EXPIRY_MS = 1000 * 60 * 15; // 15 minutes
 
+// Wrong guesses allowed against one emailed code before it's invalidated
+// and a resend is required -- a 6-digit keyspace isn't safe against
+// unlimited guessing (CLAUDE.md 27.3).
+export const MAX_EMAIL_VERIFICATION_ATTEMPTS = 5;
+
+// Deliberately generic -- unknown email, wrong code, expired code, a
+// locked-out code and an already-verified account all return this, so
+// verifyEmailCode can't be used to enumerate accounts or their state.
+export const INVALID_VERIFICATION_CODE_ERROR_MESSAGE =
+  "That code is incorrect or has expired. Request a new code and try again.";
+
+// Retry-oriented message for an unexpected DB failure only.
+export const VERIFY_EMAIL_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong verifying your email. Please try again.";
+
 // signupClient (CLAUDE.md 5.2) only links an *existing* ClientProfile
 // found by email -- it never creates one. A client who's never booked
 // has nothing to link an account to yet.
