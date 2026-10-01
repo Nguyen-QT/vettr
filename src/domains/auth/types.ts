@@ -28,6 +28,13 @@ export type SignupClientResult =
   | { success: true; pendingVerification: true; clientProfileId: string }
   | { success: false; error: string };
 
+// verifyEmailCode (CLAUDE.md 27.3.2.5) -- resolves to ClientAuthResult:
+// a correct code ends in an authenticated session.
+export interface VerifyEmailCodeInput {
+  email: string;
+  code: string;
+}
+
 // sendVerificationEmail (CLAUDE.md 27.3.2.3) -- no user-facing `error`
 // field: the caller (signupClient/resendVerificationCode) always
 // proceeds to the same pending-verification/generic result either way,
