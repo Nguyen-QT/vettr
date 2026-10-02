@@ -119,6 +119,8 @@ export interface SetUpClientProfileFormProps {
 export interface VerifyEmailCodeFormProps {
   code: string;
   onCodeChange: (value: string) => void;
+  password: string;
+  onPasswordChange: (value: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   onResend: () => void;
   resendCooldownSeconds: number; // 0 = resend available

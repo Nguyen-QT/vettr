@@ -7,13 +7,15 @@ import { Input } from "@/components/ui/input";
 
 const CODE_LENGTH = 6;
 
-// Pure view (CLAUDE.md 27.3.4.1): renders whatever code/error/cooldown
+// Pure view (CLAUDE.md 27.3.4.1/27.3.4.2): renders whatever code/password/error/cooldown
 // state it's given via props and makes no decisions of its own. State,
 // the resend timer and the server action calls are wired in by the
 // useVerifyEmailCode hook (27.3.5.1).
 export function VerifyEmailCodeForm({
   code,
   onCodeChange,
+  password,
+  onPasswordChange,
   onSubmit,
   onResend,
   resendCooldownSeconds,
@@ -37,6 +39,18 @@ export function VerifyEmailCodeForm({
             maxLength={CODE_LENGTH}
             value={code}
             onChange={(e) => onCodeChange(e.target.value)}
+            aria-invalid={!!error}
+          />
+        </Field>
+
+        <Field data-invalid={!!error}>
+          <FieldLabel htmlFor="verificationPassword">Password</FieldLabel>
+          <Input
+            id="verificationPassword"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => onPasswordChange(e.target.value)}
             aria-invalid={!!error}
           />
           {error ? <FieldError>{error}</FieldError> : null}
