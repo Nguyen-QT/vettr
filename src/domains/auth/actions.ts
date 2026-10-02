@@ -3,7 +3,14 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { setUpClientProfileInputSchema, loginInputSchema, signupInputSchema, switchActiveRoleInputSchema } from "./auth.schema";
+import {
+  loginInputSchema,
+  resendVerificationCodeInputSchema,
+  setUpClientProfileInputSchema,
+  signupInputSchema,
+  switchActiveRoleInputSchema,
+  verifyEmailCodeInputSchema,
+} from "./auth.schema";
 import {
   ARTIST_LOGIN_PATH,
   CLIENT_LOGIN_PATH,
@@ -15,8 +22,10 @@ import { getSessionWithAccount } from "./services/getSessionWithAccount";
 import { linkOrCreateClientProfileForAccount } from "./services/linkOrCreateClientProfileForAccount";
 import { loginArtist } from "./services/loginArtist";
 import { loginClient } from "./services/loginClient";
+import { resendVerificationCode } from "./services/resendVerificationCode";
 import { signupClient } from "./services/signupClient";
 import { switchActiveRole } from "./services/switchActiveRole";
+import { verifyEmailCode } from "./services/verifyEmailCode";
 import type { SessionWithAccount } from "./types";
 
 // Never includes the raw sessionId -- that only ever lives in the
@@ -30,6 +39,10 @@ export type ClientAuthActionResult =
   | { success: false; error: string };
 
 export type SwitchActiveRoleActionResult = { success: false; error: string };
+
+export type ResendVerificationCodeActionResult =
+  | { success: true }
+  | { success: false; error: string };
 
 async function setSessionCookie(sessionId: string, expiresAt: Date) {
   const cookieStore = await cookies();
@@ -177,6 +190,48 @@ export async function loginClientAction(
 
   await setSessionCookie(result.sessionId, result.expiresAt);
   return { success: true, clientProfileId: result.clientProfileId };
+}
+
+// Controller/Action boundary (CLAUDE.md 27.3.3.1): validates structurally,
+// delegates to verifyEmailCode, and sets the session cookie only on
+// success -- the only place a fresh signup receives a session.
+export async function verifyEmailCodeAction(
+  input: unknown
+): Promise<ClientAuthActionResult> {
+  const parsed = verifyEmailCodeInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid verification request.",
+    };
+  }
+
+  const result = await verifyEmailCode(parsed.data);
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  await setSessionCookie(result.sessionId, result.expiresAt);
+  return { success: true, clientProfileId: result.clientProfileId };
+}
+
+// Controller/Action boundary (CLAUDE.md 27.3.3.1): validates the email
+// shape only and returns the service's generic result unchanged, so
+// nothing here can reveal whether an account exists.
+export async function resendVerificationCodeAction(
+  input: unknown
+): Promise<ResendVerificationCodeActionResult> {
+  const parsed = resendVerificationCodeInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid resend request.",
+    };
+  }
+
+  return resendVerificationCode(parsed.data);
 }
 
 // Controller/Action boundary (CLAUDE.md 5.1.3, generalized 5.2.2):
