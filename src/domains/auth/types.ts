@@ -116,6 +116,18 @@ export interface SetUpClientProfileFormProps {
   isPending?: boolean;
 }
 
+export interface VerifyEmailCodeFormProps {
+  code: string;
+  onCodeChange: (value: string) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  onResend: () => void;
+  resendCooldownSeconds: number; // 0 = resend available
+  isPending?: boolean;
+  isResending?: boolean;
+  error?: string;
+  resendMessage?: string;
+}
+
 export interface RoleSwitcherProps {
   activeRole: "ARTIST" | "CLIENT";
   isVisible: boolean;
