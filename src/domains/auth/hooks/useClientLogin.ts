@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { loginClientAction } from "@/domains/auth/actions";
 import { loginInputSchema } from "@/domains/auth/auth.schema";
+import { CLIENT_VERIFY_EMAIL_PATH } from "@/domains/auth/constants";
 
 // Mirrors useArtistLogin.ts, redirecting to the session-derived client
 // dashboard (/client, no clientProfileId param) instead of an
@@ -32,6 +33,13 @@ export function useClientLogin() {
     if (!result.success) {
       setIsSubmitting(false);
       setServerError(result.error);
+      return;
+    }
+
+    // An unverified account has no session -- redirectTo is deliberately
+    // not forwarded to the verify step.
+    if ("pendingVerification" in result) {
+      router.push(`${CLIENT_VERIFY_EMAIL_PATH}?email=${encodeURIComponent(data.email)}`);
       return;
     }
 

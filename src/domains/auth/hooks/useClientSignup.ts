@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 
 import { signupClientAction } from "@/domains/auth/actions";
 import { signupInputSchema } from "@/domains/auth/auth.schema";
+import { CLIENT_VERIFY_EMAIL_PATH } from "@/domains/auth/constants";
 
 // Mirrors useClientLogin.ts. No redirectTo handling here -- signup
 // isn't a route-protection redirect target the way login is, a client
@@ -31,6 +32,12 @@ export function useClientSignup() {
     if (!result.success) {
       setIsSubmitting(false);
       setServerError(result.error);
+      return;
+    }
+
+    // An unverified signup has no session yet -- route to the verify step.
+    if ("pendingVerification" in result) {
+      router.push(`${CLIENT_VERIFY_EMAIL_PATH}?email=${encodeURIComponent(data.email)}`);
       return;
     }
 
