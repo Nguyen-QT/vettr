@@ -38,6 +38,21 @@ export const setUpClientProfileInputSchema = z.object({
   dateOfBirth: dateOfBirthSchema.optional(),
 });
 
+// Structural validity only -- see services/verifyEmailCode.ts for the
+// actual code/password check. The code stays a string so leading zeros
+// survive; the password has no length floor (it's checked against the
+// stored hash, as in login), and identity is the email, never an id.
+export const verifyEmailCodeInputSchema = z.object({
+  email: z.email(),
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
+  password: z.string().min(1, "Password is required."),
+});
+
+// Structural validity only -- see services/resendVerificationCode.ts.
+export const resendVerificationCodeInputSchema = z.object({
+  email: z.email(),
+});
+
 // Structural validity only -- see services/switchActiveRole.ts for the
 // actual check that the account is linked to the target role.
 export const switchActiveRoleInputSchema = z.object({
