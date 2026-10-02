@@ -49,7 +49,7 @@ export const RESEND_VERIFICATION_UNEXPECTED_ERROR_MESSAGE =
 // locked-out code and an already-verified account all return this, so
 // verifyEmailCode can't be used to enumerate accounts or their state.
 export const INVALID_VERIFICATION_CODE_ERROR_MESSAGE =
-  "That code is incorrect or has expired. Request a new code and try again.";
+  "Incorrect or expired verification code. Request a new code and try again.";
 
 // Retry-oriented message for an unexpected DB failure only.
 export const VERIFY_EMAIL_UNEXPECTED_ERROR_MESSAGE =

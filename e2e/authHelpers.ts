@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import type { Page } from "@playwright/test";
 
 import type { E2eFixture } from "./global-setup";
@@ -26,4 +29,25 @@ export async function loginWithSessionId(page: Page, sessionId: string) {
 // directly (CLAUDE.md 5.1.4/5.1.5) -- the single-role artist Account.
 export async function loginAsArtist(page: Page, fixture: E2eFixture) {
   await loginWithSessionId(page, fixture.authenticatedSessionId);
+}
+
+// Where the dev server's sendVerificationEmail writes instead of calling
+// Resend (src/lib/emailCaptureSink.ts) -- wired into the webServer env in
+// playwright.config.ts. Absolute so server and specs agree on cwd.
+export const EMAIL_CAPTURE_SINK_PATH = path.join(__dirname, ".email-sink.jsonl");
+
+// Polls the capture sink for the newest verification code sent to `email`
+// (JSONL, last matching line wins -- see captureEmail).
+export async function readCapturedCode(email: string): Promise<string> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const raw = await readFile(EMAIL_CAPTURE_SINK_PATH, "utf-8").catch(() => "");
+    const records = raw
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as { to: string; code: string });
+    const match = records.filter((record) => record.to === email).pop();
+    if (match) return match.code;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error(`No captured verification email for ${email}`);
 }

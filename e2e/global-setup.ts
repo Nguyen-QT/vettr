@@ -1,9 +1,11 @@
 import { randomBytes, randomUUID, scryptSync } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { config } from "dotenv";
 import { Client } from "pg";
+
+import { EMAIL_CAPTURE_SINK_PATH } from "./authHelpers";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
@@ -87,6 +89,10 @@ export interface E2eFixture {
   // reuses freestylePendingClientId, which nothing else ever links an
   // Account to.
   clientSignupEmail: string;
+  // A second unverified-signup candidate (CLAUDE.md 27.3.6.1) so
+  // verify-email.spec.ts never races client-auth.spec.ts for the
+  // single-use clientSignupEmail.
+  clientVerifyEmail: string;
   // A second login-capable client (CLAUDE.md 6.2) whose onboarding
   // fields are already set, for the "locked fields" spec.
   onboardedClientEmail: string;
@@ -174,6 +180,9 @@ async function cleanupStaleE2eFixtures(client: Client) {
 export default async function globalSetup() {
   config();
 
+  // A stale sink from an aborted run could hand specs an old code.
+  await rm(EMAIL_CAPTURE_SINK_PATH, { force: true });
+
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
 
@@ -197,6 +206,8 @@ export default async function globalSetup() {
   const rescheduleTestClientHandle = "e2e_client_reschedule";
   const clientLoginProfileId = randomUUID();
   const clientLoginRequestId = randomUUID();
+  const clientVerifyProfileId = randomUUID();
+  const clientVerifyRequestId = randomUUID();
   const clientEditableRequestId = randomUUID();
   // A third booking for the same login-capable client (CLAUDE.md 7.1.9)
   // -- APPROVED, unpaid, TIER_4 so it never overlaps the TIER_2/TIER_3
@@ -737,6 +748,20 @@ export default async function globalSetup() {
   const clientLoginEmail = "e2e-client-login@example.com";
   const clientLoginPassword = "e2e-test-password-123";
   const clientSignupEmail = "e2e-client-freestyle@example.com";
+  const clientVerifyEmail = "e2e-client-verify@example.com";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [clientVerifyProfileId, "e2e_client_verify", clientVerifyEmail]
+  );
+  await client.query(
+    `INSERT INTO "BookingRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "updatedAt")
+     VALUES
+       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], now())`,
+    [clientVerifyRequestId, clientVerifyProfileId, artistId]
+  );
 
   await client.query(
     `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
@@ -934,6 +959,7 @@ export default async function globalSetup() {
       bookedSlotClientId,
       rescheduleTestClientId,
       clientLoginProfileId,
+      clientVerifyProfileId,
       ...pastDueClientIds,
       cancelUpcomingClientId,
       onboardedClientId,
@@ -950,6 +976,7 @@ export default async function globalSetup() {
       bookedSlotRequestId,
       rescheduleTestRequestId,
       clientLoginRequestId,
+      clientVerifyRequestId,
       clientEditableRequestId,
       depositRequestId,
       refundedDepositRequestId,
@@ -979,6 +1006,7 @@ export default async function globalSetup() {
     clientLoginEmail,
     clientLoginPassword,
     clientSignupEmail,
+    clientVerifyEmail,
     onboardedClientEmail,
     onboardedClientPassword,
     imageClientEmail,
