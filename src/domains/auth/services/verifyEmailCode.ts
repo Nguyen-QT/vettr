@@ -10,6 +10,7 @@ import {
 import type { ClientAuthResult, VerifyEmailCodeInput } from "../types";
 import { createSession } from "./createSession";
 import { hashEmailVerificationCode } from "./hashEmailVerificationCode";
+import { verifyPassword } from "./verifyPassword";
 
 function hashesMatch(a: string, b: string): boolean {
   const aBuffer = Buffer.from(a);
@@ -29,8 +30,11 @@ const INVALID_RESULT: ClientAuthResult = {
 
 // Domain Service (CLAUDE.md 27.3.2.5): the only path that issues a
 // session for a fresh signup. Every rejection returns the same generic
-// error (unknown email, wrong/expired/locked-out code, already verified)
-// so it can't enumerate accounts or their state.
+// error (unknown email, wrong password, wrong/expired/locked-out code,
+// already verified) so it can't enumerate accounts or their state.
+// Requiring the password proves password knowledge as well as inbox
+// control, so a squatter's password can never end up on a verified
+// account the real owner verifies (27.3.2.8).
 //
 // Concurrency (architecture.md Sec8.A): an attempt is *reserved* with an
 // atomic updateMany (guarded on the exact stored hash, unverified, under
@@ -57,6 +61,13 @@ export async function verifyEmailCode(input: VerifyEmailCodeInput): Promise<Clie
       expiresAt.getTime() <= now.getTime() ||
       account.emailVerificationAttempts >= MAX_EMAIL_VERIFICATION_ATTEMPTS
     ) {
+      return INVALID_RESULT;
+    }
+
+    // Before reserving an attempt, so a caller without the account's
+    // password can't burn the real owner's guesses (27.3.2.8).
+    const passwordMatches = await verifyPassword(input.password, account.passwordHash);
+    if (!passwordMatches) {
       return INVALID_RESULT;
     }
 

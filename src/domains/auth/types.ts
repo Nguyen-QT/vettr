@@ -35,10 +35,12 @@ export type SignupClientResult =
   | { success: false; error: string };
 
 // verifyEmailCode (CLAUDE.md 27.3.2.5) -- resolves to ClientAuthResult:
-// a correct code ends in an authenticated session.
+// a correct code *and* password end in an authenticated session
+// (27.3.2.8 -- the password closes the pre-verification squatting path).
 export interface VerifyEmailCodeInput {
   email: string;
   code: string;
+  password: string;
 }
 
 // sendVerificationEmail (CLAUDE.md 27.3.2.3) -- no user-facing `error`
