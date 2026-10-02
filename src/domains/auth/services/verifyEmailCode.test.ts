@@ -1,5 +1,13 @@
 import { prismaMock } from "@/testUtils/prismaMock";
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 
 import {
   INVALID_VERIFICATION_CODE_ERROR_MESSAGE,
@@ -9,11 +17,15 @@ import {
 import { createSession } from "./createSession";
 import { hashEmailVerificationCode } from "./hashEmailVerificationCode";
 import { verifyEmailCode } from "./verifyEmailCode";
+import { verifyPassword } from "./verifyPassword";
 
 vi.mock("./createSession", () => ({ createSession: vi.fn() }));
+vi.mock("./verifyPassword", () => ({ verifyPassword: vi.fn() }));
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 const EMAIL = "client@example.com";
+const PASSWORD = "correct horse battery staple";
+const PASSWORD_HASH = "stored-password-hash";
 const CODE = "042517";
 const CODE_HASH = hashEmailVerificationCode(CODE);
 const SESSION_EXPIRES_AT = new Date("2026-01-31T00:00:00.000Z");
@@ -24,6 +36,7 @@ function accountRow(overrides: Record<string, unknown> = {}) {
     email: EMAIL,
     role: "CLIENT",
     clientProfileId: "profile_1",
+    passwordHash: PASSWORD_HASH,
     emailVerifiedAt: null,
     emailVerificationCodeHash: CODE_HASH,
     emailVerificationCodeExpiresAt: new Date(NOW.getTime() + 60_000),
@@ -32,7 +45,10 @@ function accountRow(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-const GENERIC_FAILURE = { success: false, error: INVALID_VERIFICATION_CODE_ERROR_MESSAGE };
+const GENERIC_FAILURE = {
+  success: false,
+  error: INVALID_VERIFICATION_CODE_ERROR_MESSAGE,
+};
 
 describe("verifyEmailCode", () => {
   let consoleErrorSpy: MockInstance<typeof console.error>;
@@ -41,6 +57,8 @@ describe("verifyEmailCode", () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(verifyPassword).mockReset();
+    vi.mocked(verifyPassword).mockResolvedValue(true);
     vi.mocked(createSession).mockReset();
     vi.mocked(createSession).mockResolvedValue({
       id: "session_1",
@@ -59,7 +77,11 @@ describe("verifyEmailCode", () => {
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValueOnce({ count: 1 });
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual({
       success: true,
@@ -78,7 +100,11 @@ describe("verifyEmailCode", () => {
       data: { emailVerificationAttempts: { increment: 1 } },
     });
     expect(prismaMock.account.updateMany).toHaveBeenNthCalledWith(2, {
-      where: { id: "account_1", emailVerificationCodeHash: CODE_HASH, emailVerifiedAt: null },
+      where: {
+        id: "account_1",
+        emailVerificationCodeHash: CODE_HASH,
+        emailVerifiedAt: null,
+      },
       data: {
         emailVerifiedAt: NOW,
         emailVerificationCodeHash: null,
@@ -89,11 +115,44 @@ describe("verifyEmailCode", () => {
     expect(createSession).toHaveBeenCalledWith("account_1", "CLIENT");
   });
 
+  it("rejects the correct code with the wrong password, without burning an attempt or issuing a session", async () => {
+    vi.mocked(verifyPassword).mockResolvedValue(false);
+    prismaMock.account.findUnique.mockResolvedValueOnce(accountRow());
+
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: "attacker-chosen-password",
+    });
+
+    expect(result).toEqual(GENERIC_FAILURE);
+    expect(verifyPassword).toHaveBeenCalledWith(
+      "attacker-chosen-password",
+      PASSWORD_HASH,
+    );
+    expect(prismaMock.account.updateMany).not.toHaveBeenCalled();
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it("does not check the password for an ineligible account", async () => {
+    prismaMock.account.findUnique.mockResolvedValueOnce(
+      accountRow({ emailVerifiedAt: new Date("2025-12-01T00:00:00.000Z") }),
+    );
+
+    await verifyEmailCode({ email: EMAIL, code: CODE, password: PASSWORD });
+
+    expect(verifyPassword).not.toHaveBeenCalled();
+  });
+
   it("matches a code with leading zeros", async () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(accountRow());
     prismaMock.account.updateMany.mockResolvedValue({ count: 1 });
 
-    const result = await verifyEmailCode({ email: EMAIL, code: "042517" });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: "042517",
+      password: PASSWORD,
+    });
 
     expect(result.success).toBe(true);
   });
@@ -102,23 +161,35 @@ describe("verifyEmailCode", () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(accountRow());
     prismaMock.account.updateMany.mockResolvedValue({ count: 1 });
 
-    const result = await verifyEmailCode({ email: EMAIL, code: "999999" });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: "999999",
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(createSession).not.toHaveBeenCalled();
     expect(prismaMock.account.updateMany).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ data: { emailVerificationAttempts: { increment: 1 } } })
+      expect.objectContaining({
+        data: { emailVerificationAttempts: { increment: 1 } },
+      }),
     );
   });
 
   it("invalidates the code once a wrong guess reaches the attempt cap", async () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(
-      accountRow({ emailVerificationAttempts: MAX_EMAIL_VERIFICATION_ATTEMPTS - 1 })
+      accountRow({
+        emailVerificationAttempts: MAX_EMAIL_VERIFICATION_ATTEMPTS - 1,
+      }),
     );
     prismaMock.account.updateMany.mockResolvedValue({ count: 1 });
 
-    const result = await verifyEmailCode({ email: EMAIL, code: "999999" });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: "999999",
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(prismaMock.account.updateMany).toHaveBeenNthCalledWith(2, {
@@ -127,16 +198,25 @@ describe("verifyEmailCode", () => {
         emailVerificationCodeHash: CODE_HASH,
         emailVerificationAttempts: { gte: MAX_EMAIL_VERIFICATION_ATTEMPTS },
       },
-      data: { emailVerificationCodeHash: null, emailVerificationCodeExpiresAt: null },
+      data: {
+        emailVerificationCodeHash: null,
+        emailVerificationCodeExpiresAt: null,
+      },
     });
   });
 
   it("rejects even the correct code once attempts are exhausted, without writing", async () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(
-      accountRow({ emailVerificationAttempts: MAX_EMAIL_VERIFICATION_ATTEMPTS })
+      accountRow({
+        emailVerificationAttempts: MAX_EMAIL_VERIFICATION_ATTEMPTS,
+      }),
     );
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(prismaMock.account.updateMany).not.toHaveBeenCalled();
@@ -145,10 +225,16 @@ describe("verifyEmailCode", () => {
 
   it("rejects an expired code without writing", async () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(
-      accountRow({ emailVerificationCodeExpiresAt: new Date(NOW.getTime() - 1) })
+      accountRow({
+        emailVerificationCodeExpiresAt: new Date(NOW.getTime() - 1),
+      }),
     );
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(prismaMock.account.updateMany).not.toHaveBeenCalled();
@@ -156,20 +242,28 @@ describe("verifyEmailCode", () => {
 
   it("rejects a code that expires exactly now", async () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(
-      accountRow({ emailVerificationCodeExpiresAt: NOW })
+      accountRow({ emailVerificationCodeExpiresAt: NOW }),
     );
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
   });
 
   it("rejects an already-verified account", async () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(
-      accountRow({ emailVerifiedAt: new Date("2025-12-01T00:00:00.000Z") })
+      accountRow({ emailVerifiedAt: new Date("2025-12-01T00:00:00.000Z") }),
     );
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(prismaMock.account.updateMany).not.toHaveBeenCalled();
@@ -178,7 +272,11 @@ describe("verifyEmailCode", () => {
   it("rejects an unknown email with the same generic error", async () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(null);
 
-    const result = await verifyEmailCode({ email: "nobody@example.com", code: CODE });
+    const result = await verifyEmailCode({
+      email: "nobody@example.com",
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(prismaMock.account.updateMany).not.toHaveBeenCalled();
@@ -186,18 +284,31 @@ describe("verifyEmailCode", () => {
 
   it("rejects an account with no outstanding code (invalidated or never issued)", async () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(
-      accountRow({ emailVerificationCodeHash: null, emailVerificationCodeExpiresAt: null })
+      accountRow({
+        emailVerificationCodeHash: null,
+        emailVerificationCodeExpiresAt: null,
+      }),
     );
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
   });
 
   it("rejects a non-CLIENT account", async () => {
-    prismaMock.account.findUnique.mockResolvedValueOnce(accountRow({ role: "ARTIST" }));
+    prismaMock.account.findUnique.mockResolvedValueOnce(
+      accountRow({ role: "ARTIST" }),
+    );
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(prismaMock.account.updateMany).not.toHaveBeenCalled();
@@ -207,7 +318,11 @@ describe("verifyEmailCode", () => {
     prismaMock.account.findUnique.mockResolvedValueOnce(accountRow());
     prismaMock.account.updateMany.mockResolvedValueOnce({ count: 0 });
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(prismaMock.account.updateMany).toHaveBeenCalledTimes(1);
@@ -220,7 +335,11 @@ describe("verifyEmailCode", () => {
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValueOnce({ count: 0 });
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
     expect(result).toEqual(GENERIC_FAILURE);
     expect(createSession).not.toHaveBeenCalled();
@@ -228,12 +347,19 @@ describe("verifyEmailCode", () => {
 
   it("returns the unexpected-error message and logs no PII on a database failure", async () => {
     prismaMock.account.findUnique.mockRejectedValueOnce(
-      new Error(`connection lost for ${EMAIL} code ${CODE}`)
+      new Error(`connection lost for ${EMAIL} code ${CODE}`),
     );
 
-    const result = await verifyEmailCode({ email: EMAIL, code: CODE });
+    const result = await verifyEmailCode({
+      email: EMAIL,
+      code: CODE,
+      password: PASSWORD,
+    });
 
-    expect(result).toEqual({ success: false, error: VERIFY_EMAIL_UNEXPECTED_ERROR_MESSAGE });
+    expect(result).toEqual({
+      success: false,
+      error: VERIFY_EMAIL_UNEXPECTED_ERROR_MESSAGE,
+    });
     expect(consoleErrorSpy).toHaveBeenCalled();
     for (const call of consoleErrorSpy.mock.calls) {
       const logged = JSON.stringify(call);

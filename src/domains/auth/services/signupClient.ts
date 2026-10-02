@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 import {
   ACCOUNT_ALREADY_EXISTS_ERROR_MESSAGE,
+  EMAIL_VERIFICATION_RESEND_COOLDOWN_MS,
   NO_BOOKING_FOUND_ERROR_MESSAGE,
 } from "../constants";
 import type { LoginInput, SignupClientResult } from "../types";
@@ -33,13 +34,52 @@ export async function signupClient(input: LoginInput): Promise<SignupClientResul
     return { success: false, error: NO_BOOKING_FOUND_ERROR_MESSAGE };
   }
 
-  if (clientProfile.account) {
+  const existingAccount = clientProfile.account;
+  if (existingAccount && existingAccount.emailVerifiedAt !== null) {
     return { success: false, error: ACCOUNT_ALREADY_EXISTS_ERROR_MESSAGE };
   }
 
   const passwordHash = await hashPassword(input.password);
   const now = new Date();
   const { code, codeHash, expiresAt } = generateEmailVerificationCode(now);
+
+  if (existingAccount) {
+    // Pre-verification squatting defense (27.3.2.8): an *unverified*
+    // account is reclaimable, so the real owner can always replace a
+    // squatter's password. The atomic WHERE guards a concurrent verify
+    // (emailVerifiedAt) and shares resendVerificationCode's cooldown so
+    // signup can't be used to email-bomb the address. A concurrent
+    // verifyEmailCode consume is guarded on the old code hash, which this
+    // overwrites, so it can never yield a session for the replaced
+    // password. count === 0 (cooldown, or verified meanwhile) returns the
+    // same pending result with no send -- indistinguishable from here.
+    const cooldownCutoff = new Date(now.getTime() - EMAIL_VERIFICATION_RESEND_COOLDOWN_MS);
+    const { count } = await prisma.account.updateMany({
+      where: {
+        id: existingAccount.id,
+        emailVerifiedAt: null,
+        OR: [
+          { emailVerificationCodeSentAt: null },
+          { emailVerificationCodeSentAt: { lte: cooldownCutoff } },
+        ],
+      },
+      data: {
+        passwordHash,
+        emailVerificationCodeHash: codeHash,
+        emailVerificationCodeExpiresAt: expiresAt,
+        emailVerificationCodeSentAt: now,
+        emailVerificationAttempts: 0,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
+
+    if (count > 0) {
+      await sendVerificationEmail(input.email, code);
+    }
+
+    return { success: true, pendingVerification: true, clientProfileId: clientProfile.id };
+  }
 
   await prisma.account.create({
     data: {
