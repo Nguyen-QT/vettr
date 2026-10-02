@@ -41,6 +41,13 @@ export interface VerifyEmailCodeInput {
 // so a failed send is only ever surfaced as "use the resend button".
 export type SendVerificationEmailResult = { success: true } | { success: false };
 
+
+export interface ResendVerificationCodeInput {
+  email: string;
+}
+
+export type ResendVerificationCodeResult = { success: true } | { success: false; error: string };
+
 export interface SessionWithAccount {
   sessionId: string;
   expiresAt: Date;

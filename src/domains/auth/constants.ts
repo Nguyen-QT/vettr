@@ -37,6 +37,14 @@ export const EMAIL_VERIFICATION_CODE_EXPIRY_MS = 1000 * 60 * 15; // 15 minutes
 // unlimited guessing (CLAUDE.md 27.3).
 export const MAX_EMAIL_VERIFICATION_ATTEMPTS = 5;
 
+// Minimum gap between resends for one account (CLAUDE.md 27.3.2.6).
+// Also caps Resend calls at one per account per window, including after
+// a failed send, so a degraded provider isn't hammered.
+export const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 1000 * 60;
+
+export const RESEND_VERIFICATION_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong resending the verification code. Please try again.";
+
 // Deliberately generic -- unknown email, wrong code, expired code, a
 // locked-out code and an already-verified account all return this, so
 // verifyEmailCode can't be used to enumerate accounts or their state.
