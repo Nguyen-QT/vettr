@@ -39,6 +39,7 @@ describe("loginClient", () => {
         passwordHash: await hashPassword(password),
         role: "CLIENT",
         clientProfileId,
+        emailVerifiedAt: new Date(),
       },
     });
   });
@@ -56,7 +57,7 @@ describe("loginClient", () => {
     const result = await loginClient({ email, password });
 
     expect(result.success).toBe(true);
-    if (!result.success) return;
+    if (!result.success || "pendingVerification" in result) return;
     expect(result.clientProfileId).toBe(clientProfileId);
 
     const session = await prisma.session.findUnique({
@@ -173,6 +174,55 @@ describe("loginClient", () => {
     expect(account?.failedLoginAttempts).toBe(MAX_FAILED_LOGIN_ATTEMPTS);
     expect(account?.lockedUntil).not.toBeNull();
     expect(account?.lockedUntil?.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("returns pendingVerification with no session for an unverified account and correct password", async () => {
+    await prisma.account.update({ where: { email }, data: { emailVerifiedAt: null } });
+
+    const result = await loginClient({ email, password });
+
+    expect(result).toEqual({ success: true, pendingVerification: true, clientProfileId });
+    const account = await prisma.account.findUnique({ where: { email } });
+    expect(await prisma.session.count({ where: { accountId: account?.id } })).toBe(0);
+  });
+
+  it("rejects an unverified account with a wrong password and still counts the failure", async () => {
+    await prisma.account.update({ where: { email }, data: { emailVerifiedAt: null } });
+
+    const result = await loginClient({ email, password: "wrong password" });
+
+    expect(result).toEqual({ success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE });
+    const account = await prisma.account.findUnique({ where: { email } });
+    expect(account?.failedLoginAttempts).toBe(1);
+  });
+
+  it("resets the counter but stays pending for an unverified account with prior failures", async () => {
+    await prisma.account.update({
+      where: { email },
+      data: { emailVerifiedAt: null, failedLoginAttempts: 3, lockedUntil: null },
+    });
+
+    const result = await loginClient({ email, password });
+
+    expect(result).toEqual({ success: true, pendingVerification: true, clientProfileId });
+    const account = await prisma.account.findUnique({ where: { email } });
+    expect(account?.failedLoginAttempts).toBe(0);
+  });
+
+  it("lockout takes precedence over pendingVerification for an unverified locked account", async () => {
+    await prisma.account.update({
+      where: { email },
+      data: {
+        emailVerifiedAt: null,
+        failedLoginAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
+        lockedUntil: new Date(Date.now() + 60_000),
+      },
+    });
+
+    const result = await loginClient({ email, password });
+
+    expect(result).toEqual({ success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE });
+    expect(verifyPasswordModule.verifyPassword).not.toHaveBeenCalled();
   });
 
   it("resets the counter on a successful login after prior failures", async () => {

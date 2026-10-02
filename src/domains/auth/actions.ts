@@ -7,6 +7,7 @@ import { setUpClientProfileInputSchema, loginInputSchema, signupInputSchema, swi
 import {
   ARTIST_LOGIN_PATH,
   CLIENT_LOGIN_PATH,
+  INVALID_CREDENTIALS_ERROR_MESSAGE,
   SESSION_COOKIE_NAME,
 } from "./constants";
 import { deleteSession } from "./services/deleteSession";
@@ -166,6 +167,12 @@ export async function loginClientAction(
   const result = await loginClient(parsed.data);
   if (!result.success) {
     return { success: false, error: result.error };
+  }
+
+  // Placeholder until 27.3.3.2 carries the pending-verification outcome
+  // through; never sets a cookie for an unverified account.
+  if ("pendingVerification" in result) {
+    return { success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE };
   }
 
   await setSessionCookie(result.sessionId, result.expiresAt);

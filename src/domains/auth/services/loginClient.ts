@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 import { INVALID_CREDENTIALS_ERROR_MESSAGE } from "../constants";
-import type { ClientAuthResult, LoginInput } from "../types";
+import type { ClientLoginResult, LoginInput } from "../types";
 import { createSession } from "./createSession";
 import { recordFailedLoginAttempt } from "./recordFailedLoginAttempt";
 import { resetFailedLoginAttempts } from "./resetFailedLoginAttempts";
@@ -9,7 +9,7 @@ import { verifyPassword } from "./verifyPassword";
 
 // Mirrors loginArtist.ts, scoped to role CLIENT and a clientProfileId
 // instead of an artistId (CLAUDE.md 5.2).
-export async function loginClient(input: LoginInput): Promise<ClientAuthResult> {
+export async function loginClient(input: LoginInput): Promise<ClientLoginResult> {
   const account = await prisma.account.findUnique({
     where: { email: input.email },
   });
@@ -39,6 +39,13 @@ export async function loginClient(input: LoginInput): Promise<ClientAuthResult> 
 
   if (account.failedLoginAttempts > 0 || account.lockedUntil !== null) {
     await resetFailedLoginAttempts(account.id);
+  }
+
+  // Reached only after the password is proven, so this reveals nothing to
+  // a prober (27.3 design). The counter reset above intentionally still
+  // applies -- the password was correct.
+  if (account.emailVerifiedAt === null) {
+    return { success: true, pendingVerification: true, clientProfileId: account.clientProfileId };
   }
 
   const session = await createSession(account.id, account.role);
