@@ -14,7 +14,6 @@ import {
 import {
   ARTIST_LOGIN_PATH,
   CLIENT_LOGIN_PATH,
-  INVALID_CREDENTIALS_ERROR_MESSAGE,
   SESSION_COOKIE_NAME,
 } from "./constants";
 import { deleteSession } from "./services/deleteSession";
@@ -37,6 +36,12 @@ export type LoginActionResult =
 export type ClientAuthActionResult =
   | { success: true; clientProfileId: string }
   | { success: false; error: string };
+
+// signupClientAction/loginClientAction (CLAUDE.md 27.3.3.2): an unverified
+// account gets no session, only a pointer to the verify-email step.
+export type ClientEntryActionResult =
+  | ClientAuthActionResult
+  | { success: true; pendingVerification: true; clientProfileId: string };
 
 export type SwitchActiveRoleActionResult = { success: false; error: string };
 
@@ -85,7 +90,7 @@ export async function loginAction(input: unknown): Promise<LoginActionResult> {
 // shape as loginAction above.
 export async function signupClientAction(
   input: unknown
-): Promise<ClientAuthActionResult> {
+): Promise<ClientEntryActionResult> {
   const parsed = signupInputSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -100,10 +105,13 @@ export async function signupClientAction(
     return { success: false, error: result.error };
   }
 
-  // Interim shim (27.3.2.4): signupClient no longer issues a session, so
-  // no cookie is set here. 27.3.3.2 carries the pending-verification
-  // outcome through this action's result type properly.
-  return { success: true, clientProfileId: result.clientProfileId };
+  // signupClient never issues a session; no cookie is set until
+  // verifyEmailCodeAction succeeds.
+  return {
+    success: true,
+    pendingVerification: true,
+    clientProfileId: result.clientProfileId,
+  };
 }
 
 // Controller/Action boundary (CLAUDE.md 26.1.3.1): validates structurally, derives accountId 
@@ -167,7 +175,7 @@ export async function switchActiveRoleAction(input: unknown): Promise<SwitchActi
 // delegating to loginClient instead of loginArtist.
 export async function loginClientAction(
   input: unknown
-): Promise<ClientAuthActionResult> {
+): Promise<ClientEntryActionResult> {
   const parsed = loginInputSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -182,10 +190,13 @@ export async function loginClientAction(
     return { success: false, error: result.error };
   }
 
-  // Placeholder until 27.3.3.2 carries the pending-verification outcome
-  // through; never sets a cookie for an unverified account.
+  // Never sets a cookie for an unverified account.
   if ("pendingVerification" in result) {
-    return { success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE };
+    return {
+      success: true,
+      pendingVerification: true,
+      clientProfileId: result.clientProfileId,
+    };
   }
 
   await setSessionCookie(result.sessionId, result.expiresAt);
