@@ -1,0 +1,94 @@
+// @vitest-environment jsdom
+import { act, renderHook } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { useClientLogin } from "./useClientLogin";
+
+const loginClientActionMock = vi.fn();
+const pushMock = vi.fn();
+let redirectTo: string | null = null;
+
+vi.mock("@/domains/auth/actions", () => ({
+  loginClientAction: (...args: unknown[]) => loginClientActionMock(...args),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: pushMock }),
+  useSearchParams: () => ({ get: () => redirectTo }),
+}));
+
+const EMAIL = "a+b@example.com";
+const PASSWORD = "hunter2hunter2";
+
+async function submit() {
+  const hook = renderHook(() => useClientLogin());
+  act(() => {
+    hook.result.current.form.setValue("email", EMAIL);
+    hook.result.current.form.setValue("password", PASSWORD);
+  });
+  await act(async () => {
+    await hook.result.current.onSubmit();
+  });
+  return hook;
+}
+
+describe("useClientLogin", () => {
+  beforeEach(() => {
+    loginClientActionMock.mockReset();
+    pushMock.mockReset();
+    redirectTo = null;
+  });
+
+  it("redirects to the verify-email page with the encoded email on pendingVerification", async () => {
+    loginClientActionMock.mockResolvedValue({
+      success: true,
+      pendingVerification: true,
+      clientProfileId: "cp_1",
+    });
+
+    await submit();
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
+    expect(pushMock).toHaveBeenCalledWith("/client/verify-email?email=a%2Bb%40example.com");
+  });
+
+  it("ignores redirectTo when verification is pending", async () => {
+    redirectTo = "/client/bookings";
+    loginClientActionMock.mockResolvedValue({
+      success: true,
+      pendingVerification: true,
+      clientProfileId: "cp_1",
+    });
+
+    await submit();
+
+    expect(pushMock).toHaveBeenCalledWith("/client/verify-email?email=a%2Bb%40example.com");
+  });
+
+  it("redirects to /client on an authenticated success", async () => {
+    loginClientActionMock.mockResolvedValue({ success: true, clientProfileId: "cp_1" });
+
+    await submit();
+
+    expect(pushMock).toHaveBeenCalledWith("/client");
+  });
+
+  it("honours redirectTo on an authenticated success", async () => {
+    redirectTo = "/client/bookings";
+    loginClientActionMock.mockResolvedValue({ success: true, clientProfileId: "cp_1" });
+
+    await submit();
+
+    expect(pushMock).toHaveBeenCalledWith("/client/bookings");
+  });
+
+  it("surfaces the server error and does not redirect on failure", async () => {
+    loginClientActionMock.mockResolvedValue({ success: false, error: "Nope." });
+
+    const { result } = await submit();
+
+    expect(result.current.serverError).toBe("Nope.");
+    expect(result.current.isSubmitting).toBe(false);
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+});

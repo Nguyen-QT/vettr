@@ -95,3 +95,4 @@ export const SESSION_COOKIE_NAME = "vettr_session";
 // 5.2.2) rather than hardcoding one.
 export const ARTIST_LOGIN_PATH = "/artist/login";
 export const CLIENT_LOGIN_PATH = "/client/login";
+export const CLIENT_VERIFY_EMAIL_PATH = "/client/verify-email";
