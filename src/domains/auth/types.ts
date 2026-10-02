@@ -21,6 +21,12 @@ export type ClientAuthResult =
   | { success: true; sessionId: string; expiresAt: Date; clientProfileId: string }
   | { success: false; error: string };
 
+// loginClient (CLAUDE.md 27.3.2.7) -- an unverified account with the
+// correct password gets no session, only a pointer to the verify step.
+export type ClientLoginResult =
+  | ClientAuthResult
+  | { success: true; pendingVerification: true; clientProfileId: string };
+
 // signupClient (CLAUDE.md 27.3.2.4) -- deliberately no session fields:
 // a fresh signup only ever gets a session via verifyEmailCode, after
 // proving ownership of the email.
@@ -47,6 +53,7 @@ export interface ResendVerificationCodeInput {
 }
 
 export type ResendVerificationCodeResult = { success: true } | { success: false; error: string };
+
 
 export interface SessionWithAccount {
   sessionId: string;

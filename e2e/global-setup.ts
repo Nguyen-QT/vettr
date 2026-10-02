@@ -805,8 +805,8 @@ export default async function globalSetup() {
   );
 
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
     [
       randomUUID(),
       clientLoginEmail,
@@ -837,8 +837,8 @@ export default async function globalSetup() {
     ]
   );
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
     [
       randomUUID(),
       onboardedClientEmail,
@@ -912,8 +912,8 @@ export default async function globalSetup() {
     ]
   );
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now())`,
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
     [
       randomUUID(),
       imageClientEmail,
