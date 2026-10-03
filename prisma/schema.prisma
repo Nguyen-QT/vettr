@@ -113,6 +113,8 @@ model Session {
   // Account itself, and must be server-trusted (not a client-readable
   // cookie) since src/proxy.ts uses it as an authorization gate.
   activeRole AccountRole
+
+  @@index([expiresAt])
 }
 
 model Artist {
