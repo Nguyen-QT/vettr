@@ -18,6 +18,7 @@
 /playwright-report/
 /blob-report/
 /e2e/.fixture.json
+/e2e/.email-sink.jsonl
 
 # next.js
 /.next/

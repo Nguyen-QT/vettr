@@ -4,12 +4,15 @@ import path from "node:path";
 import { config } from "dotenv";
 import { Client } from "pg";
 
+import { EMAIL_CAPTURE_SINK_PATH } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
 export default async function globalTeardown() {
   config();
+
+  await rm(EMAIL_CAPTURE_SINK_PATH, { force: true });
 
   const raw = await readFile(FIXTURE_PATH, "utf-8").catch(() => null);
   if (!raw) return;

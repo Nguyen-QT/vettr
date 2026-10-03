@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import {
   ARTIST_LOGIN_PATH,
   CLIENT_LOGIN_PATH,
+  CLIENT_VERIFY_EMAIL_PATH,
   SESSION_COOKIE_NAME,
 } from "@/domains/auth/constants";
 import { getSessionWithAccount } from "@/domains/auth/services/getSessionWithAccount";
@@ -16,8 +17,9 @@ import type { SessionWithAccount } from "@/domains/auth/types";
 // can't run on Edge.
 
 // Client auth pages (signup, login) stay public -- everything else
-// under /client requires a session (CLAUDE.md 5.2.3).
-const PUBLIC_CLIENT_PATHS = [CLIENT_LOGIN_PATH, "/client/signup"];
+// under /client requires a session (CLAUDE.md 5.2.3). verify-email is
+// public too: the visitor has no session until they pass it (27.3.6.1).
+const PUBLIC_CLIENT_PATHS = [CLIENT_LOGIN_PATH, "/client/signup", CLIENT_VERIFY_EMAIL_PATH];
 
 async function getSessionFromRequest(
   request: NextRequest

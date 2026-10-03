@@ -53,3 +53,19 @@ export async function refreshDashboardTodayAppointment(
     await client.end();
   }
 }
+
+// Puts a signup fixture back to "ClientProfile exists, no Account yet" so
+// a signup spec can be re-run (Playwright UI mode re-runs a test without
+// re-running global-setup.ts, and a completed signup leaves a verified
+// Account that makes the next signup return "account already exists").
+// Account-only: the ClientProfile/BookingRequest signup depends on stay.
+export async function resetClientSignup(email: string): Promise<void> {
+  config();
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(`DELETE FROM "Account" WHERE email = $1`, [email]);
+  } finally {
+    await client.end();
+  }
+}

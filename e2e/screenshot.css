@@ -1,0 +1,5 @@
+/* Hides the Next.js dev indicator, whose state ("N" vs "1 Issue") varies
+   run to run and would otherwise end up in visual baselines. */
+nextjs-portal {
+  display: none !important;
+}

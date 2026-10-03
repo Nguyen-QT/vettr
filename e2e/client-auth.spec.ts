@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { readCapturedCode } from "./authHelpers";
+import { resetClientSignup } from "./dbHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -42,17 +44,24 @@ test.describe("client signup, login, and dashboard", () => {
     await expect(page).toHaveURL(/\/client\/login/);
   });
 
-  // Signup no longer issues a session (27.3.2.4) -- re-enabled and routed
-  // through /client/verify-email in 27.3.6.1.
-  test.fixme("signs up with an email that has a prior booking and reaches the dashboard", async ({
+  // Signup no longer issues a session (27.3.2.4) -- it routes through
+  // /client/verify-email, reading the code back from the e2e capture sink.
+  test("signs up with an email that has a prior booking and reaches the dashboard", async ({
     page,
   }) => {
     const fixture = await readFixture();
+    await resetClientSignup(fixture.clientSignupEmail);
 
     await page.goto("/client/signup");
     await page.getByLabel("Email").fill(fixture.clientSignupEmail);
     await page.getByLabel("Password").fill("a-brand-new-password");
     await page.getByRole("button", { name: "Create account" }).click();
+
+    await expect(page).toHaveURL(/\/client\/verify-email\?email=/);
+    const code = await readCapturedCode(fixture.clientSignupEmail);
+    await page.getByLabel("Verification code").fill(code);
+    await page.getByLabel("Password").fill("a-brand-new-password");
+    await page.getByRole("button", { name: "Verify" }).click();
 
     await expect(page).toHaveURL("http://localhost:3000/client");
   });
