@@ -96,3 +96,11 @@ export const SESSION_COOKIE_NAME = "vettr_session";
 export const ARTIST_LOGIN_PATH = "/artist/login";
 export const CLIENT_LOGIN_PATH = "/client/login";
 export const CLIENT_VERIFY_EMAIL_PATH = "/client/verify-email";
+
+// Rows deleted per batched DELETE in pruneExpiredSessions (CLAUDE.md 27.4).
+// Bounds each statement's lock/transaction time on a large backlog.
+export const SESSION_CLEANUP_BATCH_SIZE = 1000;
+
+// Max batches per sweep invocation -- caps one run at 20,000 deletions;
+// a larger backlog finishes on the next scheduled run.
+export const SESSION_CLEANUP_MAX_BATCHES = 20;
