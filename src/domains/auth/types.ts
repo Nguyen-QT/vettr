@@ -57,6 +57,33 @@ export interface ResendVerificationCodeInput {
 export type ResendVerificationCodeResult = { success: true } | { success: false; error: string };
 
 
+// recordAuditEvent (CLAUDE.md 27.5.2.1) -- literal unions kept structurally
+// in sync by hand with the AuditEvent* enums in schema.prisma.
+export type AuditEventTypeValue = "LOGIN_FAILED" | "ROLE_SWITCH" | "CLIENT_PROFILE_LINK";
+
+export type AuditEventOutcomeValue = "SUCCESS" | "REJECTED";
+
+export type AuditReasonCodeValue =
+  | "ACCOUNT_NOT_FOUND"
+  | "ROLE_MISMATCH"
+  | "INVALID_PASSWORD"
+  | "NOT_LINKED_TO_ARTIST"
+  | "NOT_LINKED_TO_CLIENT"
+  | "ROLE_SWITCHED"
+  | "ALREADY_HAS_CLIENT_PROFILE"
+  | "CLIENT_PROFILE_ALREADY_LINKED"
+  | "CLIENT_PROFILE_CREATED"
+  | "CLIENT_PROFILE_MATCHED_EXISTING";
+
+export interface RecordAuditEventInput {
+  eventType: AuditEventTypeValue;
+  outcome: AuditEventOutcomeValue;
+  reasonCode: AuditReasonCodeValue;
+  accountId?: string;
+  attemptedEmail?: string;
+  targetRole?: "ARTIST" | "CLIENT";
+}
+
 export interface SessionWithAccount {
   sessionId: string;
   expiresAt: Date;
