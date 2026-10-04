@@ -48,3 +48,24 @@ This tracking file contains upcoming user experience refinements, interface stan
 ### 📦 Phase 49: Domain Service Refactor — Design Pattern TBD
 - **Status:** Unscoped.
 - **Objectives:** Revisit domain services against architecture.md's SOLID/single-responsibility rules once a specific target pattern and target services are chosen. No concrete scope exists yet; needs a follow-up scoping conversation before any task breakdown.
+
+---
+
+### 📦 Phase 53: Vercel Deployment & Production Readiness
+- **Status:** 53.1–53.3 scoped. Sequencing: 53.1 is cheap and can be slotted in anywhere; 53.2 (test-mode staging) is safe at demo stage; 53.3 (real-money go-live) is no longer blocked by 27.1 (login throttling shipped), but still wants a final pre-launch security review.
+- **Design (confirmed):** Vercel hosting + **Neon free plan** Postgres (plain Postgres, so it works with the existing `@prisma/adapter-pg`/`pg` stack; scale-to-zero wakes automatically, unlike Supabase's free tier which pauses after 7 days of inactivity and needs a manual restore). Start in a UK/EU region and align the Vercel function region to it. A future US East/West move is expected: a Neon project's region is fixed at creation, so it is a new project + dump/restore, and the runbook (53.1.6.1) must document that path and keep the Vercel function region configurable rather than hardcoded in app code. Runtime `DATABASE_URL` uses Neon's pooled (`-pooler`) connection string; `prisma migrate deploy` uses the direct, non-pooled URL. Migrations stay out of the Vercel build to avoid concurrent-deploy races.
+- [ ] **53.1: Deployable Build & Runbook**
+  - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **53.1.1.1** Data Gateway — N/A, no schema change.
+    - [ ] **53.1.2.1** Domain Service — N/A.
+    - [ ] **53.1.3.1** Controller/Action — make the Vercel build generate the Prisma client (`prisma generate` via `postinstall` or the build script; first verify whether `src/generated/prisma` is gitignored). `prisma migrate deploy` stays out of the build.
+    - [ ] **53.1.4.1** UI Primitive — N/A.
+    - [ ] **53.1.5.1** Domain Hook — N/A.
+    - [ ] **53.1.6.1** View & Route — document every production env var in `.env.example` (`DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `UPLOADTHING_TOKEN`, `RESEND_API_KEY`, `EMAIL_FROM`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`) and add a deployment runbook covering Vercel project setup, Neon provisioning (pooled vs direct URL), region matching and the later US region-move path, the Stripe webhook endpoint at `/api/webhooks/stripe`, UploadThing/Resend setup, and `CRON_SECRET` generation.
+- [ ] **53.2: Staging Deploy & Cron Activation** (operational, no code)
+  - [ ] **53.2.1.1** Provision Neon (UK/EU region), run `prisma migrate deploy` with the direct URL, set Vercel env vars (Stripe test keys).
+  - [ ] **53.2.1.2** Deploy to Vercel; point a Stripe test-mode webhook at the URL; smoke-test signup, booking intake and a deposit payment.
+  - [ ] **53.2.1.3** Set `APP_URL` (the production deployment URL, not a preview, since Deployment Protection would 401 the cron `curl`) and `CRON_SECRET` repo secrets, re-enable the Session Cleanup workflow (27.4.6.1), trigger it once and confirm `deletedCount` in the job log.
+- [ ] **53.3: Production Go-Live** (operational; 27.1 login throttling already shipped)
+  - [ ] **53.3.1.1** Swap to live Stripe keys and a live webhook secret (never mix test/live), attach a custom domain, verify the Resend sending domain.
+  - [ ] **53.3.1.2** Enable DB backups/point-in-time recovery (paid plan) before holding real artist data; re-run the smoke test with a real low-value payment.
