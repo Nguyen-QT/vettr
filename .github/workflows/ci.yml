@@ -38,6 +38,7 @@ jobs:
       UPLOADTHING_TOKEN: dummy_uploadthing_token
       RESEND_API_KEY: re_dummy
       EMAIL_FROM: "Vettr <noreply@example.com>"
+      CRON_SECRET: dummy_cron_secret
 
     steps:
       - uses: actions/checkout@v4
