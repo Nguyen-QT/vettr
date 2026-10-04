@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { INVALID_CREDENTIALS_ERROR_MESSAGE } from "../constants";
 import type { LoginInput, LoginResult } from "../types";
 import { createSession } from "./createSession";
+import { recordAuditEvent } from "./recordAuditEvent";
 import { recordFailedLoginAttempt } from "./recordFailedLoginAttempt";
 import { resetFailedLoginAttempts } from "./resetFailedLoginAttempts";
 import { verifyPassword } from "./verifyPassword";
@@ -21,6 +22,14 @@ export async function loginArtist(input: LoginInput): Promise<LoginResult> {
     // No password was checked, so there's no attempt to record here --
     // this also keeps a client-login probe against an ARTIST email from
     // ever incrementing that account's lockout counter.
+    // attemptedEmail only (no accountId) -- there's no verified identity
+    // to attach to; the caller still gets the same generic error.
+    await recordAuditEvent({
+      eventType: "LOGIN_FAILED",
+      outcome: "REJECTED",
+      reasonCode: account ? "ROLE_MISMATCH" : "ACCOUNT_NOT_FOUND",
+      attemptedEmail: input.email,
+    });
     return { success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE };
   }
 
@@ -37,6 +46,12 @@ export async function loginArtist(input: LoginInput): Promise<LoginResult> {
   const passwordMatches = await verifyPassword(input.password, account.passwordHash);
   if (!passwordMatches) {
     await recordFailedLoginAttempt(account.id);
+    await recordAuditEvent({
+      eventType: "LOGIN_FAILED",
+      outcome: "REJECTED",
+      reasonCode: "INVALID_PASSWORD",
+      accountId: account.id,
+    });
     return { success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE };
   }
 

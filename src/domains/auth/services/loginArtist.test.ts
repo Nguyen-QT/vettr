@@ -7,7 +7,10 @@ import { prisma } from "@/lib/prisma";
 import { INVALID_CREDENTIALS_ERROR_MESSAGE, MAX_FAILED_LOGIN_ATTEMPTS } from "../constants";
 import { hashPassword } from "./hashPassword";
 import { loginArtist } from "./loginArtist";
+import { recordAuditEvent } from "./recordAuditEvent";
 import * as verifyPasswordModule from "./verifyPassword";
+
+vi.mock("./recordAuditEvent", () => ({ recordAuditEvent: vi.fn() }));
 
 // Spies on the real implementation rather than stubbing a fake result --
 // existing cases below still exercise real scrypt verification; new
@@ -24,6 +27,7 @@ describe("loginArtist", () => {
 
   beforeEach(async () => {
     vi.mocked(verifyPasswordModule.verifyPassword).mockClear();
+    vi.mocked(recordAuditEvent).mockClear();
     artistId = randomUUID();
     email = `${artistId}-account@example.com`;
     await prisma.artist.create({
@@ -57,6 +61,7 @@ describe("loginArtist", () => {
     const result = await loginArtist({ email, password });
 
     expect(result.success).toBe(true);
+    expect(recordAuditEvent).not.toHaveBeenCalled();
     if (!result.success) return;
     expect(result.artistId).toBe(artistId);
 
@@ -73,6 +78,16 @@ describe("loginArtist", () => {
       success: false,
       error: INVALID_CREDENTIALS_ERROR_MESSAGE,
     });
+
+    const account = await prisma.account.findUnique({ where: { email } });
+    expect(recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).toHaveBeenCalledWith({
+      eventType: "LOGIN_FAILED",
+      outcome: "REJECTED",
+      reasonCode: "INVALID_PASSWORD",
+      accountId: account?.id,
+    });
+    expect(vi.mocked(recordAuditEvent).mock.calls[0][0]).not.toHaveProperty("attemptedEmail");
   });
 
   it("rejects an email with no matching account", async () => {
@@ -85,6 +100,14 @@ describe("loginArtist", () => {
       success: false,
       error: INVALID_CREDENTIALS_ERROR_MESSAGE,
     });
+    expect(recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).toHaveBeenCalledWith({
+      eventType: "LOGIN_FAILED",
+      outcome: "REJECTED",
+      reasonCode: "ACCOUNT_NOT_FOUND",
+      attemptedEmail: "no-such-account@example.com",
+    });
+    expect(vi.mocked(recordAuditEvent).mock.calls[0][0]).not.toHaveProperty("accountId");
   });
 
   it("rejects a non-ARTIST account even with the correct password", async () => {
@@ -115,6 +138,14 @@ describe("loginArtist", () => {
 
     const wrongRoleAccount = await prisma.account.findUnique({ where: { email: clientEmail } });
     expect(wrongRoleAccount?.failedLoginAttempts).toBe(0);
+    expect(recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).toHaveBeenCalledWith({
+      eventType: "LOGIN_FAILED",
+      outcome: "REJECTED",
+      reasonCode: "ROLE_MISMATCH",
+      attemptedEmail: clientEmail,
+    });
+    expect(vi.mocked(recordAuditEvent).mock.calls[0][0]).not.toHaveProperty("accountId");
 
     await prisma.account.delete({ where: { email: clientEmail } });
     await prisma.clientProfile.delete({ where: { id: clientProfileId } });
@@ -133,6 +164,7 @@ describe("loginArtist", () => {
       error: INVALID_CREDENTIALS_ERROR_MESSAGE,
     });
     expect(verifyPasswordModule.verifyPassword).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
 
     const account = await prisma.account.findUnique({ where: { email } });
     expect(account?.failedLoginAttempts).toBe(MAX_FAILED_LOGIN_ATTEMPTS);
