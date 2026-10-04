@@ -92,7 +92,8 @@ model Account {
   clientProfile   ClientProfile? @relation(fields: [clientProfileId], references: [id])
   clientProfileId String?        @unique
 
-  sessions Session[]
+  sessions    Session[]
+  auditEvents AuditEvent[]
 }
 
 // DB-backed so a session can actually be revoked (logout, or a future
@@ -379,4 +380,55 @@ model TimeSlot {
   bookingRequestId String
 
   @@index([artistId, startTime])
+}
+
+// Append-only audit trail for security-relevant identity events (27.5).
+// All classification columns are DB-enforced enums so a typo'd value can
+// never land in the table. accountId is SetNull (unlike Session's Cascade)
+// so a row outlives account deletion for forensic value.
+enum AuditEventType {
+  LOGIN_FAILED
+  ROLE_SWITCH
+  CLIENT_PROFILE_LINK
+}
+
+enum AuditEventOutcome {
+  SUCCESS
+  REJECTED
+}
+
+enum AuditReasonCode {
+  ACCOUNT_NOT_FOUND
+  ROLE_MISMATCH
+  INVALID_PASSWORD
+  NOT_LINKED_TO_ARTIST
+  NOT_LINKED_TO_CLIENT
+  ROLE_SWITCHED
+  ALREADY_HAS_CLIENT_PROFILE
+  CLIENT_PROFILE_ALREADY_LINKED
+  CLIENT_PROFILE_CREATED
+  CLIENT_PROFILE_MATCHED_EXISTING
+}
+
+model AuditEvent {
+  id         String            @id @default(cuid())
+  createdAt  DateTime          @default(now())
+  eventType  AuditEventType
+  outcome    AuditEventOutcome
+  reasonCode AuditReasonCode
+
+  // Only set when there is a real account to attach to.
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  accountId String?
+
+  // Populated only when there is no accountId (account-not-found /
+  // role-mismatch logins), to detect enumeration scanning. Never returned
+  // to callers and never written to logs.
+  attemptedEmail String?
+
+  // Role being switched into (ROLE_SWITCH events only).
+  targetRole AccountRole?
+
+  @@index([accountId, createdAt])
+  @@index([eventType, createdAt])
 }
