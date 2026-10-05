@@ -2,6 +2,8 @@ import { prismaMock } from "@/testUtils/prismaMock";
 
 import { describe, expect, it } from "vitest";
 
+import { Prisma } from "@/generated/prisma/client";
+
 import { SLOT_CONFLICT_ERROR_MESSAGE } from "../constants";
 import { confirmTimeSlot, isSlotConflict } from "./confirmTimeSlot";
 
@@ -14,6 +16,13 @@ import { confirmTimeSlot, isSlotConflict } from "./confirmTimeSlot";
 const EXCLUSION_ERROR = new Error(
   'conflicting key value violates exclusion constraint (code "23P01")'
 );
+
+function prismaError(code: string): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError("Transaction failed", {
+    code,
+    clientVersion: "test",
+  });
+}
 
 describe("confirmTimeSlot", () => {
   const artistId = "artist-1";
@@ -121,6 +130,19 @@ describe("confirmTimeSlot", () => {
     expect(result).toEqual({ success: false, error: SLOT_CONFLICT_ERROR_MESSAGE });
   });
 
+  it("returns the slot-conflict error when the loser is aborted with a P2034 write conflict", async () => {
+    prismaMock.timeSlot.create.mockRejectedValueOnce(prismaError("P2034"));
+
+    const result = await confirmTimeSlot({
+      bookingRequestId,
+      artistId,
+      startTime: new Date("2026-11-05T11:00:00.000Z"),
+      durationMinutes: 60,
+    });
+
+    expect(result).toEqual({ success: false, error: SLOT_CONFLICT_ERROR_MESSAGE });
+  });
+
   it("rethrows errors that are not slot conflicts", async () => {
     const failure = new Error("connection reset");
     prismaMock.timeSlot.create.mockRejectedValueOnce(failure);
@@ -139,6 +161,14 @@ describe("confirmTimeSlot", () => {
 describe("isSlotConflict", () => {
   it("is true for an error whose message carries the Postgres exclusion-violation code", () => {
     expect(isSlotConflict(EXCLUSION_ERROR)).toBe(true);
+  });
+
+  it("is true for a Prisma P2034 write-conflict/deadlock error", () => {
+    expect(isSlotConflict(prismaError("P2034"))).toBe(true);
+  });
+
+  it("is false for other Prisma error codes", () => {
+    expect(isSlotConflict(prismaError("P2002"))).toBe(false);
   });
 
   it("is false for other errors and non-Error values", () => {

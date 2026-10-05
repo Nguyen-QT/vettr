@@ -1,9 +1,9 @@
 "use server";
 
+import { getCurrentSession } from "@/domains/auth/actions";
 import { prisma } from "@/lib/prisma";
 
 import {
-  artistIdInputSchema,
   confirmTimeSlotInputSchema,
   getAvailableSlotsInputSchema,
   setScheduleOverrideInputSchema,
@@ -19,6 +19,19 @@ import { setScheduleOverride } from "./services/setScheduleOverride";
 import { setScheduleOverrideRange } from "./services/setScheduleOverrideRange";
 import { setWeeklyHours } from "./services/setWeeklyHours";
 import type { ConfirmTimeSlotResult, SlotTime } from "./types";
+
+const NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE =
+  "You must be signed in as an artist to do that.";
+
+// Checks activeRole (not role) so a dual-role account browsing as a client
+// can't manage the artist schedule -- same posture as billing/booking.
+async function requireArtistId(): Promise<string | null> {
+  const session = await getCurrentSession();
+  if (!session || session.activeRole !== "ARTIST" || !session.artistId) {
+    return null;
+  }
+  return session.artistId;
+}
 
 export type GetAvailableSlotsResult =
   | { success: true; slots: AvailableSlot[] }
@@ -73,7 +86,9 @@ export async function confirmTimeSlotAction(
 // then hands off to the read query. Called from the booking form as the
 // client picks a date (4.1j-c/d), so a real artistId/date are always
 // supplied by the app itself -- validation here mainly guards against a
-// malformed date string, not adversarial input.
+// malformed date string, not adversarial input. Intentionally public (no
+// session guard): the guest booking wizard calls it signed-out, and it only
+// reveals open slots.
 export async function getAvailableSlotsAction(
   input: unknown
 ): Promise<GetAvailableSlotsResult> {
@@ -96,6 +111,11 @@ export async function getAvailableSlotsAction(
 export async function setWeeklyHoursAction(
   input: unknown
 ): Promise<ScheduleMutationResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
   const parsed = setWeeklyHoursInputSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -105,7 +125,7 @@ export async function setWeeklyHoursAction(
     };
   }
 
-  await setWeeklyHours(parsed.data);
+  await setWeeklyHours({ artistId, ...parsed.data });
   return { success: true };
 }
 
@@ -115,6 +135,11 @@ export async function setWeeklyHoursAction(
 export async function setScheduleOverrideAction(
   input: unknown
 ): Promise<ScheduleMutationResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
   const parsed = setScheduleOverrideInputSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -124,7 +149,7 @@ export async function setScheduleOverrideAction(
     };
   }
 
-  await setScheduleOverride(parsed.data);
+  await setScheduleOverride({ artistId, ...parsed.data });
   return { success: true };
 }
 
@@ -134,6 +159,11 @@ export async function setScheduleOverrideAction(
 export async function setScheduleOverrideRangeAction(
   input: unknown
 ): Promise<ScheduleMutationResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
   const parsed = setScheduleOverrideRangeInputSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -143,7 +173,7 @@ export async function setScheduleOverrideRangeAction(
     };
   }
 
-  await setScheduleOverrideRange(parsed.data);
+  await setScheduleOverrideRange({ artistId, ...parsed.data });
   return { success: true };
 }
 
@@ -153,19 +183,16 @@ export async function setScheduleOverrideRangeAction(
 // precedent as booking/actions.ts's submitBookingRequest). Powers the
 // settings UI (4.3.7), which needs to show what's already configured.
 export async function getWeeklyHoursAction(
-  input: unknown
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy hook callers still pass an ignored artistId
+  _input?: unknown
 ): Promise<GetWeeklyHoursResult> {
-  const parsed = artistIdInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid request.",
-    };
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
   }
 
   const rows = await prisma.artistWeeklyHours.findMany({
-    where: { artistId: parsed.data.artistId },
+    where: { artistId },
     orderBy: { dayOfWeek: "asc" },
   });
 
@@ -181,19 +208,16 @@ export async function getWeeklyHoursAction(
 // Controller/Action boundary (CLAUDE.md 4.3): see getWeeklyHoursAction
 // above for why this queries Prisma directly.
 export async function getScheduleOverridesAction(
-  input: unknown
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- legacy hook callers still pass an ignored artistId
+  _input?: unknown
 ): Promise<GetScheduleOverridesResult> {
-  const parsed = artistIdInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid request.",
-    };
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
   }
 
   const rows = await prisma.artistScheduleOverride.findMany({
-    where: { artistId: parsed.data.artistId },
+    where: { artistId },
     orderBy: { date: "asc" },
   });
 
