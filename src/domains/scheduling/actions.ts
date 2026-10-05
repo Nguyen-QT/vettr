@@ -4,13 +4,11 @@ import { getCurrentSession } from "@/domains/auth/actions";
 import { prisma } from "@/lib/prisma";
 
 import {
-  confirmTimeSlotInputSchema,
   getAvailableSlotsInputSchema,
   setScheduleOverrideInputSchema,
   setScheduleOverrideRangeInputSchema,
   setWeeklyHoursInputSchema,
 } from "./scheduling.schema";
-import { confirmTimeSlot } from "./services/confirmTimeSlot";
 import {
   getAvailableSlots,
   type AvailableSlot,
@@ -18,7 +16,7 @@ import {
 import { setScheduleOverride } from "./services/setScheduleOverride";
 import { setScheduleOverrideRange } from "./services/setScheduleOverrideRange";
 import { setWeeklyHours } from "./services/setWeeklyHours";
-import type { ConfirmTimeSlotResult, SlotTime } from "./types";
+import type { SlotTime } from "./types";
 
 const NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE =
   "You must be signed in as an artist to do that.";
@@ -58,29 +56,6 @@ export interface ScheduleOverrideSummary {
 export type GetScheduleOverridesResult =
   | { success: true; overrides: ScheduleOverrideSummary[] }
   | { success: false; error: string };
-
-// Controller/Action boundary (CLAUDE.md): validates structurally, then
-// hands off to the domain service for the concurrency-safe database
-// check. Not yet called from any view -- the artist-facing duration
-// picker this depends on hasn't been built (CLAUDE.md 4.1 was scoped to
-// the confirmation logic only). Also deliberately does not touch
-// BookingRequest.status: composing this with booking's approveBookingRequest
-// is a later wiring task, same separation booking/actions.ts already
-// documents on its own approve/decline mutators.
-export async function confirmTimeSlotAction(
-  input: unknown
-): Promise<ConfirmTimeSlotResult> {
-  const parsed = confirmTimeSlotInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid time slot request.",
-    };
-  }
-
-  return confirmTimeSlot(parsed.data);
-}
 
 // Controller/Action boundary (CLAUDE.md 4.1j-b): validates structurally,
 // then hands off to the read query. Called from the booking form as the
