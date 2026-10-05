@@ -1,108 +1,74 @@
-import { randomUUID } from "node:crypto";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
-
-import type { RequestStatus } from "@/domains/booking/types";
+import { getBookingRequestForCheckout } from "@/domains/booking/services/getBookingRequestForCheckout";
+import { markAppointmentCompleted } from "@/domains/booking/services/markAppointmentCompleted";
+import type { BookingRequestCheckoutView } from "@/domains/booking/types";
 
 import { finalizeCheckout } from "./finalizeCheckout";
 
-// Hits the real local Postgres database, same as the rest of this
-// suite's DB-backed tests.
+vi.mock("@/domains/booking/services/getBookingRequestForCheckout", () => ({
+  getBookingRequestForCheckout: vi.fn(),
+}));
+vi.mock("@/domains/booking/services/markAppointmentCompleted", () => ({
+  markAppointmentCompleted: vi.fn(),
+}));
+
+// Unit test (architecture.md §7): finalizeCheckout only checks ownership
+// and delegates. The APPROVED / past-due rules live in booking's
+// markAppointmentCompleted and are tested there; here we assert the
+// delegation and that its result is passed through unchanged.
 describe("finalizeCheckout", () => {
-  let artistId: string;
-  let clientId: string;
+  const artistId = "artist-1";
+  const bookingRequestId = "request-1";
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Finalize Checkout Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.timeSlot.deleteMany({ where: { artistId } });
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  async function createRequest(
-    status: RequestStatus,
-    timeSlots: { startTime: Date; endTime: Date }[] = []
-  ) {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status,
-        estimatedPrice: 150,
-      },
-    });
-    for (const slot of timeSlots) {
-      await prisma.timeSlot.create({
-        data: {
-          artistId,
-          bookingRequestId: request.id,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          status: "BOOKED",
-        },
-      });
-    }
-    return request;
+  function checkoutView(
+    overrides: Partial<BookingRequestCheckoutView> = {}
+  ): BookingRequestCheckoutView {
+    return {
+      id: bookingRequestId,
+      artistId,
+      status: "APPROVED",
+      estimatedPrice: 150,
+      depositAmount: null,
+      depositPaid: false,
+      ...overrides,
+    };
   }
 
-  it("marks a past-due APPROVED request owned by the artist as completed", async () => {
-    const pastStart = new Date(Date.now() - 24 * 60 * 60_000);
-    const request = await createRequest("APPROVED", [
-      { startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) },
-    ]);
+  beforeEach(() => {
+    vi.mocked(getBookingRequestForCheckout).mockReset();
+    vi.mocked(markAppointmentCompleted).mockReset();
+  });
 
-    const result = await finalizeCheckout(request.id, artistId);
+  it("delegates to markAppointmentCompleted for a request owned by the artist", async () => {
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(checkoutView());
+    vi.mocked(markAppointmentCompleted).mockResolvedValue({ success: true });
+
+    const result = await finalizeCheckout(bookingRequestId, artistId);
 
     expect(result).toEqual({ success: true });
-    const updated = await prisma.bookingRequest.findUnique({ where: { id: request.id } });
-    expect(updated?.status).toBe("COMPLETED");
+    expect(markAppointmentCompleted).toHaveBeenCalledWith({ bookingRequestId });
   });
 
   it("rejects a request that does not belong to the artist", async () => {
-    const pastStart = new Date(Date.now() - 24 * 60 * 60_000);
-    const request = await createRequest("APPROVED", [
-      { startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) },
-    ]);
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ artistId: "other-artist" })
+    );
 
-    const result = await finalizeCheckout(request.id, randomUUID());
+    const result = await finalizeCheckout(bookingRequestId, artistId);
 
     expect(result.success).toBe(false);
-    const updated = await prisma.bookingRequest.findUnique({ where: { id: request.id } });
-    expect(updated?.status).toBe("APPROVED");
+    expect(markAppointmentCompleted).not.toHaveBeenCalled();
   });
 
-  it("delegates the not-yet-due rejection to markAppointmentCompleted", async () => {
-    const futureStart = new Date(Date.now() + 24 * 60 * 60_000);
-    const request = await createRequest("APPROVED", [
-      { startTime: futureStart, endTime: new Date(futureStart.getTime() + 60 * 60_000) },
-    ]);
+  it("passes through the not-yet-due rejection from markAppointmentCompleted", async () => {
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(checkoutView());
+    vi.mocked(markAppointmentCompleted).mockResolvedValue({
+      success: false,
+      error: "This appointment hasn't happened yet.",
+    });
 
-    const result = await finalizeCheckout(request.id, artistId);
+    const result = await finalizeCheckout(bookingRequestId, artistId);
 
     expect(result).toEqual({
       success: false,
@@ -111,8 +77,11 @@ describe("finalizeCheckout", () => {
   });
 
   it("rejects a request that doesn't exist", async () => {
-    const result = await finalizeCheckout(randomUUID(), artistId);
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(null);
+
+    const result = await finalizeCheckout(bookingRequestId, artistId);
 
     expect(result.success).toBe(false);
+    expect(markAppointmentCompleted).not.toHaveBeenCalled();
   });
 });

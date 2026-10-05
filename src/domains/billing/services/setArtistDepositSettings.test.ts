@@ -1,59 +1,51 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { setArtistDepositSettings } from "./setArtistDepositSettings";
 
-// Hits the real local Postgres database, same as the other domain
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7). "No duplicate row" is the
+// (artistId, tier) unique key's job in Postgres -- a 28.3 integration-tier
+// candidate, not faked here; we assert the upsert is keyed on it.
 describe("setArtistDepositSettings", () => {
-  let artistId: string;
+  const artistId = "artist-1";
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Deposit Settings Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-  });
+  it("upserts keyed on artist + tier, creating when none exists", async () => {
+    prismaMock.artistDepositSetting.upsert.mockResolvedValue({} as never);
 
-  afterEach(async () => {
-    await prisma.artistDepositSetting.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  it("creates a row when none exists for that tier", async () => {
     await setArtistDepositSettings({ artistId, tier: "TIER_2", depositAmount: 20 });
 
-    const row = await prisma.artistDepositSetting.findUnique({
+    expect(prismaMock.artistDepositSetting.upsert).toHaveBeenCalledWith({
       where: { artistId_tier: { artistId, tier: "TIER_2" } },
+      update: { depositAmount: 20 },
+      create: { artistId, tier: "TIER_2", depositAmount: 20 },
     });
-    expect(Number(row?.depositAmount)).toBe(20);
   });
 
-  it("updates the existing row instead of creating a duplicate", async () => {
+  it("uses the same key on a repeat call so the existing row is updated, not duplicated", async () => {
+    prismaMock.artistDepositSetting.upsert.mockResolvedValue({} as never);
+
     await setArtistDepositSettings({ artistId, tier: "TIER_3", depositAmount: 30 });
     await setArtistDepositSettings({ artistId, tier: "TIER_3", depositAmount: 45 });
 
-    const rows = await prisma.artistDepositSetting.findMany({
-      where: { artistId, tier: "TIER_3" },
+    expect(prismaMock.artistDepositSetting.upsert).toHaveBeenCalledTimes(2);
+    expect(prismaMock.artistDepositSetting.upsert).toHaveBeenLastCalledWith({
+      where: { artistId_tier: { artistId, tier: "TIER_3" } },
+      update: { depositAmount: 45 },
+      create: { artistId, tier: "TIER_3", depositAmount: 45 },
     });
-    expect(rows).toHaveLength(1);
-    expect(Number(rows[0].depositAmount)).toBe(45);
   });
 
-  it("does not affect a different tier for the same artist", async () => {
+  it("only targets the given tier, leaving other tiers untouched", async () => {
+    prismaMock.artistDepositSetting.upsert.mockResolvedValue({} as never);
+
     await setArtistDepositSettings({ artistId, tier: "TIER_4", depositAmount: 40 });
 
-    const otherTier = await prisma.artistDepositSetting.findUnique({
-      where: { artistId_tier: { artistId, tier: "FREESTYLE" } },
-    });
-    expect(otherTier).toBeNull();
+    expect(prismaMock.artistDepositSetting.upsert).toHaveBeenCalledTimes(1);
+    expect(prismaMock.artistDepositSetting.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { artistId_tier: { artistId, tier: "TIER_4" } },
+      })
+    );
   });
 });

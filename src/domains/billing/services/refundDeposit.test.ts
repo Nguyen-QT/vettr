@@ -1,10 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { prisma } from "@/lib/prisma";
-
-import * as recordDepositRefundModule from "@/domains/booking/services/recordDepositRefund";
+import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
+import { recordDepositRefund } from "@/domains/booking/services/recordDepositRefund";
+import type { BookingRequestDepositView } from "@/domains/booking/types";
 
 import { refundDeposit } from "./refundDeposit";
 
@@ -20,143 +18,123 @@ vi.mock("@/lib/stripe", () => ({
     },
   },
 }));
+vi.mock("@/domains/booking/services/getBookingRequestForDeposit", () => ({
+  getBookingRequestForDeposit: vi.fn(),
+}));
+vi.mock("@/domains/booking/services/recordDepositRefund", () => ({
+  recordDepositRefund: vi.fn(),
+}));
 
-// Hits the real local Postgres database for everything except the
-// Stripe API call itself, which is mocked above -- same split as
-// createDepositPaymentIntent.test.ts.
+// Unit test (architecture.md §7): refundDeposit touches no Prisma of its
+// own -- Stripe and booking's deposit read/write are mocked at their
+// boundaries, same split as createDepositPaymentIntent.test.ts.
 describe("refundDeposit", () => {
-  let artistId: string;
-  let clientId: string;
+  const bookingRequestId = "request-1";
 
-  beforeEach(async () => {
-    createRefundMock.mockReset();
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Refund Deposit Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  async function createRequest(overrides: {
-    depositPaid?: boolean;
-    depositRefunded?: boolean;
-    stripePaymentIntentId?: string | null;
-  }) {
-    return prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "CANCELLED_BY_CLIENT",
-        depositPaid: overrides.depositPaid ?? false,
-        depositRefunded: overrides.depositRefunded ?? false,
-        stripePaymentIntentId: overrides.stripePaymentIntentId,
-      },
-    });
-  }
-
-  it("issues a Stripe refund and records it when the deposit is paid and unrefunded", async () => {
-    const request = await createRequest({
+  function depositView(
+    overrides: Partial<BookingRequestDepositView> = {}
+  ): BookingRequestDepositView {
+    return {
+      id: bookingRequestId,
+      clientId: "client-1",
+      artistId: "artist-1",
+      tier: "TIER_2",
+      status: "CANCELLED_BY_CLIENT",
       depositPaid: true,
       stripePaymentIntentId: "pi_refund_123",
-    });
+      depositRefunded: false,
+      estimatedPrice: null,
+      clientEnforcePrecharge: false,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    createRefundMock.mockReset();
+    vi.mocked(getBookingRequestForDeposit).mockReset();
+    vi.mocked(recordDepositRefund).mockReset();
+  });
+
+  it("issues a Stripe refund and records it when the deposit is paid and unrefunded", async () => {
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
     createRefundMock.mockResolvedValue({ id: "re_123" });
 
-    const result = await refundDeposit(request.id);
+    const result = await refundDeposit(bookingRequestId);
 
     expect(result).toEqual({ success: true });
     expect(createRefundMock).toHaveBeenCalledWith(
       { payment_intent: "pi_refund_123" },
-      { idempotencyKey: `deposit-refund:${request.id}` }
+      { idempotencyKey: `deposit-refund:${bookingRequestId}` }
     );
-
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: request.id },
-    });
-    expect(updated?.depositRefunded).toBe(true);
-    expect(updated?.stripeRefundId).toBe("re_123");
+    expect(recordDepositRefund).toHaveBeenCalledWith(bookingRequestId, "re_123");
   });
 
   it("is idempotent when the deposit was already refunded", async () => {
-    const request = await createRequest({
-      depositPaid: true,
-      depositRefunded: true,
-      stripePaymentIntentId: "pi_refund_456",
-    });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ depositRefunded: true })
+    );
 
-    const result = await refundDeposit(request.id);
+    const result = await refundDeposit(bookingRequestId);
 
     expect(result).toEqual({ success: true });
     expect(createRefundMock).not.toHaveBeenCalled();
+    expect(recordDepositRefund).not.toHaveBeenCalled();
   });
 
   it("rejects a request whose deposit was never paid", async () => {
-    const request = await createRequest({ depositPaid: false });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ depositPaid: false, stripePaymentIntentId: null })
+    );
 
-    const result = await refundDeposit(request.id);
+    const result = await refundDeposit(bookingRequestId);
+
+    expect(result.success).toBe(false);
+    expect(createRefundMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a paid request that has no PaymentIntent id to refund against", async () => {
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ stripePaymentIntentId: null })
+    );
+
+    const result = await refundDeposit(bookingRequestId);
 
     expect(result.success).toBe(false);
     expect(createRefundMock).not.toHaveBeenCalled();
   });
 
   it("rejects a request that doesn't exist", async () => {
-    const result = await refundDeposit(randomUUID());
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(null);
+
+    const result = await refundDeposit(bookingRequestId);
 
     expect(result.success).toBe(false);
     expect(createRefundMock).not.toHaveBeenCalled();
   });
 
   it("returns a clean error when the Stripe refund call itself fails", async () => {
-    const request = await createRequest({
-      depositPaid: true,
-      stripePaymentIntentId: "pi_refund_fail",
-    });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
     createRefundMock.mockRejectedValue(new Error("Stripe network error"));
 
-    const result = await refundDeposit(request.id);
+    const result = await refundDeposit(bookingRequestId);
 
     expect(result.success).toBe(false);
-    const untouched = await prisma.bookingRequest.findUnique({
-      where: { id: request.id },
-    });
-    expect(untouched?.depositRefunded).toBe(false);
+    expect(recordDepositRefund).not.toHaveBeenCalled();
   });
 
   it("still reports success when Stripe succeeds but the local write fails -- the refund already happened", async () => {
-    const request = await createRequest({
-      depositPaid: true,
-      stripePaymentIntentId: "pi_refund_write_fail",
-    });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
     createRefundMock.mockResolvedValue({ id: "re_write_fail" });
-    const recordSpy = vi
-      .spyOn(recordDepositRefundModule, "recordDepositRefund")
-      .mockRejectedValueOnce(new Error("DB write failed"));
+    vi.mocked(recordDepositRefund).mockRejectedValueOnce(
+      new Error("DB write failed")
+    );
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const result = await refundDeposit(request.id);
+    const result = await refundDeposit(bookingRequestId);
 
     expect(result).toEqual({ success: true });
     expect(createRefundMock).toHaveBeenCalledTimes(1);
-
-    recordSpy.mockRestore();
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
   });
 });

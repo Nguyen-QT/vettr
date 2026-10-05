@@ -1,115 +1,83 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/prisma";
-
-import type { RequestStatus } from "@/domains/booking/types";
+import { getBookingRequestForCheckout } from "@/domains/booking/services/getBookingRequestForCheckout";
+import type { BookingRequestCheckoutView } from "@/domains/booking/types";
 
 import { addBillingAddon } from "./addBillingAddon";
 
-// Hits the real local Postgres database, same as the rest of this
-// suite's DB-backed tests.
+vi.mock("@/domains/booking/services/getBookingRequestForCheckout", () => ({
+  getBookingRequestForCheckout: vi.fn(),
+}));
+
+// Mocked-Prisma unit test (architecture.md §7): booking's checkout read
+// is mocked at its public contract; only billing's own Addon table goes
+// through prismaMock.
 describe("addBillingAddon", () => {
-  let artistId: string;
-  let clientId: string;
+  const artistId = "artist-1";
+  const bookingRequestId = "request-1";
+  const input = { bookingRequestId, artistId, label: "Extra shading", price: 25 };
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Checkout Addon Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  async function createRequest(status: RequestStatus) {
-    return prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status,
-        estimatedPrice: 150,
-      },
-    });
+  function checkoutView(
+    overrides: Partial<BookingRequestCheckoutView> = {}
+  ): BookingRequestCheckoutView {
+    return {
+      id: bookingRequestId,
+      artistId,
+      status: "APPROVED",
+      estimatedPrice: 150,
+      depositAmount: null,
+      depositPaid: false,
+      ...overrides,
+    };
   }
 
-  it("adds an addon to an APPROVED request owned by the artist", async () => {
-    const request = await createRequest("APPROVED");
+  beforeEach(() => {
+    vi.mocked(getBookingRequestForCheckout).mockReset();
+  });
 
-    const result = await addBillingAddon({
-      bookingRequestId: request.id,
-      artistId,
-      label: "Extra shading",
-      price: 25,
-    });
+  it("adds an addon to an APPROVED request owned by the artist", async () => {
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(checkoutView());
+    prismaMock.addon.create.mockResolvedValue({} as never);
+
+    const result = await addBillingAddon(input);
 
     expect(result).toEqual({ success: true });
-
-    const addons = await prisma.addon.findMany({
-      where: { bookingRequestId: request.id },
+    expect(getBookingRequestForCheckout).toHaveBeenCalledWith(bookingRequestId);
+    expect(prismaMock.addon.create).toHaveBeenCalledWith({
+      data: { bookingRequestId, label: "Extra shading", price: 25 },
     });
-    expect(addons).toHaveLength(1);
-    expect(addons[0]?.label).toBe("Extra shading");
-    expect(Number(addons[0]?.price)).toBe(25);
   });
 
   it("rejects a request that does not belong to the artist", async () => {
-    const request = await createRequest("APPROVED");
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ artistId: "other-artist" })
+    );
 
-    const result = await addBillingAddon({
-      bookingRequestId: request.id,
-      artistId: randomUUID(),
-      label: "Extra shading",
-      price: 25,
-    });
+    const result = await addBillingAddon(input);
 
     expect(result.success).toBe(false);
-    expect(await prisma.addon.count({ where: { bookingRequestId: request.id } })).toBe(0);
+    expect(prismaMock.addon.create).not.toHaveBeenCalled();
   });
 
   it("rejects a request that is not APPROVED", async () => {
-    const request = await createRequest("PENDING");
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ status: "PENDING" })
+    );
 
-    const result = await addBillingAddon({
-      bookingRequestId: request.id,
-      artistId,
-      label: "Extra shading",
-      price: 25,
-    });
+    const result = await addBillingAddon(input);
 
     expect(result.success).toBe(false);
-    expect(await prisma.addon.count({ where: { bookingRequestId: request.id } })).toBe(0);
+    expect(prismaMock.addon.create).not.toHaveBeenCalled();
   });
 
   it("rejects a request that doesn't exist", async () => {
-    const result = await addBillingAddon({
-      bookingRequestId: randomUUID(),
-      artistId,
-      label: "Extra shading",
-      price: 25,
-    });
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(null);
+
+    const result = await addBillingAddon(input);
 
     expect(result.success).toBe(false);
+    expect(prismaMock.addon.create).not.toHaveBeenCalled();
   });
 });

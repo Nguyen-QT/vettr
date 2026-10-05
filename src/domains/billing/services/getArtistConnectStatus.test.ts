@@ -1,31 +1,20 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { getArtistConnectStatus } from "./getArtistConnectStatus";
 
+// Mocked-Prisma unit test (architecture.md §7).
 describe("getArtistConnectStatus", () => {
-  let artistId: string;
-
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Connect Status Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
+  const artistId = "artist-1";
 
   it("reports not connected for an artist who never started onboarding", async () => {
+    prismaMock.artist.findUnique.mockResolvedValue({
+      stripeConnectAccountId: null,
+      stripeConnectChargesEnabled: false,
+      stripeConnectPayoutsEnabled: false,
+    } as never);
+
     const status = await getArtistConnectStatus(artistId);
 
     expect(status).toEqual({
@@ -33,13 +22,22 @@ describe("getArtistConnectStatus", () => {
       chargesEnabled: false,
       payoutsEnabled: false,
     });
+    expect(prismaMock.artist.findUnique).toHaveBeenCalledWith({
+      where: { id: artistId },
+      select: {
+        stripeConnectAccountId: true,
+        stripeConnectChargesEnabled: true,
+        stripeConnectPayoutsEnabled: true,
+      },
+    });
   });
 
   it("reports connected but not yet enabled for an artist mid-onboarding", async () => {
-    await prisma.artist.update({
-      where: { id: artistId },
-      data: { stripeConnectAccountId: "acct_pending" },
-    });
+    prismaMock.artist.findUnique.mockResolvedValue({
+      stripeConnectAccountId: "acct_pending",
+      stripeConnectChargesEnabled: false,
+      stripeConnectPayoutsEnabled: false,
+    } as never);
 
     const status = await getArtistConnectStatus(artistId);
 
@@ -51,14 +49,11 @@ describe("getArtistConnectStatus", () => {
   });
 
   it("reports both capabilities once Stripe has enabled them", async () => {
-    await prisma.artist.update({
-      where: { id: artistId },
-      data: {
-        stripeConnectAccountId: "acct_live",
-        stripeConnectChargesEnabled: true,
-        stripeConnectPayoutsEnabled: true,
-      },
-    });
+    prismaMock.artist.findUnique.mockResolvedValue({
+      stripeConnectAccountId: "acct_live",
+      stripeConnectChargesEnabled: true,
+      stripeConnectPayoutsEnabled: true,
+    } as never);
 
     const status = await getArtistConnectStatus(artistId);
 
@@ -70,7 +65,9 @@ describe("getArtistConnectStatus", () => {
   });
 
   it("reports not connected for an artist that does not exist", async () => {
-    const status = await getArtistConnectStatus(randomUUID());
+    prismaMock.artist.findUnique.mockResolvedValue(null);
+
+    const status = await getArtistConnectStatus(artistId);
 
     expect(status).toEqual({
       connected: false,

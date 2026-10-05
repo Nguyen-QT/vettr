@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/prisma";
-
-import type { RequestStatus } from "@/domains/booking/types";
+import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
+import { recordDepositPaymentIntent } from "@/domains/booking/services/recordDepositPaymentIntent";
+import type { BookingRequestDepositView } from "@/domains/booking/types";
 
 import { createDepositPaymentIntent } from "./createDepositPaymentIntent";
 
@@ -20,328 +20,269 @@ vi.mock("@/lib/stripe", () => ({
     },
   },
 }));
+vi.mock("@/domains/booking/services/getBookingRequestForDeposit", () => ({
+  getBookingRequestForDeposit: vi.fn(),
+}));
+vi.mock("@/domains/booking/services/recordDepositPaymentIntent", () => ({
+  recordDepositPaymentIntent: vi.fn(),
+}));
 
-// Hits the real local Postgres database for everything except the
-// Stripe API call itself, which is mocked above -- same split as the
-// rest of this suite's DB-backed tests, just with one external call
-// stubbed out.
+// Mocked-Prisma unit test (architecture.md §7): Stripe and booking's
+// deposit read/write are mocked at their boundaries; billing's own
+// ArtistDepositSetting (via the real sibling getArtistDepositSettings)
+// and Artist Connect lookups go through prismaMock.
 describe("createDepositPaymentIntent", () => {
-  let artistId: string;
-  let clientId: string;
+  const artistId = "artist-1";
+  const clientId = "client-1";
+  const bookingRequestId = "request-1";
+  const input = { bookingRequestId, clientProfileId: clientId };
 
-  beforeEach(async () => {
+  function depositView(
+    overrides: Partial<BookingRequestDepositView> = {}
+  ): BookingRequestDepositView {
+    return {
+      id: bookingRequestId,
+      clientId,
+      artistId,
+      tier: "TIER_2",
+      status: "APPROVED",
+      depositPaid: false,
+      stripePaymentIntentId: null,
+      depositRefunded: false,
+      estimatedPrice: null,
+      clientEnforcePrecharge: false,
+      ...overrides,
+    };
+  }
+
+  function configureDeposit(amount: number | null): void {
+    prismaMock.artistDepositSetting.findMany.mockResolvedValue(
+      amount === null
+        ? []
+        : ([{ artistId, tier: "TIER_2", depositAmount: amount }] as never)
+    );
+  }
+
+  function configureConnect(
+    stripeConnectAccountId: string | null,
+    stripeConnectChargesEnabled: boolean
+  ): void {
+    prismaMock.artist.findUnique.mockResolvedValue({
+      stripeConnectAccountId,
+      stripeConnectChargesEnabled,
+    } as never);
+  }
+
+  function intentParams(
+    amount: number,
+    extra: Record<string, unknown> = {}
+  ): Record<string, unknown> {
+    return {
+      amount,
+      currency: "gbp",
+      metadata: { bookingRequestId },
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      ...extra,
+    };
+  }
+
+  const idempotencyOptions = { idempotencyKey: `deposit-intent:${bookingRequestId}` };
+
+  beforeEach(() => {
     createPaymentIntentMock.mockReset();
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Deposit Payment Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
+    vi.mocked(getBookingRequestForDeposit).mockReset();
+    vi.mocked(recordDepositPaymentIntent).mockReset();
+    configureConnect(null, false);
   });
-
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.artistDepositSetting.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  async function createRequest(
-    status: RequestStatus,
-    overrides: { depositPaid?: boolean; estimatedPrice?: number } = {}
-  ) {
-    return prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status,
-        depositPaid: overrides.depositPaid ?? false,
-        estimatedPrice: overrides.estimatedPrice,
-      },
-    });
-  }
-
-  async function flagClient() {
-    await prisma.clientProfile.update({
-      where: { id: clientId },
-      data: { enforcePrecharge: true },
-    });
-  }
 
   it("creates a PaymentIntent and snapshots the amount/id when everything is valid", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 20 },
-    });
-    const request = await createRequest("APPROVED");
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
+    configureDeposit(20);
     createPaymentIntentMock.mockResolvedValue({
       id: "pi_123",
       client_secret: "secret_123",
     });
 
-    const result = await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    const result = await createDepositPaymentIntent(input);
 
     expect(result).toEqual({ success: true, clientSecret: "secret_123" });
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
-      {
-        amount: 2000,
-        currency: "gbp",
-        metadata: { bookingRequestId: request.id },
-        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      },
-      { idempotencyKey: `deposit-intent:${request.id}` }
+      intentParams(2000),
+      idempotencyOptions
     );
-
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: request.id },
+    expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
+      depositAmount: 20,
+      stripePaymentIntentId: "pi_123",
     });
-    expect(updated?.stripePaymentIntentId).toBe("pi_123");
-    expect(Number(updated?.depositAmount)).toBe(20);
   });
 
   it("rejects a request that does not belong to the client", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 20 },
-    });
-    const request = await createRequest("APPROVED");
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ clientId: "other-client" })
+    );
+    configureDeposit(20);
 
-    const result = await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: randomUUID(),
-    });
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result.success).toBe(false);
+    expect(createPaymentIntentMock).not.toHaveBeenCalled();
+    expect(recordDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("rejects a request that doesn't exist", async () => {
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(null);
+
+    const result = await createDepositPaymentIntent(input);
 
     expect(result.success).toBe(false);
     expect(createPaymentIntentMock).not.toHaveBeenCalled();
   });
 
   it("rejects a request that is not APPROVED", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 20 },
-    });
-    const request = await createRequest("PENDING");
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ status: "PENDING" })
+    );
+    configureDeposit(20);
 
-    const result = await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    const result = await createDepositPaymentIntent(input);
 
     expect(result.success).toBe(false);
     expect(createPaymentIntentMock).not.toHaveBeenCalled();
   });
 
   it("rejects a request whose deposit is already paid", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 20 },
-    });
-    const request = await createRequest("APPROVED", { depositPaid: true });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ depositPaid: true })
+    );
+    configureDeposit(20);
 
-    const result = await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    const result = await createDepositPaymentIntent(input);
 
     expect(result.success).toBe(false);
     expect(createPaymentIntentMock).not.toHaveBeenCalled();
   });
 
   it("rejects when the artist has not configured a deposit for the tier", async () => {
-    const request = await createRequest("APPROVED");
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
+    configureDeposit(null);
 
-    const result = await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    const result = await createDepositPaymentIntent(input);
 
     expect(result.success).toBe(false);
     expect(createPaymentIntentMock).not.toHaveBeenCalled();
   });
 
   it("applies a 50% precharge for a flagged client even with no configured deposit", async () => {
-    await flagClient();
-    const request = await createRequest("APPROVED", { estimatedPrice: 200 });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ clientEnforcePrecharge: true, estimatedPrice: 200 })
+    );
+    configureDeposit(null);
     createPaymentIntentMock.mockResolvedValue({
       id: "pi_precharge_1",
       client_secret: "secret_precharge_1",
     });
 
-    const result = await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    const result = await createDepositPaymentIntent(input);
 
     expect(result).toEqual({ success: true, clientSecret: "secret_precharge_1" });
+    // 50% of £200 = £100
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
-      {
-        amount: 10_000, // 50% of £200 = £100
-        currency: "gbp",
-        metadata: { bookingRequestId: request.id },
-        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      },
-      { idempotencyKey: `deposit-intent:${request.id}` }
+      intentParams(10_000),
+      idempotencyOptions
     );
   });
 
   it("uses the precharge amount when it exceeds the artist's configured deposit", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 20 },
-    });
-    await flagClient();
-    const request = await createRequest("APPROVED", { estimatedPrice: 200 });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ clientEnforcePrecharge: true, estimatedPrice: 200 })
+    );
+    configureDeposit(20);
     createPaymentIntentMock.mockResolvedValue({
       id: "pi_precharge_2",
       client_secret: "secret_precharge_2",
     });
 
-    await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    await createDepositPaymentIntent(input);
 
+    // 50% of £200 = £100, greater than the configured £20
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
-      {
-        amount: 10_000, // 50% of £200 = £100, greater than the configured £20
-        currency: "gbp",
-        metadata: { bookingRequestId: request.id },
-        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      },
-      { idempotencyKey: `deposit-intent:${request.id}` }
+      intentParams(10_000),
+      idempotencyOptions
     );
   });
 
   it("keeps the artist's configured deposit when it exceeds the precharge amount", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 90 },
-    });
-    await flagClient();
-    const request = await createRequest("APPROVED", { estimatedPrice: 100 });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ clientEnforcePrecharge: true, estimatedPrice: 100 })
+    );
+    configureDeposit(90);
     createPaymentIntentMock.mockResolvedValue({
       id: "pi_precharge_3",
       client_secret: "secret_precharge_3",
     });
 
-    await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    await createDepositPaymentIntent(input);
 
+    // configured £90, greater than 50% of £100 = £50
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
-      {
-        amount: 9_000, // configured £90, greater than 50% of £100 = £50
-        currency: "gbp",
-        metadata: { bookingRequestId: request.id },
-        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      },
-      { idempotencyKey: `deposit-intent:${request.id}` }
+      intentParams(9_000),
+      idempotencyOptions
     );
   });
 
   it("routes the deposit to the artist's connected account once charges are enabled", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 20 },
-    });
-    await prisma.artist.update({
-      where: { id: artistId },
-      data: {
-        stripeConnectAccountId: "acct_connected",
-        stripeConnectChargesEnabled: true,
-      },
-    });
-    const request = await createRequest("APPROVED");
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
+    configureDeposit(20);
+    configureConnect("acct_connected", true);
     createPaymentIntentMock.mockResolvedValue({
       id: "pi_connect_1",
       client_secret: "secret_connect_1",
     });
 
-    await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    await createDepositPaymentIntent(input);
 
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
-      {
-        amount: 2000,
-        currency: "gbp",
-        metadata: { bookingRequestId: request.id },
-        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      intentParams(2000, {
         on_behalf_of: "acct_connected",
         transfer_data: { destination: "acct_connected" },
-      },
-      { idempotencyKey: `deposit-intent:${request.id}` }
+      }),
+      idempotencyOptions
     );
   });
 
   it("stays platform-only for a connected account that isn't charges-enabled yet", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 20 },
-    });
-    await prisma.artist.update({
-      where: { id: artistId },
-      data: {
-        stripeConnectAccountId: "acct_pending",
-        stripeConnectChargesEnabled: false,
-      },
-    });
-    const request = await createRequest("APPROVED");
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
+    configureDeposit(20);
+    configureConnect("acct_pending", false);
     createPaymentIntentMock.mockResolvedValue({
       id: "pi_connect_2",
       client_secret: "secret_connect_2",
     });
 
-    await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    await createDepositPaymentIntent(input);
 
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
-      {
-        amount: 2000,
-        currency: "gbp",
-        metadata: { bookingRequestId: request.id },
-        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      },
-      { idempotencyKey: `deposit-intent:${request.id}` }
+      intentParams(2000),
+      idempotencyOptions
     );
   });
 
   it("does not apply precharge for an unflagged client even with a high estimate", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 20 },
-    });
-    const request = await createRequest("APPROVED", { estimatedPrice: 500 });
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ estimatedPrice: 500 })
+    );
+    configureDeposit(20);
     createPaymentIntentMock.mockResolvedValue({
       id: "pi_precharge_4",
       client_secret: "secret_precharge_4",
     });
 
-    await createDepositPaymentIntent({
-      bookingRequestId: request.id,
-      clientProfileId: clientId,
-    });
+    await createDepositPaymentIntent(input);
 
+    // stays at the configured £20, precharge never applies
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
-      {
-        amount: 2_000, // stays at the configured £20, precharge never applies
-        currency: "gbp",
-        metadata: { bookingRequestId: request.id },
-        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      },
-      { idempotencyKey: `deposit-intent:${request.id}` }
+      intentParams(2_000),
+      idempotencyOptions
     );
   });
 });

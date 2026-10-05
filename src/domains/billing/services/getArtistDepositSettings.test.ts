@@ -1,34 +1,17 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { getArtistDepositSettings } from "./getArtistDepositSettings";
 
-// Hits the real local Postgres database, same as the other domain
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7). Per-artist row isolation is
+// the where clause's job; we assert it is scoped by artistId.
 describe("getArtistDepositSettings", () => {
-  let artistId: string;
-
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Deposit Settings Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.artistDepositSetting.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
+  const artistId = "artist-1";
 
   it("returns every tier as a key with null when nothing is configured", async () => {
+    prismaMock.artistDepositSetting.findMany.mockResolvedValue([]);
+
     const result = await getArtistDepositSettings(artistId);
 
     expect(result).toEqual({
@@ -40,12 +23,10 @@ describe("getArtistDepositSettings", () => {
   });
 
   it("returns the configured amount only for tiers that have one", async () => {
-    await prisma.artistDepositSetting.createMany({
-      data: [
-        { artistId, tier: "TIER_2", depositAmount: 20 },
-        { artistId, tier: "FREESTYLE", depositAmount: 75 },
-      ],
-    });
+    prismaMock.artistDepositSetting.findMany.mockResolvedValue([
+      { artistId, tier: "TIER_2", depositAmount: 20 },
+      { artistId, tier: "FREESTYLE", depositAmount: "75.00" },
+    ] as never);
 
     const result = await getArtistDepositSettings(artistId);
 
@@ -55,27 +36,13 @@ describe("getArtistDepositSettings", () => {
     expect(result.TIER_4).toBeNull();
   });
 
-  it("does not let another artist's settings show up", async () => {
-    const otherArtistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: otherArtistId,
-        name: "Other Artist",
-        instagramHandle: `test_artist_${otherArtistId.slice(0, 8)}`,
-        email: `${otherArtistId}@example.com`,
-      },
-    });
-    await prisma.artistDepositSetting.create({
-      data: { artistId: otherArtistId, tier: "TIER_2", depositAmount: 50 },
-    });
+  it("scopes the query to the requested artist so another artist's settings can't show up", async () => {
+    prismaMock.artistDepositSetting.findMany.mockResolvedValue([]);
 
-    const result = await getArtistDepositSettings(artistId);
+    await getArtistDepositSettings(artistId);
 
-    expect(result.TIER_2).toBeNull();
-
-    await prisma.artistDepositSetting.deleteMany({
-      where: { artistId: otherArtistId },
+    expect(prismaMock.artistDepositSetting.findMany).toHaveBeenCalledWith({
+      where: { artistId },
     });
-    await prisma.artist.delete({ where: { id: otherArtistId } });
   });
 });
