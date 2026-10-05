@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:stripe": "vitest run --config vitest.stripe.config.mts",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:seed": "tsx prisma/seed.ts"
