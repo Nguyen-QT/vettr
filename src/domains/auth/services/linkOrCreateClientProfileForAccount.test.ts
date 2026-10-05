@@ -1,3 +1,5 @@
+import { prismaMock } from "@/testUtils/prismaMock";
+
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { Prisma } from "@/generated/prisma/client";
@@ -8,31 +10,8 @@ import {
   SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
 } from "../constants";
 
-// First mocked-Prisma unit test in this domain (CLAUDE.md 26.1.2.4) --
-// every sibling test in this folder hits real Postgres instead. This
-// establishes the pattern testing.md's Database Mocking Mandate already
-// calls for; migrating the existing suite is tracked as a separate,
-// scoped follow-up rather than folded into this PR.
-const { mockTx } = vi.hoisted(() => ({
-  mockTx: {
-    account: {
-      findUniqueOrThrow: vi.fn(),
-      update: vi.fn(),
-    },
-    clientProfile: {
-      findUnique: vi.fn(),
-      update: vi.fn(),
-      create: vi.fn(),
-    },
-  },
-}));
-
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    $transaction: (callback: (tx: typeof mockTx) => unknown) => callback(mockTx),
-  },
-}));
-
+// Mocked-Prisma unit test (architecture.md §7): the shared prismaMock's default
+// $transaction passes itself to the callback, so tx.* calls land on prismaMock.*.
 const { mockRecordAuditEvent } = vi.hoisted(() => ({
   mockRecordAuditEvent: vi.fn(),
 }));
@@ -46,8 +25,22 @@ const { linkOrCreateClientProfileForAccount } = await import(
 const ACCOUNT_ID = "account-1";
 const ACCOUNT_EMAIL = "artist@example.com";
 
+// Services read only a few fields, so stubs return that narrow shape.
+function stubRow(
+  method: { mockResolvedValue(v: never): unknown },
+  row: unknown
+): void {
+  method.mockResolvedValue(row as never);
+}
+
+function stubFindUnique(
+  impl: (args: { where: { instagramHandle?: string } }) => Promise<unknown>
+): void {
+  prismaMock.clientProfile.findUnique.mockImplementation(impl as never);
+}
+
 function mockAccount(clientProfileId: string | null) {
-  mockTx.account.findUniqueOrThrow.mockResolvedValue({
+  stubRow(prismaMock.account.findUniqueOrThrow, {
     id: ACCOUNT_ID,
     email: ACCOUNT_EMAIL,
     clientProfileId,
@@ -77,8 +70,8 @@ describe("linkOrCreateClientProfileForAccount", () => {
       success: false,
       error: ACCOUNT_ALREADY_HAS_CLIENT_PROFILE_ERROR_MESSAGE,
     });
-    expect(mockTx.clientProfile.findUnique).not.toHaveBeenCalled();
-    expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(prismaMock.clientProfile.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.account.update).not.toHaveBeenCalled();
     expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
     expect(mockRecordAuditEvent).toHaveBeenCalledWith({
       eventType: "CLIENT_PROFILE_LINK",
@@ -90,15 +83,15 @@ describe("linkOrCreateClientProfileForAccount", () => {
 
   it("creates a new ClientProfile from the account's email when nothing matches", async () => {
     mockAccount(null);
-    mockTx.clientProfile.findUnique.mockResolvedValue(null);
-    mockTx.clientProfile.create.mockResolvedValue({ id: "new-cp" });
+    stubRow(prismaMock.clientProfile.findUnique, null);
+    stubRow(prismaMock.clientProfile.create, { id: "new-cp" });
 
     const result = await linkOrCreateClientProfileForAccount(ACCOUNT_ID, {
       instagramHandle: "fresh_handle",
       phone: "555-1234",
     });
 
-    expect(mockTx.clientProfile.create).toHaveBeenCalledWith({
+    expect(prismaMock.clientProfile.create).toHaveBeenCalledWith({
       data: {
         instagramHandle: "fresh_handle",
         email: ACCOUNT_EMAIL,
@@ -108,7 +101,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
         dateOfBirth: undefined,
       },
     });
-    expect(mockTx.account.update).toHaveBeenCalledWith({
+    expect(prismaMock.account.update).toHaveBeenCalledWith({
       where: { id: ACCOUNT_ID },
       data: { clientProfileId: "new-cp" },
     });
@@ -121,14 +114,14 @@ describe("linkOrCreateClientProfileForAccount", () => {
       accountId: ACCOUNT_ID,
     });
     // Recorded only after the link write landed.
-    expect(mockTx.account.update.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(prismaMock.account.update.mock.invocationCallOrder[0]).toBeLessThan(
       mockRecordAuditEvent.mock.invocationCallOrder[0]!
     );
   });
 
   it("links an unlinked handle match, filling only blank fields", async () => {
     mockAccount(null);
-    mockTx.clientProfile.findUnique.mockImplementation(({ where }) => {
+    stubFindUnique(({ where }) => {
       if (where.instagramHandle) {
         return Promise.resolve({
           id: "matched-cp",
@@ -151,15 +144,15 @@ describe("linkOrCreateClientProfileForAccount", () => {
       lastName: "Filled",
     });
 
-    expect(mockTx.clientProfile.update).toHaveBeenCalledWith({
+    expect(prismaMock.clientProfile.update).toHaveBeenCalledWith({
       where: { id: "matched-cp" },
       data: { phone: "555-9999", lastName: "Filled" },
     });
-    expect(mockTx.account.update).toHaveBeenCalledWith({
+    expect(prismaMock.account.update).toHaveBeenCalledWith({
       where: { id: ACCOUNT_ID },
       data: { clientProfileId: "matched-cp" },
     });
-    expect(mockTx.clientProfile.create).not.toHaveBeenCalled();
+    expect(prismaMock.clientProfile.create).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true, clientProfileId: "matched-cp" });
     expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
     expect(mockRecordAuditEvent).toHaveBeenCalledWith({
@@ -172,7 +165,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
 
   it("returns failure when the handle match already belongs to another account", async () => {
     mockAccount(null);
-    mockTx.clientProfile.findUnique.mockResolvedValue({
+    stubRow(prismaMock.clientProfile.findUnique, {
       id: "matched-cp",
       account: { id: "other-account" },
     });
@@ -185,8 +178,8 @@ describe("linkOrCreateClientProfileForAccount", () => {
       success: false,
       error: CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE,
     });
-    expect(mockTx.clientProfile.update).not.toHaveBeenCalled();
-    expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(prismaMock.clientProfile.update).not.toHaveBeenCalled();
+    expect(prismaMock.account.update).not.toHaveBeenCalled();
     expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
     expect(mockRecordAuditEvent).toHaveBeenCalledWith({
       eventType: "CLIENT_PROFILE_LINK",
@@ -198,7 +191,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
 
   it("falls back to an unlinked email match without touching the existing handle", async () => {
     mockAccount(null);
-    mockTx.clientProfile.findUnique.mockImplementation(({ where }) => {
+    stubFindUnique(({ where }) => {
       if (where.instagramHandle) return Promise.resolve(null);
       return Promise.resolve({
         id: "matched-by-email",
@@ -217,7 +210,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
       firstName: "Filled",
     });
 
-    expect(mockTx.clientProfile.update).toHaveBeenCalledWith({
+    expect(prismaMock.clientProfile.update).toHaveBeenCalledWith({
       where: { id: "matched-by-email" },
       data: { firstName: "Filled" },
     });
@@ -233,7 +226,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
 
   it("returns failure when the email match already belongs to another account", async () => {
     mockAccount(null);
-    mockTx.clientProfile.findUnique.mockImplementation(({ where }) => {
+    stubFindUnique(({ where }) => {
       if (where.instagramHandle) return Promise.resolve(null);
       return Promise.resolve({
         id: "matched-by-email",
@@ -249,7 +242,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
       success: false,
       error: CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE,
     });
-    expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(prismaMock.account.update).not.toHaveBeenCalled();
     expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
     expect(mockRecordAuditEvent).toHaveBeenCalledWith({
       eventType: "CLIENT_PROFILE_LINK",
@@ -260,7 +253,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
   });
 
   it("returns the generic error instead of throwing on an unexpected failure", async () => {
-    mockTx.account.findUniqueOrThrow.mockRejectedValue(new Error("connection lost"));
+    prismaMock.account.findUniqueOrThrow.mockRejectedValue(new Error("connection lost"));
 
     const result = await linkOrCreateClientProfileForAccount(ACCOUNT_ID, {
       instagramHandle: "any_handle",
@@ -270,7 +263,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
       success: false,
       error: SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
     });
-    expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(prismaMock.account.update).not.toHaveBeenCalled();
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     expect(consoleErrorSpy.mock.calls[0]?.[0]).toContain("Unexpected failure");
@@ -281,8 +274,8 @@ describe("linkOrCreateClientProfileForAccount", () => {
   // log only.
   it("returns the same generic error on a P2002 unique conflict, distinguishing it only in the log", async () => {
     mockAccount(null);
-    mockTx.clientProfile.findUnique.mockResolvedValue(null);
-    mockTx.clientProfile.create.mockRejectedValue(
+    stubRow(prismaMock.clientProfile.findUnique, null);
+    prismaMock.clientProfile.create.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
         code: "P2002",
         clientVersion: "test",
@@ -297,7 +290,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
       success: false,
       error: SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
     });
-    expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(prismaMock.account.update).not.toHaveBeenCalled();
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -308,8 +301,8 @@ describe("linkOrCreateClientProfileForAccount", () => {
 
   it("never logs the account email or submitted instagram handle", async () => {
     mockAccount(null);
-    mockTx.clientProfile.findUnique.mockResolvedValue(null);
-    mockTx.clientProfile.create.mockRejectedValue(
+    stubRow(prismaMock.clientProfile.findUnique, null);
+    prismaMock.clientProfile.create.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
         code: "P2002",
         clientVersion: "test",

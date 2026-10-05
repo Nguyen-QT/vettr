@@ -1,105 +1,114 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import type { Account } from "@/generated/prisma/client";
 
 import { INVALID_CREDENTIALS_ERROR_MESSAGE, MAX_FAILED_LOGIN_ATTEMPTS } from "../constants";
-import { hashPassword } from "./hashPassword";
+import { createSession } from "./createSession";
 import { loginClient } from "./loginClient";
 import { recordAuditEvent } from "./recordAuditEvent";
-import * as verifyPasswordModule from "./verifyPassword";
+import { recordFailedLoginAttempt } from "./recordFailedLoginAttempt";
+import { resetFailedLoginAttempts } from "./resetFailedLoginAttempts";
+import { verifyPassword } from "./verifyPassword";
 
+// Mocked-Prisma unit test (architecture.md §7): the account lookup is stubbed
+// and same-domain collaborators are mocked, so assertions are on delegation
+// and payloads rather than reading rows back. The lockout-threshold write
+// itself is covered by recordFailedLoginAttempt.test.ts.
+vi.mock("./createSession", () => ({ createSession: vi.fn() }));
 vi.mock("./recordAuditEvent", () => ({ recordAuditEvent: vi.fn() }));
+vi.mock("./recordFailedLoginAttempt", () => ({ recordFailedLoginAttempt: vi.fn() }));
+vi.mock("./resetFailedLoginAttempts", () => ({ resetFailedLoginAttempts: vi.fn() }));
+vi.mock("./verifyPassword", () => ({ verifyPassword: vi.fn() }));
 
-// Spies on the real implementation rather than stubbing a fake result --
-// existing cases below still exercise real scrypt verification; new
-// lockout cases only need to assert whether it was called at all.
-vi.mock("./verifyPassword", async (importOriginal) => {
-  const actual = await importOriginal<typeof verifyPasswordModule>();
-  return { verifyPassword: vi.fn(actual.verifyPassword) };
-});
+const NOW = new Date("2026-03-01T12:00:00.000Z");
+const SESSION_EXPIRES_AT = new Date("2026-03-08T12:00:00.000Z");
+const EMAIL = "account-1@example.com";
+const PASSWORD = "correct horse battery staple";
+
+function buildAccount(overrides: Partial<Account> = {}): Account {
+  return {
+    id: "account-1",
+    email: EMAIL,
+    passwordHash: "stored-hash",
+    role: "CLIENT",
+    createdAt: NOW,
+    updatedAt: NOW,
+    failedLoginAttempts: 0,
+    lockedUntil: null,
+    emailVerifiedAt: new Date("2026-01-01T00:00:00.000Z"),
+    emailVerificationCodeHash: null,
+    emailVerificationCodeExpiresAt: null,
+    emailVerificationCodeSentAt: null,
+    emailVerificationAttempts: 0,
+    artistId: null,
+    clientProfileId: "client-1",
+    ...overrides,
+  };
+}
 
 describe("loginClient", () => {
-  let clientProfileId: string;
-  let email: string;
-  const password = "correct horse battery staple";
-
-  beforeEach(async () => {
-    vi.mocked(verifyPasswordModule.verifyPassword).mockClear();
-    vi.mocked(recordAuditEvent).mockClear();
-    clientProfileId = randomUUID();
-    email = `${clientProfileId}-account@example.com`;
-    await prisma.clientProfile.create({
-      data: {
-        id: clientProfileId,
-        instagramHandle: `test_client_${clientProfileId.slice(0, 8)}`,
-        email: `${clientProfileId}@example.com`,
-      },
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    vi.mocked(verifyPassword).mockResolvedValue(true);
+    vi.mocked(createSession).mockResolvedValue({
+      id: "session-1",
+      expiresAt: SESSION_EXPIRES_AT,
+      createdAt: NOW,
+      accountId: "account-1",
+      activeRole: "CLIENT",
     });
-    await prisma.account.create({
-      data: {
-        email,
-        passwordHash: await hashPassword(password),
-        role: "CLIENT",
-        clientProfileId,
-        emailVerifiedAt: new Date(),
-      },
-    });
+    prismaMock.account.findUnique.mockResolvedValue(buildAccount());
   });
 
-  afterEach(async () => {
-    const account = await prisma.account.findUnique({ where: { email } });
-    if (account) {
-      await prisma.session.deleteMany({ where: { accountId: account.id } });
-      await prisma.account.delete({ where: { id: account.id } });
-    }
-    await prisma.clientProfile.delete({ where: { id: clientProfileId } });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   it("creates a session and returns the linked clientProfileId for correct credentials", async () => {
-    const result = await loginClient({ email, password });
+    const result = await loginClient({ email: EMAIL, password: PASSWORD });
 
-    expect(result.success).toBe(true);
-    expect(recordAuditEvent).not.toHaveBeenCalled();
-    if (!result.success || "pendingVerification" in result) return;
-    expect(result.clientProfileId).toBe(clientProfileId);
-
-    const session = await prisma.session.findUnique({
-      where: { id: result.sessionId },
+    expect(prismaMock.account.findUnique).toHaveBeenCalledWith({ where: { email: EMAIL } });
+    expect(verifyPassword).toHaveBeenCalledWith(PASSWORD, "stored-hash");
+    expect(createSession).toHaveBeenCalledWith("account-1", "CLIENT");
+    expect(result).toEqual({
+      success: true,
+      sessionId: "session-1",
+      expiresAt: SESSION_EXPIRES_AT,
+      clientProfileId: "client-1",
     });
-    expect(session).not.toBeNull();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+    expect(resetFailedLoginAttempts).not.toHaveBeenCalled();
   });
 
   it("rejects an incorrect password without creating a session", async () => {
-    const result = await loginClient({ email, password: "wrong password" });
+    vi.mocked(verifyPassword).mockResolvedValue(false);
 
-    expect(result).toEqual({
-      success: false,
-      error: INVALID_CREDENTIALS_ERROR_MESSAGE,
-    });
+    const result = await loginClient({ email: EMAIL, password: "wrong password" });
 
-    const account = await prisma.account.findUnique({ where: { email } });
+    expect(result).toEqual({ success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE });
+    expect(createSession).not.toHaveBeenCalled();
+    expect(recordFailedLoginAttempt).toHaveBeenCalledWith("account-1");
     expect(recordAuditEvent).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith({
       eventType: "LOGIN_FAILED",
       outcome: "REJECTED",
       reasonCode: "INVALID_PASSWORD",
-      accountId: account?.id,
+      accountId: "account-1",
     });
     expect(vi.mocked(recordAuditEvent).mock.calls[0][0]).not.toHaveProperty("attemptedEmail");
   });
 
   it("rejects an email with no matching account", async () => {
-    const result = await loginClient({
-      email: "no-such-account@example.com",
-      password,
-    });
+    prismaMock.account.findUnique.mockResolvedValue(null);
 
-    expect(result).toEqual({
-      success: false,
-      error: INVALID_CREDENTIALS_ERROR_MESSAGE,
-    });
+    const result = await loginClient({ email: "no-such-account@example.com", password: PASSWORD });
+
+    expect(result).toEqual({ success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE });
+    expect(verifyPassword).not.toHaveBeenCalled();
     expect(recordAuditEvent).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith({
       eventType: "LOGIN_FAILED",
@@ -111,164 +120,125 @@ describe("loginClient", () => {
   });
 
   it("rejects a non-CLIENT account even with the correct password", async () => {
-    const artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Login Client Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    const artistEmail = `${artistId}-account@example.com`;
-    await prisma.account.create({
-      data: {
-        email: artistEmail,
-        passwordHash: await hashPassword(password),
-        role: "ARTIST",
-        artistId,
-      },
-    });
+    prismaMock.account.findUnique.mockResolvedValue(
+      buildAccount({ role: "ARTIST", artistId: "artist-1", clientProfileId: null })
+    );
 
-    const result = await loginClient({ email: artistEmail, password });
+    const result = await loginClient({ email: EMAIL, password: PASSWORD });
 
-    expect(result).toEqual({
-      success: false,
-      error: INVALID_CREDENTIALS_ERROR_MESSAGE,
-    });
-
-    const wrongRoleAccount = await prisma.account.findUnique({ where: { email: artistEmail } });
-    expect(wrongRoleAccount?.failedLoginAttempts).toBe(0);
+    expect(result).toEqual({ success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE });
+    expect(verifyPassword).not.toHaveBeenCalled();
+    expect(recordFailedLoginAttempt).not.toHaveBeenCalled();
     expect(recordAuditEvent).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith({
       eventType: "LOGIN_FAILED",
       outcome: "REJECTED",
       reasonCode: "ROLE_MISMATCH",
-      attemptedEmail: artistEmail,
+      attemptedEmail: EMAIL,
     });
     expect(vi.mocked(recordAuditEvent).mock.calls[0][0]).not.toHaveProperty("accountId");
-
-    await prisma.account.delete({ where: { email: artistEmail } });
-    await prisma.artist.delete({ where: { id: artistId } });
   });
 
   it("rejects a locked account even with the correct password, without calling verifyPassword", async () => {
-    await prisma.account.update({
-      where: { email },
-      data: { failedLoginAttempts: MAX_FAILED_LOGIN_ATTEMPTS, lockedUntil: new Date(Date.now() + 60_000) },
-    });
+    prismaMock.account.findUnique.mockResolvedValue(
+      buildAccount({
+        failedLoginAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
+        lockedUntil: new Date(NOW.getTime() + 60_000),
+      })
+    );
 
-    const result = await loginClient({ email, password });
+    const result = await loginClient({ email: EMAIL, password: PASSWORD });
 
-    expect(result).toEqual({
-      success: false,
-      error: INVALID_CREDENTIALS_ERROR_MESSAGE,
-    });
-    expect(verifyPasswordModule.verifyPassword).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE });
+    expect(verifyPassword).not.toHaveBeenCalled();
     expect(recordAuditEvent).not.toHaveBeenCalled();
-
-    const account = await prisma.account.findUnique({ where: { email } });
-    expect(account?.failedLoginAttempts).toBe(MAX_FAILED_LOGIN_ATTEMPTS);
-    expect(account?.lockedUntil).not.toBeNull();
+    expect(recordFailedLoginAttempt).not.toHaveBeenCalled();
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it("logs in and resets the counter once a lockout has naturally expired", async () => {
-    await prisma.account.update({
-      where: { email },
-      data: { failedLoginAttempts: MAX_FAILED_LOGIN_ATTEMPTS, lockedUntil: new Date(Date.now() - 1000) },
-    });
+    prismaMock.account.findUnique.mockResolvedValue(
+      buildAccount({
+        failedLoginAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
+        lockedUntil: new Date(NOW.getTime() - 1000),
+      })
+    );
 
-    const result = await loginClient({ email, password });
+    const result = await loginClient({ email: EMAIL, password: PASSWORD });
 
     expect(result.success).toBe(true);
-
-    const account = await prisma.account.findUnique({ where: { email } });
-    expect(account?.failedLoginAttempts).toBe(0);
-    expect(account?.lockedUntil).toBeNull();
+    expect(resetFailedLoginAttempts).toHaveBeenCalledWith("account-1");
   });
 
-  it("increments the failed-attempt counter on a wrong password", async () => {
-    await loginClient({ email, password: "wrong password" });
+  it("delegates the failed-attempt count to recordFailedLoginAttempt on a wrong password", async () => {
+    vi.mocked(verifyPassword).mockResolvedValue(false);
 
-    const account = await prisma.account.findUnique({ where: { email } });
-    expect(account?.failedLoginAttempts).toBe(1);
-  });
+    await loginClient({ email: EMAIL, password: "wrong password" });
 
-  it("locks the account when a wrong password hits MAX_FAILED_LOGIN_ATTEMPTS", async () => {
-    await prisma.account.update({
-      where: { email },
-      data: { failedLoginAttempts: MAX_FAILED_LOGIN_ATTEMPTS - 1, lockedUntil: null },
-    });
-
-    await loginClient({ email, password: "wrong password" });
-
-    const account = await prisma.account.findUnique({ where: { email } });
-    expect(account?.failedLoginAttempts).toBe(MAX_FAILED_LOGIN_ATTEMPTS);
-    expect(account?.lockedUntil).not.toBeNull();
-    expect(account?.lockedUntil?.getTime()).toBeGreaterThan(Date.now());
+    expect(recordFailedLoginAttempt).toHaveBeenCalledTimes(1);
+    expect(recordFailedLoginAttempt).toHaveBeenCalledWith("account-1");
   });
 
   it("returns pendingVerification with no session for an unverified account and correct password", async () => {
-    await prisma.account.update({ where: { email }, data: { emailVerifiedAt: null } });
+    prismaMock.account.findUnique.mockResolvedValue(buildAccount({ emailVerifiedAt: null }));
 
-    const result = await loginClient({ email, password });
+    const result = await loginClient({ email: EMAIL, password: PASSWORD });
 
-    expect(result).toEqual({ success: true, pendingVerification: true, clientProfileId });
-    const account = await prisma.account.findUnique({ where: { email } });
-    expect(await prisma.session.count({ where: { accountId: account?.id } })).toBe(0);
+    expect(result).toEqual({
+      success: true,
+      pendingVerification: true,
+      clientProfileId: "client-1",
+    });
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it("rejects an unverified account with a wrong password and still counts the failure", async () => {
-    await prisma.account.update({ where: { email }, data: { emailVerifiedAt: null } });
+    prismaMock.account.findUnique.mockResolvedValue(buildAccount({ emailVerifiedAt: null }));
+    vi.mocked(verifyPassword).mockResolvedValue(false);
 
-    const result = await loginClient({ email, password: "wrong password" });
+    const result = await loginClient({ email: EMAIL, password: "wrong password" });
 
     expect(result).toEqual({ success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE });
-    const account = await prisma.account.findUnique({ where: { email } });
-    expect(account?.failedLoginAttempts).toBe(1);
+    expect(recordFailedLoginAttempt).toHaveBeenCalledWith("account-1");
   });
 
   it("resets the counter but stays pending for an unverified account with prior failures", async () => {
-    await prisma.account.update({
-      where: { email },
-      data: { emailVerifiedAt: null, failedLoginAttempts: 3, lockedUntil: null },
+    prismaMock.account.findUnique.mockResolvedValue(
+      buildAccount({ emailVerifiedAt: null, failedLoginAttempts: 3 })
+    );
+
+    const result = await loginClient({ email: EMAIL, password: PASSWORD });
+
+    expect(result).toEqual({
+      success: true,
+      pendingVerification: true,
+      clientProfileId: "client-1",
     });
-
-    const result = await loginClient({ email, password });
-
-    expect(result).toEqual({ success: true, pendingVerification: true, clientProfileId });
-    const account = await prisma.account.findUnique({ where: { email } });
-    expect(account?.failedLoginAttempts).toBe(0);
+    expect(resetFailedLoginAttempts).toHaveBeenCalledWith("account-1");
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it("lockout takes precedence over pendingVerification for an unverified locked account", async () => {
-    await prisma.account.update({
-      where: { email },
-      data: {
+    prismaMock.account.findUnique.mockResolvedValue(
+      buildAccount({
         emailVerifiedAt: null,
         failedLoginAttempts: MAX_FAILED_LOGIN_ATTEMPTS,
-        lockedUntil: new Date(Date.now() + 60_000),
-      },
-    });
+        lockedUntil: new Date(NOW.getTime() + 60_000),
+      })
+    );
 
-    const result = await loginClient({ email, password });
+    const result = await loginClient({ email: EMAIL, password: PASSWORD });
 
     expect(result).toEqual({ success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE });
-    expect(verifyPasswordModule.verifyPassword).not.toHaveBeenCalled();
+    expect(verifyPassword).not.toHaveBeenCalled();
   });
 
   it("resets the counter on a successful login after prior failures", async () => {
-    await prisma.account.update({
-      where: { email },
-      data: { failedLoginAttempts: 3, lockedUntil: null },
-    });
+    prismaMock.account.findUnique.mockResolvedValue(buildAccount({ failedLoginAttempts: 3 }));
 
-    const result = await loginClient({ email, password });
+    const result = await loginClient({ email: EMAIL, password: PASSWORD });
 
     expect(result.success).toBe(true);
-
-    const account = await prisma.account.findUnique({ where: { email } });
-    expect(account?.failedLoginAttempts).toBe(0);
-    expect(account?.lockedUntil).toBeNull();
+    expect(resetFailedLoginAttempts).toHaveBeenCalledWith("account-1");
   });
 });
