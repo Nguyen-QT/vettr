@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { RequestStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 // Real-database integration tier helpers (28.3). Unlike prismaMock.ts this
@@ -20,6 +21,35 @@ export interface TrackedIdentity {
   id: string;
   instagramHandle: string;
   email: string;
+}
+
+export interface CreateBookingRequestInput {
+  artistId: string;
+  clientId: string;
+  requestedStartTime?: Date;
+  status?: RequestStatus;
+  proposedDurationMinutes?: number;
+}
+
+// Creates a request for an already-tracked artist/client, so wipe() removes
+// it (and its cascading children) without extra tracking.
+export async function createBookingRequest(
+  input: CreateBookingRequestInput
+): Promise<{ id: string }> {
+  const request = await prisma.bookingRequest.create({
+    data: {
+      artistId: input.artistId,
+      clientId: input.clientId,
+      tier: "TIER_2",
+      minPrice: 50,
+      maxPrice: 100,
+      requestedStartTime: input.requestedStartTime,
+      status: input.status,
+      proposedDurationMinutes: input.proposedDurationMinutes,
+    },
+    select: { id: true },
+  });
+  return request;
 }
 
 export interface IntegrationTracker {
