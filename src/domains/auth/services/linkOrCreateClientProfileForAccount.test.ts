@@ -33,6 +33,12 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+const { mockRecordAuditEvent } = vi.hoisted(() => ({
+  mockRecordAuditEvent: vi.fn(),
+}));
+
+vi.mock("./recordAuditEvent", () => ({ recordAuditEvent: mockRecordAuditEvent }));
+
 const { linkOrCreateClientProfileForAccount } = await import(
   "./linkOrCreateClientProfileForAccount"
 );
@@ -73,6 +79,13 @@ describe("linkOrCreateClientProfileForAccount", () => {
     });
     expect(mockTx.clientProfile.findUnique).not.toHaveBeenCalled();
     expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+      eventType: "CLIENT_PROFILE_LINK",
+      outcome: "REJECTED",
+      reasonCode: "ALREADY_HAS_CLIENT_PROFILE",
+      accountId: ACCOUNT_ID,
+    });
   });
 
   it("creates a new ClientProfile from the account's email when nothing matches", async () => {
@@ -100,6 +113,17 @@ describe("linkOrCreateClientProfileForAccount", () => {
       data: { clientProfileId: "new-cp" },
     });
     expect(result).toEqual({ success: true, clientProfileId: "new-cp" });
+    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+      eventType: "CLIENT_PROFILE_LINK",
+      outcome: "SUCCESS",
+      reasonCode: "CLIENT_PROFILE_CREATED",
+      accountId: ACCOUNT_ID,
+    });
+    // Recorded only after the link write landed.
+    expect(mockTx.account.update.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRecordAuditEvent.mock.invocationCallOrder[0]!
+    );
   });
 
   it("links an unlinked handle match, filling only blank fields", async () => {
@@ -137,6 +161,13 @@ describe("linkOrCreateClientProfileForAccount", () => {
     });
     expect(mockTx.clientProfile.create).not.toHaveBeenCalled();
     expect(result).toEqual({ success: true, clientProfileId: "matched-cp" });
+    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+      eventType: "CLIENT_PROFILE_LINK",
+      outcome: "SUCCESS",
+      reasonCode: "CLIENT_PROFILE_MATCHED_EXISTING",
+      accountId: ACCOUNT_ID,
+    });
   });
 
   it("returns failure when the handle match already belongs to another account", async () => {
@@ -156,6 +187,13 @@ describe("linkOrCreateClientProfileForAccount", () => {
     });
     expect(mockTx.clientProfile.update).not.toHaveBeenCalled();
     expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+      eventType: "CLIENT_PROFILE_LINK",
+      outcome: "REJECTED",
+      reasonCode: "CLIENT_PROFILE_ALREADY_LINKED",
+      accountId: ACCOUNT_ID,
+    });
   });
 
   it("falls back to an unlinked email match without touching the existing handle", async () => {
@@ -184,6 +222,13 @@ describe("linkOrCreateClientProfileForAccount", () => {
       data: { firstName: "Filled" },
     });
     expect(result).toEqual({ success: true, clientProfileId: "matched-by-email" });
+    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+      eventType: "CLIENT_PROFILE_LINK",
+      outcome: "SUCCESS",
+      reasonCode: "CLIENT_PROFILE_MATCHED_EXISTING",
+      accountId: ACCOUNT_ID,
+    });
   });
 
   it("returns failure when the email match already belongs to another account", async () => {
@@ -205,6 +250,13 @@ describe("linkOrCreateClientProfileForAccount", () => {
       error: CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE,
     });
     expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+      eventType: "CLIENT_PROFILE_LINK",
+      outcome: "REJECTED",
+      reasonCode: "CLIENT_PROFILE_ALREADY_LINKED",
+      accountId: ACCOUNT_ID,
+    });
   });
 
   it("returns the generic error instead of throwing on an unexpected failure", async () => {
@@ -219,6 +271,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
       error: SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
     });
     expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     expect(consoleErrorSpy.mock.calls[0]?.[0]).toContain("Unexpected failure");
   });
@@ -245,6 +298,7 @@ describe("linkOrCreateClientProfileForAccount", () => {
       error: SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
     });
     expect(mockTx.account.update).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.stringContaining("unique conflict"),
