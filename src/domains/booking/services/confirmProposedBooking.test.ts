@@ -1,137 +1,122 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import { SLOT_CONFLICT_ERROR_MESSAGE } from "@/domains/scheduling/constants";
+import {
+  createBookedTimeSlots,
+  isSlotConflict,
+} from "@/domains/scheduling/services/confirmTimeSlot";
 
 import { confirmProposedBooking } from "./confirmProposedBooking";
-import { reviewBookingRequest } from "./reviewBookingRequest";
 
-// Hits the real local Postgres database, same as reviewBookingRequest.test.ts.
+vi.mock("@/domains/scheduling/services/confirmTimeSlot", () => ({
+  createBookedTimeSlots: vi.fn(),
+  isSlotConflict: vi.fn(),
+}));
+
+// Mocked-Prisma unit test (architecture.md §7): scheduling's slot booking
+// is mocked at its public contract. The real "second slot taken by someone
+// else -> transaction rolls back, no partial booking" behaviour (double-
+// booking under concurrency) is a 28.3 integration-tier candidate; here
+// only this service's conflict translation and write ordering are asserted.
 describe("confirmProposedBooking", () => {
-  let artistId: string;
+  const requestedStartTime = new Date("2026-12-10T11:00:00.000Z");
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Confirm Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  async function createBookingRequest(requestedStartTime: Date): Promise<string> {
-    const clientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        requestedStartTime,
-      },
-    });
-    return request.id;
+  function stubRequest(
+    overrides: Partial<{
+      status: string;
+      requestedStartTime: Date | null;
+      proposedDurationMinutes: number | null;
+    }> = {}
+  ): void {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      id: "request-1",
+      artistId: "artist-1",
+      status: "AWAITING_SLOT_CONFIRMATION",
+      requestedStartTime,
+      proposedDurationMinutes: 300,
+      ...overrides,
+    } as never);
   }
 
-  it("books both proposed slots and approves an AWAITING_SLOT_CONFIRMATION request", async () => {
-    const bookingRequestId = await createBookingRequest(
-      new Date("2026-12-10T11:00:00.000Z")
-    );
-    const proposal = await reviewBookingRequest({
-      bookingRequestId,
-      durationMinutes: 300, // spills into a second slot
-      estimatedPrice: 400,
-    });
-    expect(proposal.success).toBe(true);
-    if (!proposal.success) return;
-    expect(proposal.outcome).toBe("AWAITING_SLOT_CONFIRMATION");
+  beforeEach(() => {
+    vi.mocked(createBookedTimeSlots).mockReset();
+    vi.mocked(isSlotConflict).mockReset();
+  });
 
-    const result = await confirmProposedBooking(bookingRequestId);
+  it("books both proposed slots and approves an AWAITING_SLOT_CONFIRMATION request", async () => {
+    stubRequest();
+    vi.mocked(createBookedTimeSlots).mockResolvedValue(undefined as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
+
+    const result = await confirmProposedBooking("request-1");
 
     expect(result.success).toBe(true);
-
-    const request = await prisma.bookingRequest.findUniqueOrThrow({
-      where: { id: bookingRequestId },
+    expect(createBookedTimeSlots).toHaveBeenCalledWith(prismaMock, {
+      bookingRequestId: "request-1",
+      artistId: "artist-1",
+      startTime: requestedStartTime,
+      durationMinutes: 300,
     });
-    expect(request.status).toBe("APPROVED");
-
-    const slots = await prisma.timeSlot.findMany({
-      where: { bookingRequestId },
-      orderBy: { startTime: "asc" },
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
+      where: { id: "request-1" },
+      data: { status: "APPROVED" },
     });
-    expect(slots).toHaveLength(2);
-    expect(slots.every((slot) => slot.status === "BOOKED")).toBe(true);
-    expect(slots[0].endTime).toEqual(slots[1].startTime);
   });
 
   it("returns an error for an unknown booking request", async () => {
-    const result = await confirmProposedBooking(randomUUID());
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(null);
+
+    const result = await confirmProposedBooking("missing");
+
     expect(result.success).toBe(false);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it("returns an error when the request is not AWAITING_SLOT_CONFIRMATION", async () => {
-    const bookingRequestId = await createBookingRequest(
-      new Date("2026-12-11T11:00:00.000Z")
-    );
-    // Still PENDING -- never reviewed.
+    stubRequest({ status: "PENDING" });
 
-    const result = await confirmProposedBooking(bookingRequestId);
+    const result = await confirmProposedBooking("request-1");
 
     expect(result.success).toBe(false);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it("rolls back when one of the two proposed slots was booked by someone else in the meantime", async () => {
-    const bookingRequestId = await createBookingRequest(
-      new Date("2026-12-12T11:00:00.000Z")
-    );
-    const proposal = await reviewBookingRequest({
-      bookingRequestId,
-      durationMinutes: 300,
-      estimatedPrice: 400,
+  it("returns an error when the request has no proposed booking on file", async () => {
+    stubRequest({ proposedDurationMinutes: null });
+
+    const result = await confirmProposedBooking("request-1");
+
+    expect(result).toEqual({
+      success: false,
+      error: "This request has no proposed booking on file.",
     });
-    expect(proposal.success).toBe(true);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
 
-    // Someone else takes the second slot's exact window in the meantime.
-    const otherRequestId = await createBookingRequest(
-      new Date("2026-12-12T14:00:00.000Z")
-    );
-    const otherBooking = await reviewBookingRequest({
-      bookingRequestId: otherRequestId,
-      durationMinutes: 60,
-      estimatedPrice: 100,
+  it("returns the slot-conflict error and does not approve when a proposed slot was taken in the meantime", async () => {
+    stubRequest();
+    const conflict = new Error("slot taken");
+    vi.mocked(createBookedTimeSlots).mockRejectedValue(conflict);
+    vi.mocked(isSlotConflict).mockReturnValue(true);
+
+    const result = await confirmProposedBooking("request-1");
+
+    expect(result).toEqual({
+      success: false,
+      error: SLOT_CONFLICT_ERROR_MESSAGE,
     });
-    expect(otherBooking.success).toBe(true);
+    expect(isSlotConflict).toHaveBeenCalledWith(conflict);
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+  });
 
-    const result = await confirmProposedBooking(bookingRequestId);
+  it("rethrows an error that is not a slot conflict", async () => {
+    stubRequest();
+    vi.mocked(createBookedTimeSlots).mockRejectedValue(new Error("db down"));
+    vi.mocked(isSlotConflict).mockReturnValue(false);
 
-    expect(result.success).toBe(false);
-
-    const request = await prisma.bookingRequest.findUniqueOrThrow({
-      where: { id: bookingRequestId },
-    });
-    // Still awaiting -- the transaction rolled back, no partial booking.
-    expect(request.status).toBe("AWAITING_SLOT_CONFIRMATION");
-
-    const slots = await prisma.timeSlot.findMany({
-      where: { bookingRequestId },
-    });
-    expect(slots).toHaveLength(0);
+    await expect(confirmProposedBooking("request-1")).rejects.toThrow("db down");
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 });

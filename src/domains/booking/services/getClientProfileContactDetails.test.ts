@@ -1,68 +1,52 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { getClientProfileContactDetails } from "./getClientProfileContactDetails";
 
+// Mocked-Prisma unit test (architecture.md §7).
 describe("getClientProfileContactDetails", () => {
-  let clientId: string;
-
-  beforeEach(async () => {
-    clientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-        phone: "+1234567890",
-        firstName: "Jamie",
-        lastName: "Rivera",
-        dateOfBirth: new Date("2000-01-01"),
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-  });
-
   it("returns the client's contact and onboarding details", async () => {
-    const result = await getClientProfileContactDetails(clientId);
-
-    expect(result).toEqual({
-      instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-      email: `test_client_${clientId.slice(0, 8)}@example.com`,
+    const details = {
+      instagramHandle: "test_client",
+      email: "test_client@example.com",
       phone: "+1234567890",
       firstName: "Jamie",
       lastName: "Rivera",
       dateOfBirth: new Date("2000-01-01"),
-    });
+    };
+    prismaMock.clientProfile.findUnique.mockResolvedValue(details as never);
+
+    const result = await getClientProfileContactDetails("client-1");
+
+    expect(prismaMock.clientProfile.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "client-1" } })
+    );
+    expect(result).toEqual(details);
   });
 
   it("returns null phone/onboarding fields when unset", async () => {
-    const noPhoneClientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: noPhoneClientId,
-        instagramHandle: `test_client_${noPhoneClientId.slice(0, 8)}`,
-        email: `test_client_${noPhoneClientId.slice(0, 8)}@example.com`,
-      },
-    });
+    prismaMock.clientProfile.findUnique.mockResolvedValue({
+      instagramHandle: "test_client",
+      email: "test_client@example.com",
+      phone: null,
+      firstName: null,
+      lastName: null,
+      dateOfBirth: null,
+    } as never);
 
-    const result = await getClientProfileContactDetails(noPhoneClientId);
+    const result = await getClientProfileContactDetails("client-1");
 
     expect(result?.phone).toBeNull();
     expect(result?.firstName).toBeNull();
     expect(result?.lastName).toBeNull();
     expect(result?.dateOfBirth).toBeNull();
-
-    await prisma.clientProfile.delete({ where: { id: noPhoneClientId } });
   });
 
   it("returns null for an id that does not exist", async () => {
-    const result = await getClientProfileContactDetails(randomUUID());
+    prismaMock.clientProfile.findUnique.mockResolvedValue(null);
+
+    const result = await getClientProfileContactDetails("missing");
 
     expect(result).toBeNull();
   });

@@ -1,101 +1,91 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SLOT_CONFLICT_ERROR_MESSAGE } from "@/domains/scheduling/constants";
-import { prisma } from "@/lib/prisma";
+import { getAvailableSlots } from "@/domains/scheduling/services/getAvailableSlots";
 
 import {
   REQUEST_NOT_EDITABLE_ERROR_MESSAGE,
   REQUEST_NOT_FOUND_ERROR_MESSAGE,
 } from "../constants";
 import { combineRequestedDateAndTime } from "../booking.schema";
-import type { RequestStatus } from "../types";
 import { updatePendingBookingRequest } from "./updatePendingBookingRequest";
 
+vi.mock("@/domains/scheduling/services/getAvailableSlots", () => ({
+  getAvailableSlots: vi.fn(),
+}));
+
+// Mocked-Prisma unit test (architecture.md §7): scheduling's availability
+// read is mocked at its public contract. The nested deleteMany/create
+// atomicity of the design-reference replacement is Prisma's own guarantee
+// -> asserted here as the exact payload, with real behaviour a 28.3
+// integration-tier candidate.
 describe("updatePendingBookingRequest", () => {
-  let artistId: string;
-  let clientId: string;
+  const clientId = "client-1";
+  const requestId = "request-1";
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Update Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
+  const baseInput = {
+    bookingRequestId: requestId,
+    clientProfileId: clientId,
+    clientBudgetRange: { minPrice: 150, maxPrice: 250 },
+    requestedDate: "2099-08-01",
+    requestedTime: "14:00" as const,
+    designReferenceImageUrls: ["https://example.com/existing.jpg"],
+  };
+
+  beforeEach(() => {
+    vi.mocked(getAvailableSlots).mockReset();
   });
 
-  afterEach(async () => {
-    await prisma.timeSlot.deleteMany({ where: { artistId } });
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
+  function stubRequest(status = "PENDING", ownerId = clientId): void {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      id: requestId,
+      artistId: "artist-1",
+      clientId: ownerId,
+      status,
+    } as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
+  }
 
-  async function createRequest(status: RequestStatus): Promise<string> {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status,
-        requestedStartTime: new Date("2099-08-01T11:00:00.000Z"),
-      },
-    });
-    return request.id;
+  function stubAvailability(available: boolean): void {
+    vi.mocked(getAvailableSlots).mockResolvedValue([
+      { time: "14:00", available },
+    ] as never);
   }
 
   it("updates notes, budget, and requested time for a PENDING request", async () => {
-    const requestId = await createRequest("PENDING");
+    stubRequest();
+    stubAvailability(true);
 
     const result = await updatePendingBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
+      ...baseInput,
       clientNotes: "Updated notes",
-      clientBudgetRange: { minPrice: 150, maxPrice: 250 },
-      requestedDate: "2099-08-01",
-      requestedTime: "14:00",
-      designReferenceImageUrls: ["https://example.com/existing.jpg"],
     });
 
     expect(result).toEqual({ success: true });
-    const updated = await prisma.bookingRequest.findUnique({
+    expect(getAvailableSlots).toHaveBeenCalledWith("artist-1", "2099-08-01");
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
       where: { id: requestId },
+      data: {
+        clientNotes: "Updated notes",
+        minPrice: 150,
+        maxPrice: 250,
+        requestedStartTime: combineRequestedDateAndTime("2099-08-01", "14:00"),
+        designReferences: {
+          deleteMany: {},
+          create: [{ imageUrl: "https://example.com/existing.jpg" }],
+        },
+      },
     });
-    expect(updated?.clientNotes).toBe("Updated notes");
-    expect(Number(updated?.minPrice)).toBe(150);
-    expect(Number(updated?.maxPrice)).toBe(250);
-    expect(updated?.requestedStartTime).toEqual(
-      combineRequestedDateAndTime("2099-08-01", "14:00")
-    );
   });
 
   it("replaces the request's design reference images wholesale", async () => {
-    const requestId = await createRequest("PENDING");
-    await prisma.designReference.create({
-      data: { bookingRequestId: requestId, imageUrl: "https://example.com/old.jpg" },
-    });
+    stubRequest();
+    stubAvailability(true);
 
     const result = await updatePendingBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
-      clientBudgetRange: { minPrice: 100, maxPrice: 200 },
-      requestedDate: "2099-08-01",
-      requestedTime: "14:00",
+      ...baseInput,
       designReferenceImageUrls: [
         "https://example.com/new-1.jpg",
         "https://example.com/new-2.jpg",
@@ -103,92 +93,83 @@ describe("updatePendingBookingRequest", () => {
     });
 
     expect(result).toEqual({ success: true });
-    const references = await prisma.designReference.findMany({
-      where: { bookingRequestId: requestId },
-    });
-    expect(references.map((reference) => reference.imageUrl).sort()).toEqual(
-      ["https://example.com/new-1.jpg", "https://example.com/new-2.jpg"].sort()
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          designReferences: {
+            deleteMany: {},
+            create: [
+              { imageUrl: "https://example.com/new-1.jpg" },
+              { imageUrl: "https://example.com/new-2.jpg" },
+            ],
+          },
+        }),
+      })
     );
   });
 
   it("rejects a requested time that is no longer available", async () => {
-    await prisma.timeSlot.create({
-      data: {
-        artistId,
-        bookingRequestId: await createRequest("APPROVED"),
-        // Local time, matching getAvailableSlots' own slotWindow()
-        // construction -- not UTC.
-        startTime: new Date("2099-08-01T14:00:00"),
-        endTime: new Date("2099-08-01T17:00:00"),
-        status: "BOOKED",
-      },
-    });
-    const requestId = await createRequest("PENDING");
+    stubRequest();
+    stubAvailability(false);
 
-    const result = await updatePendingBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
-      clientBudgetRange: { minPrice: 100, maxPrice: 200 },
-      requestedDate: "2099-08-01",
-      requestedTime: "14:00",
-      designReferenceImageUrls: ["https://example.com/existing.jpg"],
-    });
+    const result = await updatePendingBookingRequest(baseInput);
 
     expect(result).toEqual({
       success: false,
       error: SLOT_CONFLICT_ERROR_MESSAGE,
     });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a requested time that is absent from the available slots", async () => {
+    stubRequest();
+    vi.mocked(getAvailableSlots).mockResolvedValue([
+      { time: "11:00", available: true },
+    ] as never);
+
+    const result = await updatePendingBookingRequest(baseInput);
+
+    expect(result).toEqual({
+      success: false,
+      error: SLOT_CONFLICT_ERROR_MESSAGE,
+    });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 
   it("rejects editing a request that is not PENDING", async () => {
-    const requestId = await createRequest("APPROVED");
+    stubRequest("APPROVED");
 
-    const result = await updatePendingBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
-      clientBudgetRange: { minPrice: 100, maxPrice: 200 },
-      requestedDate: "2099-08-02",
-      requestedTime: "11:00",
-      designReferenceImageUrls: ["https://example.com/existing.jpg"],
-    });
+    const result = await updatePendingBookingRequest(baseInput);
 
     expect(result).toEqual({
       success: false,
       error: REQUEST_NOT_EDITABLE_ERROR_MESSAGE,
     });
+    expect(getAvailableSlots).not.toHaveBeenCalled();
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 
   it("rejects editing a request that belongs to a different client", async () => {
-    const requestId = await createRequest("PENDING");
+    stubRequest("PENDING", "someone-else");
 
-    const result = await updatePendingBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: randomUUID(),
-      clientBudgetRange: { minPrice: 100, maxPrice: 200 },
-      requestedDate: "2099-08-02",
-      requestedTime: "11:00",
-      designReferenceImageUrls: ["https://example.com/existing.jpg"],
-    });
+    const result = await updatePendingBookingRequest(baseInput);
 
     expect(result).toEqual({
       success: false,
       error: REQUEST_NOT_FOUND_ERROR_MESSAGE,
     });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 
   it("rejects a request id that does not exist", async () => {
-    const result = await updatePendingBookingRequest({
-      bookingRequestId: randomUUID(),
-      clientProfileId: clientId,
-      clientBudgetRange: { minPrice: 100, maxPrice: 200 },
-      requestedDate: "2099-08-02",
-      requestedTime: "11:00",
-      designReferenceImageUrls: ["https://example.com/existing.jpg"],
-    });
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(null);
+
+    const result = await updatePendingBookingRequest(baseInput);
 
     expect(result).toEqual({
       success: false,
       error: REQUEST_NOT_FOUND_ERROR_MESSAGE,
     });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 });

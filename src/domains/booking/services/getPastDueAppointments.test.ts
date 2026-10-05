@@ -1,126 +1,145 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getPastDueAppointments } from "./getPastDueAppointments";
 
+// Mocked-Prisma unit test (architecture.md §7). The "fully passed" /
+// APPROVED / own-artist filters are DB-side, so they are asserted on the
+// `where` payload (with the clock pinned); mapping and ordering are
+// asserted on stubbed rows.
 describe("getPastDueAppointments", () => {
-  let artistId: string;
+  const artistId = "artist-1";
+  const now = new Date("2026-10-05T12:00:00.000Z");
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Past Due Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
   });
 
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  async function createApprovedRequest(
-    slots: { startTime: Date; endTime: Date }[],
-    status: "APPROVED" | "PENDING" = "APPROVED",
-    paymentMethod?: "CASH" | "CARD"
-  ): Promise<string> {
-    const clientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
+  function slot(startIso: string, endIso: string) {
+    return { startTime: new Date(startIso), endTime: new Date(endIso) };
+  }
+
+  function row(
+    overrides: Partial<{
+      id: string;
+      paymentMethod: "CASH" | "CARD" | null;
+      timeSlots: { startTime: Date; endTime: Date }[];
+    }> = {}
+  ) {
+    return {
+      id: overrides.id ?? "request-1",
+      tier: "TIER_2",
+      estimatedPrice: "150",
+      designTags: ["floral"],
+      aestheticTags: ["fine-line"],
+      clientNotes: "notes",
+      paymentMethod: overrides.paymentMethod ?? null,
+      client: {
+        instagramHandle: "test_client",
+        email: "test_client@example.com",
+        phone: null,
       },
-    });
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status,
-        paymentMethod,
-      },
-    });
-    for (const slot of slots) {
-      await prisma.timeSlot.create({
-        data: {
-          artistId,
-          bookingRequestId: request.id,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          status: "BOOKED",
-        },
-      });
-    }
-    return request.id;
+      designReferences: [{ imageUrl: "https://utfs.io/f/a.jpg" }],
+      timeSlots: overrides.timeSlots ?? [
+        slot("2026-10-04T10:00:00.000Z", "2026-10-04T12:00:00.000Z"),
+      ],
+    } as never;
   }
 
   it("returns an APPROVED request whose slot has fully passed", async () => {
-    const pastStart = new Date(Date.now() - 48 * 60 * 60_000);
-    const requestId = await createApprovedRequest([
-      { startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) },
-    ]);
+    prismaMock.bookingRequest.findMany.mockResolvedValue([row()]);
 
-    const result = await getPastDueAppointments(artistId);
+    const [result] = await getPastDueAppointments(artistId);
 
-    expect(result.map((appointment) => appointment.id)).toContain(requestId);
+    expect(result).toEqual({
+      id: "request-1",
+      clientInstagramHandle: "test_client",
+      clientEmail: "test_client@example.com",
+      clientPhone: null,
+      tier: "TIER_2",
+      estimatedPrice: 150,
+      designTags: ["floral"],
+      aestheticTags: ["fine-line"],
+      clientNotes: "notes",
+      designReferenceImageUrls: ["https://utfs.io/f/a.jpg"],
+      startTime: new Date("2026-10-04T10:00:00.000Z"),
+      endTime: new Date("2026-10-04T12:00:00.000Z"),
+      paymentMethod: null,
+    });
   });
 
   it("surfaces the client's payment method preference", async () => {
-    const pastStart = new Date(Date.now() - 48 * 60 * 60_000);
-    await createApprovedRequest(
-      [{ startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) }],
-      "APPROVED",
-      "CASH"
-    );
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({ paymentMethod: "CASH" }),
+    ]);
 
-    const result = await getPastDueAppointments(artistId);
+    const [result] = await getPastDueAppointments(artistId);
 
-    expect(result[0]?.paymentMethod).toBe("CASH");
+    expect(result?.paymentMethod).toBe("CASH");
   });
 
-  it("excludes an APPROVED request whose slot is still upcoming", async () => {
-    const futureStart = new Date(Date.now() + 48 * 60 * 60_000);
-    await createApprovedRequest([
-      { startTime: futureStart, endTime: new Date(futureStart.getTime() + 60 * 60_000) },
+  it("spans the earliest start and latest end across two adjacent slots", async () => {
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({
+        timeSlots: [
+          slot("2026-10-04T12:00:00.000Z", "2026-10-04T14:00:00.000Z"),
+          slot("2026-10-04T10:00:00.000Z", "2026-10-04T12:00:00.000Z"),
+        ],
+      }),
+    ]);
+
+    const [result] = await getPastDueAppointments(artistId);
+
+    expect(result?.startTime).toEqual(new Date("2026-10-04T10:00:00.000Z"));
+    expect(result?.endTime).toEqual(new Date("2026-10-04T14:00:00.000Z"));
+  });
+
+  it("orders multiple past-due appointments by start time ascending", async () => {
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({
+        id: "later",
+        timeSlots: [slot("2026-10-04T10:00:00.000Z", "2026-10-04T12:00:00.000Z")],
+      }),
+      row({
+        id: "earlier",
+        timeSlots: [slot("2026-10-02T10:00:00.000Z", "2026-10-02T12:00:00.000Z")],
+      }),
     ]);
 
     const result = await getPastDueAppointments(artistId);
 
-    expect(result).toHaveLength(0);
-  });
-
-  it("excludes a two-slot booking where one slot is still upcoming", async () => {
-    const pastStart = new Date(Date.now() - 60 * 60_000);
-    const futureStart = new Date(Date.now() + 60 * 60_000);
-    await createApprovedRequest([
-      { startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) },
-      { startTime: futureStart, endTime: new Date(futureStart.getTime() + 60 * 60_000) },
+    expect(result.map((appointment) => appointment.id)).toEqual([
+      "earlier",
+      "later",
     ]);
-
-    const result = await getPastDueAppointments(artistId);
-
-    expect(result).toHaveLength(0);
   });
 
-  it("excludes a request that is not APPROVED", async () => {
-    const pastStart = new Date(Date.now() - 48 * 60 * 60_000);
-    await createApprovedRequest(
-      [{ startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) }],
-      "PENDING"
-    );
+  it("filters to APPROVED requests whose BOOKED slots have all already started (excludes upcoming and mid-appointment two-slot bookings, other statuses)", async () => {
+    prismaMock.bookingRequest.findMany.mockResolvedValue([]);
 
     const result = await getPastDueAppointments(artistId);
 
-    expect(result).toHaveLength(0);
+    expect(result).toEqual([]);
+    expect(prismaMock.bookingRequest.findMany).toHaveBeenCalledWith({
+      where: {
+        artistId,
+        status: "APPROVED",
+        AND: [
+          { timeSlots: { some: { status: "BOOKED" } } },
+          { timeSlots: { none: { status: "BOOKED", startTime: { gte: now } } } },
+        ],
+      },
+      include: {
+        client: true,
+        designReferences: true,
+        timeSlots: { where: { status: "BOOKED" } },
+      },
+    });
   });
 });
