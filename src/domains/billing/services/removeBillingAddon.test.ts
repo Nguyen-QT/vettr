@@ -1,96 +1,99 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/prisma";
-
-import type { RequestStatus } from "@/domains/booking/types";
+import { getBookingRequestForCheckout } from "@/domains/booking/services/getBookingRequestForCheckout";
+import type { BookingRequestCheckoutView } from "@/domains/booking/types";
 
 import { removeBillingAddon } from "./removeBillingAddon";
 
-// Hits the real local Postgres database, same as the rest of this
-// suite's DB-backed tests.
+vi.mock("@/domains/booking/services/getBookingRequestForCheckout", () => ({
+  getBookingRequestForCheckout: vi.fn(),
+}));
+
+// Mocked-Prisma unit test (architecture.md §7).
 describe("removeBillingAddon", () => {
-  let artistId: string;
-  let clientId: string;
+  const artistId = "artist-1";
+  const addonId = "addon-1";
+  const bookingRequestId = "request-1";
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Checkout Addon Removal Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  async function createRequestWithAddon(status: RequestStatus) {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status,
-        estimatedPrice: 150,
-      },
-    });
-    const addon = await prisma.addon.create({
-      data: { bookingRequestId: request.id, label: "Extra shading", price: 25 },
-    });
-    return { request, addon };
+  function checkoutView(
+    overrides: Partial<BookingRequestCheckoutView> = {}
+  ): BookingRequestCheckoutView {
+    return {
+      id: bookingRequestId,
+      artistId,
+      status: "APPROVED",
+      estimatedPrice: 150,
+      depositAmount: null,
+      depositPaid: false,
+      ...overrides,
+    };
   }
 
-  it("removes an addon from an APPROVED request owned by the artist", async () => {
-    const { request, addon } = await createRequestWithAddon("APPROVED");
+  beforeEach(() => {
+    vi.mocked(getBookingRequestForCheckout).mockReset();
+  });
 
-    const result = await removeBillingAddon({ addonId: addon.id, artistId });
+  it("removes an addon from an APPROVED request owned by the artist", async () => {
+    prismaMock.addon.findUnique.mockResolvedValue({ bookingRequestId } as never);
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(checkoutView());
+    prismaMock.addon.delete.mockResolvedValue({} as never);
+
+    const result = await removeBillingAddon({ addonId, artistId });
 
     expect(result).toEqual({ success: true });
-    expect(await prisma.addon.count({ where: { bookingRequestId: request.id } })).toBe(0);
+    expect(prismaMock.addon.findUnique).toHaveBeenCalledWith({
+      where: { id: addonId },
+      select: { bookingRequestId: true },
+    });
+    expect(getBookingRequestForCheckout).toHaveBeenCalledWith(bookingRequestId);
+    expect(prismaMock.addon.delete).toHaveBeenCalledWith({
+      where: { id: addonId },
+    });
   });
 
   it("rejects removal for an addon on a request that does not belong to the artist", async () => {
-    const { addon } = await createRequestWithAddon("APPROVED");
+    prismaMock.addon.findUnique.mockResolvedValue({ bookingRequestId } as never);
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ artistId: "other-artist" })
+    );
 
-    const result = await removeBillingAddon({
-      addonId: addon.id,
-      artistId: randomUUID(),
-    });
+    const result = await removeBillingAddon({ addonId, artistId });
 
     expect(result.success).toBe(false);
-    expect(await prisma.addon.findUnique({ where: { id: addon.id } })).not.toBeNull();
+    expect(prismaMock.addon.delete).not.toHaveBeenCalled();
+  });
+
+  it("rejects removal when the booking request no longer resolves", async () => {
+    prismaMock.addon.findUnique.mockResolvedValue({ bookingRequestId } as never);
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(null);
+
+    const result = await removeBillingAddon({ addonId, artistId });
+
+    expect(result.success).toBe(false);
+    expect(prismaMock.addon.delete).not.toHaveBeenCalled();
   });
 
   it("rejects removal when the request is not APPROVED", async () => {
-    const { addon } = await createRequestWithAddon("PENDING");
+    prismaMock.addon.findUnique.mockResolvedValue({ bookingRequestId } as never);
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ status: "PENDING" })
+    );
 
-    const result = await removeBillingAddon({ addonId: addon.id, artistId });
+    const result = await removeBillingAddon({ addonId, artistId });
 
     expect(result.success).toBe(false);
-    expect(await prisma.addon.findUnique({ where: { id: addon.id } })).not.toBeNull();
+    expect(prismaMock.addon.delete).not.toHaveBeenCalled();
   });
 
   it("rejects removal of an addon that doesn't exist", async () => {
-    const result = await removeBillingAddon({ addonId: randomUUID(), artistId });
+    prismaMock.addon.findUnique.mockResolvedValue(null);
+
+    const result = await removeBillingAddon({ addonId, artistId });
 
     expect(result.success).toBe(false);
+    expect(getBookingRequestForCheckout).not.toHaveBeenCalled();
+    expect(prismaMock.addon.delete).not.toHaveBeenCalled();
   });
 });

@@ -1,63 +1,49 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import { getBookingRequestForCheckout } from "@/domains/booking/services/getBookingRequestForCheckout";
+import type { BookingRequestCheckoutView } from "@/domains/booking/types";
 
 import { getFinalBillTotal } from "./getFinalBillTotal";
 
-// Hits the real local Postgres database, same as the rest of this
-// suite's DB-backed tests.
+vi.mock("@/domains/booking/services/getBookingRequestForCheckout", () => ({
+  getBookingRequestForCheckout: vi.fn(),
+}));
+
+// Mocked-Prisma unit test (architecture.md §7). The sibling billing
+// service getBillingAddons runs for real (same domain) against
+// prismaMock.addon.findMany; booking's checkout read is mocked.
 describe("getFinalBillTotal", () => {
-  let artistId: string;
-  let clientId: string;
+  const artistId = "artist-1";
+  const bookingRequestId = "request-1";
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Final Bill Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-  });
+  function checkoutView(
+    overrides: Partial<BookingRequestCheckoutView> = {}
+  ): BookingRequestCheckoutView {
+    return {
+      id: bookingRequestId,
+      artistId,
+      status: "APPROVED",
+      estimatedPrice: 150,
+      depositAmount: null,
+      depositPaid: false,
+      ...overrides,
+    };
+  }
 
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
+  beforeEach(() => {
+    vi.mocked(getBookingRequestForCheckout).mockReset();
   });
 
   it("totals the estimate plus addons when no deposit was paid", async () => {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-        estimatedPrice: 150,
-      },
-    });
-    await prisma.addon.create({
-      data: { bookingRequestId: request.id, label: "Extra shading", price: 25 },
-    });
-    await prisma.addon.create({
-      data: { bookingRequestId: request.id, label: "Touch-up", price: 10 },
-    });
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(checkoutView());
+    prismaMock.addon.findMany.mockResolvedValue([
+      { id: "a1", label: "Extra shading", price: 25 },
+      { id: "a2", label: "Touch-up", price: 10 },
+    ] as never);
 
-    const result = await getFinalBillTotal(request.id, artistId);
+    const result = await getFinalBillTotal(bookingRequestId, artistId);
 
     expect(result).toEqual({
       success: true,
@@ -66,21 +52,12 @@ describe("getFinalBillTotal", () => {
   });
 
   it("credits a paid deposit against the total", async () => {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-        estimatedPrice: 150,
-        depositAmount: 20,
-        depositPaid: true,
-      },
-    });
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ depositAmount: 20, depositPaid: true })
+    );
+    prismaMock.addon.findMany.mockResolvedValue([]);
 
-    const result = await getFinalBillTotal(request.id, artistId);
+    const result = await getFinalBillTotal(bookingRequestId, artistId);
 
     expect(result).toEqual({
       success: true,
@@ -89,21 +66,12 @@ describe("getFinalBillTotal", () => {
   });
 
   it("does not credit a configured deposit amount that was never actually paid", async () => {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-        estimatedPrice: 150,
-        depositAmount: 20,
-        depositPaid: false,
-      },
-    });
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ depositAmount: 20, depositPaid: false })
+    );
+    prismaMock.addon.findMany.mockResolvedValue([]);
 
-    const result = await getFinalBillTotal(request.id, artistId);
+    const result = await getFinalBillTotal(bookingRequestId, artistId);
 
     expect(result).toEqual({
       success: true,
@@ -111,26 +79,37 @@ describe("getFinalBillTotal", () => {
     });
   });
 
-  it("rejects a request that does not belong to the artist", async () => {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-        estimatedPrice: 150,
-      },
-    });
+  it("treats a null estimatedPrice as 0", async () => {
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ estimatedPrice: null })
+    );
+    prismaMock.addon.findMany.mockResolvedValue([
+      { id: "a1", label: "Extra shading", price: 25 },
+    ] as never);
 
-    const result = await getFinalBillTotal(request.id, randomUUID());
+    const result = await getFinalBillTotal(bookingRequestId, artistId);
+
+    expect(result).toEqual({
+      success: true,
+      bill: { estimatedPrice: 0, addonsTotal: 25, depositCredit: 0, total: 25 },
+    });
+  });
+
+  it("rejects a request that does not belong to the artist", async () => {
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(
+      checkoutView({ artistId: "other-artist" })
+    );
+
+    const result = await getFinalBillTotal(bookingRequestId, artistId);
 
     expect(result.success).toBe(false);
+    expect(prismaMock.addon.findMany).not.toHaveBeenCalled();
   });
 
   it("rejects a request that doesn't exist", async () => {
-    const result = await getFinalBillTotal(randomUUID(), artistId);
+    vi.mocked(getBookingRequestForCheckout).mockResolvedValue(null);
+
+    const result = await getFinalBillTotal(bookingRequestId, artistId);
 
     expect(result.success).toBe(false);
   });

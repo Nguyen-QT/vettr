@@ -1,109 +1,80 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { ApprovedUnpaidRequestSummary } from "@/domains/booking/types";
-import { prisma } from "@/lib/prisma";
 
 import { getPayableDeposits } from "./getPayableDeposits";
 
-// Hits the real local Postgres database for ArtistDepositSetting only
-// -- getPayableDeposits is a pure join over its input, so no
-// ClientProfile/BookingRequest fixtures are needed here (see booking's
-// getApprovedUnpaidRequestSummaries.test.ts for that side).
+// Mocked-Prisma unit test (architecture.md §7): getPayableDeposits is a
+// pure join over its input plus one batched ArtistDepositSetting read.
 describe("getPayableDeposits", () => {
-  let artistId: string;
-  let otherArtistId: string;
-
-  beforeEach(async () => {
-    artistId = randomUUID();
-    otherArtistId = randomUUID();
-
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Payable Deposits Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.artist.create({
-      data: {
-        id: otherArtistId,
-        name: "Other Artist",
-        instagramHandle: `test_artist_${otherArtistId.slice(0, 8)}`,
-        email: `${otherArtistId}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.artistDepositSetting.deleteMany({
-      where: { artistId: { in: [artistId, otherArtistId] } },
-    });
-    await prisma.artist.delete({ where: { id: artistId } });
-    await prisma.artist.delete({ where: { id: otherArtistId } });
-  });
+  const artistId = "artist-1";
+  const otherArtistId = "artist-2";
 
   function summary(
+    id: string,
     overrides: Partial<ApprovedUnpaidRequestSummary> = {}
   ): ApprovedUnpaidRequestSummary {
-    return {
-      id: randomUUID(),
-      artistId,
-      tier: "TIER_2",
-      ...overrides,
-    };
+    return { id, artistId, tier: "TIER_2", ...overrides };
   }
 
   it("includes a request whose tier has a configured deposit", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 25 },
+    prismaMock.artistDepositSetting.findMany.mockResolvedValue([
+      { artistId, tier: "TIER_2", depositAmount: 25 },
+    ] as never);
+
+    const result = await getPayableDeposits([summary("r1")]);
+
+    expect(result).toEqual({ r1: 25 });
+    expect(prismaMock.artistDepositSetting.findMany).toHaveBeenCalledWith({
+      where: { artistId: { in: [artistId] } },
     });
-    const request = summary();
-
-    const result = await getPayableDeposits([request]);
-
-    expect(result).toEqual({ [request.id]: 25 });
   });
 
   it("excludes a request whose tier has no configured deposit", async () => {
-    const request = summary();
+    prismaMock.artistDepositSetting.findMany.mockResolvedValue([]);
 
-    const result = await getPayableDeposits([request]);
+    const result = await getPayableDeposits([summary("r1")]);
 
-    expect(result[request.id]).toBeUndefined();
+    expect(result.r1).toBeUndefined();
   });
 
-  it("resolves each request's amount against its own artist's tier settings", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 25 },
-    });
-    await prisma.artistDepositSetting.create({
-      data: { artistId: otherArtistId, tier: "TIER_2", depositAmount: 60 },
-    });
-    const requestA = summary({ artistId });
-    const requestB = summary({ artistId: otherArtistId });
+  it("resolves each request's amount against its own artist's tier settings in one batched query", async () => {
+    prismaMock.artistDepositSetting.findMany.mockResolvedValue([
+      { artistId, tier: "TIER_2", depositAmount: 25 },
+      { artistId: otherArtistId, tier: "TIER_2", depositAmount: "60.00" },
+    ] as never);
 
-    const result = await getPayableDeposits([requestA, requestB]);
+    const result = await getPayableDeposits([
+      summary("r1", { artistId }),
+      summary("r2", { artistId: otherArtistId }),
+      summary("r3", { artistId }),
+    ]);
 
-    expect(result).toEqual({ [requestA.id]: 25, [requestB.id]: 60 });
+    expect(result).toEqual({ r1: 25, r2: 60, r3: 25 });
+    expect(prismaMock.artistDepositSetting.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.artistDepositSetting.findMany).toHaveBeenCalledWith({
+      where: { artistId: { in: [artistId, otherArtistId] } },
+    });
   });
 
   it("does not cross-match a tier against the wrong artist's setting", async () => {
-    await prisma.artistDepositSetting.create({
-      data: { artistId, tier: "TIER_2", depositAmount: 25 },
-    });
-    const request = summary({ artistId: otherArtistId, tier: "TIER_2" });
+    prismaMock.artistDepositSetting.findMany.mockResolvedValue([
+      { artistId, tier: "TIER_2", depositAmount: 25 },
+    ] as never);
 
-    const result = await getPayableDeposits([request]);
+    const result = await getPayableDeposits([
+      summary("r1", { artistId: otherArtistId, tier: "TIER_2" }),
+    ]);
 
-    expect(result[request.id]).toBeUndefined();
+    expect(result.r1).toBeUndefined();
   });
 
-  it("returns an empty object for an empty input", async () => {
+  it("returns an empty object for an empty input without querying", async () => {
     const result = await getPayableDeposits([]);
 
     expect(result).toEqual({});
+    expect(prismaMock.artistDepositSetting.findMany).not.toHaveBeenCalled();
   });
 });

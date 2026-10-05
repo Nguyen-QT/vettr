@@ -1,8 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CONNECT_ONBOARDING_LINK_INIT_ERROR_MESSAGE } from "../constants";
 import { createConnectOnboardingLink } from "./createConnectOnboardingLink";
@@ -21,28 +19,26 @@ vi.mock("@/lib/stripe", () => ({
   },
 }));
 
+// Mocked-Prisma unit test (architecture.md §7). The sibling billing
+// service createArtistConnectAccount runs for real against prismaMock.
 describe("createConnectOnboardingLink", () => {
-  let artistId: string;
+  const artistId = "artist-1";
 
-  beforeEach(async () => {
+  function artistRow(stripeConnectAccountId: string | null): never {
+    return {
+      stripeConnectAccountId,
+      email: "artist-1@example.com",
+    } as never;
+  }
+
+  beforeEach(() => {
     createAccountMock.mockReset();
     createAccountLinkMock.mockReset();
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Onboarding Link Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.artist.delete({ where: { id: artistId } });
   });
 
   it("creates the Connect account first, then requests an onboarding link", async () => {
+    prismaMock.artist.findUnique.mockResolvedValue(artistRow(null));
+    prismaMock.artist.update.mockResolvedValue({} as never);
     createAccountMock.mockResolvedValue({ id: "acct_new" });
     createAccountLinkMock.mockResolvedValue({ url: "https://connect.stripe.com/setup/1" });
 
@@ -58,10 +54,7 @@ describe("createConnectOnboardingLink", () => {
   });
 
   it("reuses an already-onboarded account without creating a new one", async () => {
-    await prisma.artist.update({
-      where: { id: artistId },
-      data: { stripeConnectAccountId: "acct_existing" },
-    });
+    prismaMock.artist.findUnique.mockResolvedValue(artistRow("acct_existing"));
     createAccountLinkMock.mockResolvedValue({ url: "https://connect.stripe.com/setup/2" });
 
     await createConnectOnboardingLink(artistId);
@@ -73,6 +66,7 @@ describe("createConnectOnboardingLink", () => {
   });
 
   it("reports failure when account creation fails", async () => {
+    prismaMock.artist.findUnique.mockResolvedValue(artistRow(null));
     createAccountMock.mockRejectedValue(new Error("network error"));
 
     const result = await createConnectOnboardingLink(artistId);
@@ -85,6 +79,8 @@ describe("createConnectOnboardingLink", () => {
   });
 
   it("reports failure when the account link call itself throws", async () => {
+    prismaMock.artist.findUnique.mockResolvedValue(artistRow(null));
+    prismaMock.artist.update.mockResolvedValue({} as never);
     createAccountMock.mockResolvedValue({ id: "acct_new" });
     createAccountLinkMock.mockRejectedValue(new Error("network error"));
 
