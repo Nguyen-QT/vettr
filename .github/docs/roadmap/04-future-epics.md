@@ -3,7 +3,7 @@ globs: ["**/docs/roadmap/04-future-epics.md"]
 ---
 # 🗺️ Future Epics & Long-Term Strategic Backlog (Phases 32–36, 41–48, 51–52, 55)
 
-This tracking file contains large-lift feature sets, complex multi-domain subsystems, security/infra hardening, and speculative architecture designs. All items listed here require a rigorous, individual *Mandatory Task Breakdown Rule* pass to map out concrete technical layers before execution begins. Phase numbers reflect global priority rank across the entire unstarted backlog (see `03-polish-and-config.md` for the lower-lift/cosmetic phases interleaved between these; Phases 27, 28, and 50 have been promoted into `02-active-core.md`).
+This tracking file contains large-lift feature sets, complex multi-domain subsystems, security/infra hardening, and speculative architecture designs. All items listed here require a rigorous, individual *Mandatory Task Breakdown Rule* pass to map out concrete technical layers before execution begins. Phase numbers are stable IDs, not a priority rank — the work order lives in the Priority Queue at the top of `02-active-core.md` (see `03-polish-and-config.md` for the lower-lift/cosmetic phases; Phases 27, 28, 50 and 54 have been promoted into `02-active-core.md`).
 
 ---
 

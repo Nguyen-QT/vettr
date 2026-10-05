@@ -3,7 +3,7 @@ globs: ["**/docs/roadmap/03-polish-and-config.md"]
 ---
 # 🎨 Polish & Configuration Sprint Plane (Phases 29, 30, 31, 37, 38, 39, 40, 49)
 
-This tracking file contains upcoming user experience refinements, interface standardizations, configuration forms, and technical debt items. These phases execute lower-risk cosmetic, presentational, or menu features building atop the core application engines. Phase numbers reflect global priority rank across the entire unstarted backlog (see `04-future-epics.md` for the higher-lift/infra phases interleaved between these).
+This tracking file contains upcoming user experience refinements, interface standardizations, configuration forms, and technical debt items. These phases execute lower-risk cosmetic, presentational, or menu features building atop the core application engines. Phase numbers are stable IDs, not a priority rank — the work order lives in the Priority Queue at the top of `02-active-core.md` (see `04-future-epics.md` for the higher-lift/infra phases).
 
 ---
 
@@ -29,7 +29,7 @@ This tracking file contains upcoming user experience refinements, interface stan
 ---
 
 ### 📦 Phase 38: Layout & Responsive Consistency Polish
-- [ ] **38.1: Request Page Padding Standardization** (`/book/[artistId]/page.tsx` padding adjustments matching container class standards).
+- [ ] **38.1: Request Page Padding Standardization** (**SUPERSEDED by 54.1.6.2** — `/book/[artistId]` becomes a redirect; the booking page moves to `/@handle/book`.) (`/book/[artistId]/page.tsx` padding adjustments matching container class standards).
 - [ ] **38.2: Nested Viewport Unit Audit** (Workspace-wide component check tracking down and eliminating hardcoded nested sizing constraints).
 - [ ] **38.3: Settings Back-Button Consistency** (The settings page back navigation currently renders as a full-width bar, inconsistent with the standard nav affordances used elsewhere in the app; restyle to match).
 
