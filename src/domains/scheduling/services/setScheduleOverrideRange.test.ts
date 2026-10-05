@@ -1,34 +1,25 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { setScheduleOverrideRange } from "./setScheduleOverrideRange";
 
-// Hits the real local Postgres database, same as the other scheduling
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7): asserts which dates get
+// upserted and with what payload. Row-level outcomes (no duplicates,
+// rows outside the range untouched) are Postgres behaviour -- covered
+// here only as payload assertions; real-row proof is a 28.3 candidate.
 describe("setScheduleOverrideRange", () => {
-  let artistId: string;
+  const artistId = "artist-1";
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Schedule Override Range Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-  });
+  function upsertedDates(): Date[] {
+    return prismaMock.artistScheduleOverride.upsert.mock.calls.map(
+      ([args]) => args.where.artistId_date!.date as Date
+    );
+  }
 
-  afterEach(async () => {
-    await prisma.artistScheduleOverride.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
+  it("upserts one row per date in an inclusive range, inside a single transaction", async () => {
+    prismaMock.artistScheduleOverride.upsert.mockResolvedValue({} as never);
 
-  it("creates one row per date in an inclusive range", async () => {
     await setScheduleOverrideRange({
       artistId,
       startDate: "2027-05-01",
@@ -36,22 +27,27 @@ describe("setScheduleOverrideRange", () => {
       availableTimes: [],
     });
 
-    const rows = await prisma.artistScheduleOverride.findMany({
-      where: { artistId },
-      orderBy: { date: "asc" },
-    });
-    expect(rows).toHaveLength(3);
-    expect(rows.every((row) => row.availableTimes.length === 0)).toBe(true);
-
-    for (const date of ["2027-05-01", "2027-05-02", "2027-05-03"]) {
-      const row = await prisma.artistScheduleOverride.findUnique({
-        where: { artistId_date: { artistId, date: new Date(`${date}T00:00:00`) } },
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.artistScheduleOverride.upsert).toHaveBeenCalledTimes(3);
+    expect(upsertedDates()).toEqual([
+      new Date("2027-05-01T00:00:00"),
+      new Date("2027-05-02T00:00:00"),
+      new Date("2027-05-03T00:00:00"),
+    ]);
+    for (const [args] of prismaMock.artistScheduleOverride.upsert.mock.calls) {
+      expect(args.update).toEqual({ availableTimes: [] });
+      expect(args.create).toEqual({
+        artistId,
+        date: args.where.artistId_date!.date,
+        availableTimes: [],
       });
-      expect(row).not.toBeNull();
+      expect(args.where.artistId_date!.artistId).toBe(artistId);
     }
   });
 
   it("handles a single-date range the same as one date", async () => {
+    prismaMock.artistScheduleOverride.upsert.mockResolvedValue({} as never);
+
     await setScheduleOverrideRange({
       artistId,
       startDate: "2027-05-10",
@@ -59,36 +55,41 @@ describe("setScheduleOverrideRange", () => {
       availableTimes: ["11:00"],
     });
 
-    const rows = await prisma.artistScheduleOverride.findMany({
-      where: { artistId },
+    expect(prismaMock.artistScheduleOverride.upsert).toHaveBeenCalledTimes(1);
+    expect(prismaMock.artistScheduleOverride.upsert).toHaveBeenCalledWith({
+      where: {
+        artistId_date: { artistId, date: new Date("2027-05-10T00:00:00") },
+      },
+      update: { availableTimes: ["11:00"] },
+      create: {
+        artistId,
+        date: new Date("2027-05-10T00:00:00"),
+        availableTimes: ["11:00"],
+      },
     });
-    expect(rows).toHaveLength(1);
-    expect(rows[0].availableTimes).toEqual(["11:00"]);
   });
 
-  it("updates existing rows in the range instead of duplicating them", async () => {
+  it("targets the same unique keys on a repeat call so existing rows are updated", async () => {
+    prismaMock.artistScheduleOverride.upsert.mockResolvedValue({} as never);
+    const range = { artistId, startDate: "2027-05-20", endDate: "2027-05-21" };
+
+    await setScheduleOverrideRange({ ...range, availableTimes: ["11:00"] });
+    const firstDates = upsertedDates();
     await setScheduleOverrideRange({
-      artistId,
-      startDate: "2027-05-20",
-      endDate: "2027-05-21",
-      availableTimes: ["11:00"],
-    });
-    await setScheduleOverrideRange({
-      artistId,
-      startDate: "2027-05-20",
-      endDate: "2027-05-21",
+      ...range,
       availableTimes: ["14:00", "17:30"],
     });
 
-    const rows = await prisma.artistScheduleOverride.findMany({
-      where: { artistId },
-      orderBy: { date: "asc" },
-    });
-    expect(rows).toHaveLength(2);
-    expect(rows.every((row) => row.availableTimes.length === 2)).toBe(true);
+    expect(prismaMock.artistScheduleOverride.upsert).toHaveBeenCalledTimes(4);
+    expect(upsertedDates().slice(2)).toEqual(firstDates);
+    expect(
+      prismaMock.artistScheduleOverride.upsert.mock.calls[2][0].update
+    ).toEqual({ availableTimes: ["14:00", "17:30"] });
   });
 
-  it("does not affect dates outside the range", async () => {
+  it("does not upsert dates outside the range", async () => {
+    prismaMock.artistScheduleOverride.upsert.mockResolvedValue({} as never);
+
     await setScheduleOverrideRange({
       artistId,
       startDate: "2027-06-01",
@@ -96,12 +97,9 @@ describe("setScheduleOverrideRange", () => {
       availableTimes: [],
     });
 
-    const outsideRange = await prisma.artistScheduleOverride.findUnique({
-      where: {
-        artistId_date: { artistId, date: new Date("2027-06-03T00:00:00") },
-      },
-    });
-    expect(outsideRange).toBeNull();
+    const times = upsertedDates().map((date) => date.getTime());
+    expect(times).not.toContain(new Date("2027-06-03T00:00:00").getTime());
+    expect(times).not.toContain(new Date("2027-05-31T00:00:00").getTime());
   });
 
   it("is a safe no-op when endDate is before startDate", async () => {
@@ -112,9 +110,6 @@ describe("setScheduleOverrideRange", () => {
       availableTimes: ["11:00"],
     });
 
-    const rows = await prisma.artistScheduleOverride.findMany({
-      where: { artistId },
-    });
-    expect(rows).toHaveLength(0);
+    expect(prismaMock.artistScheduleOverride.upsert).not.toHaveBeenCalled();
   });
 });

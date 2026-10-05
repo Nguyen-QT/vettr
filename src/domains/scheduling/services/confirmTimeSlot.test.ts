@@ -1,78 +1,56 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import { SLOT_CONFLICT_ERROR_MESSAGE } from "../constants";
+import { confirmTimeSlot, isSlotConflict } from "./confirmTimeSlot";
 
-import { confirmTimeSlot } from "./confirmTimeSlot";
+// Mocked-Prisma unit test (architecture.md §7). The no-double-booking
+// guarantee itself lives in TimeSlot's GiST exclusion constraint, which a
+// mock cannot prove. 28.3 integration-tier candidates handed off from here:
+// exact-slot double booking, partial-overlap rejection, and the concurrent
+// two-approval race (exactly one wins). Here we cover the service's own
+// branches: slot-splitting payloads and conflict-vs-rethrow handling.
+const EXCLUSION_ERROR = new Error(
+  'conflicting key value violates exclusion constraint (code "23P01")'
+);
 
-// Hits the real local Postgres database (same as e2e/global-setup.ts) so
-// the exclusion constraint's concurrency guarantee is actually exercised
-// -- a mocked Prisma client couldn't prove a race condition is safe.
 describe("confirmTimeSlot", () => {
-  let artistId: string;
+  const artistId = "artist-1";
+  const bookingRequestId = "request-1";
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "E2E Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    // Cascades to TimeSlot/DesignReference/Addon rows.
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  async function createBookingRequest(): Promise<string> {
-    const clientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-      },
-    });
-    return request.id;
+  function stubCreateIds(ids: string[]): void {
+    for (const id of ids) {
+      prismaMock.timeSlot.create.mockResolvedValueOnce({ id } as never);
+    }
   }
 
   it("books a single slot for a duration within the per-slot max", async () => {
-    const bookingRequestId = await createBookingRequest();
+    stubCreateIds(["slot-1"]);
+    const startTime = new Date("2026-11-01T11:00:00.000Z");
 
     const result = await confirmTimeSlot({
       bookingRequestId,
       artistId,
-      startTime: new Date("2026-11-01T11:00:00.000Z"),
+      startTime,
       durationMinutes: 90,
     });
 
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.timeSlotIds).toHaveLength(1);
-
-    const slot = await prisma.timeSlot.findUnique({
-      where: { id: result.timeSlotIds[0] },
+    expect(result).toEqual({ success: true, timeSlotIds: ["slot-1"] });
+    expect(prismaMock.timeSlot.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.timeSlot.create).toHaveBeenCalledWith({
+      data: {
+        artistId,
+        bookingRequestId,
+        startTime,
+        endTime: new Date("2026-11-01T12:30:00.000Z"),
+        status: "BOOKED",
+      },
     });
-    expect(slot?.status).toBe("BOOKED");
   });
 
-  it("books two adjacent slots and locks the second one when duration overflows one slot", async () => {
-    const bookingRequestId = await createBookingRequest();
+  it("books two adjacent slots when duration overflows one slot", async () => {
+    stubCreateIds(["slot-1", "slot-2"]);
 
     const result = await confirmTimeSlot({
       bookingRequestId,
@@ -81,110 +59,91 @@ describe("confirmTimeSlot", () => {
       durationMinutes: 300, // exceeds the 180-minute per-slot max
     });
 
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-    expect(result.timeSlotIds).toHaveLength(2);
-
-    const slots = await prisma.timeSlot.findMany({
-      where: { id: { in: result.timeSlotIds } },
-      orderBy: { startTime: "asc" },
-    });
-    expect(slots.every((slot) => slot.status === "BOOKED")).toBe(true);
-    expect(slots[0].endTime).toEqual(slots[1].startTime);
+    expect(result).toEqual({ success: true, timeSlotIds: ["slot-1", "slot-2"] });
+    expect(prismaMock.timeSlot.create).toHaveBeenCalledTimes(2);
+    const [first, second] = prismaMock.timeSlot.create.mock.calls.map(
+      ([args]) => args.data as { startTime: Date; endTime: Date; status: string }
+    );
+    expect(first.endTime).toEqual(second.startTime);
+    expect(first.status).toBe("BOOKED");
+    expect(second.status).toBe("BOOKED");
   });
 
-  it("rejects a double-booking attempt against an already-booked slot", async () => {
-    const firstRequestId = await createBookingRequest();
-    const secondRequestId = await createBookingRequest();
-    const startTime = new Date("2026-11-03T14:00:00.000Z");
+  it("books adjacent, non-overlapping slots without any pre-check read", async () => {
+    stubCreateIds(["slot-a"]);
+    stubCreateIds(["slot-b"]);
 
     const first = await confirmTimeSlot({
-      bookingRequestId: firstRequestId,
-      artistId,
-      startTime,
-      durationMinutes: 60,
-    });
-    expect(first.success).toBe(true);
-
-    const second = await confirmTimeSlot({
-      bookingRequestId: secondRequestId,
-      artistId,
-      startTime,
-      durationMinutes: 60,
-    });
-
-    expect(second.success).toBe(false);
-    if (second.success) return;
-    expect(second.error).toMatch(/already booked/i);
-  });
-
-  it("rejects a booking that only partially overlaps an already-booked slot", async () => {
-    const firstRequestId = await createBookingRequest();
-    const secondRequestId = await createBookingRequest();
-
-    const first = await confirmTimeSlot({
-      bookingRequestId: firstRequestId,
-      artistId,
-      startTime: new Date("2026-11-04T11:00:00.000Z"),
-      durationMinutes: 120, // 11:00 - 13:00
-    });
-    expect(first.success).toBe(true);
-
-    const second = await confirmTimeSlot({
-      bookingRequestId: secondRequestId,
-      artistId,
-      startTime: new Date("2026-11-04T12:00:00.000Z"), // overlaps 12:00 - 13:00
-      durationMinutes: 60,
-    });
-
-    expect(second.success).toBe(false);
-  });
-
-  it("allows two concurrently-submitted approvals for the same slot to race, letting exactly one win", async () => {
-    const firstRequestId = await createBookingRequest();
-    const secondRequestId = await createBookingRequest();
-    const startTime = new Date("2026-11-05T17:30:00.000Z");
-
-    const [first, second] = await Promise.all([
-      confirmTimeSlot({
-        bookingRequestId: firstRequestId,
-        artistId,
-        startTime,
-        durationMinutes: 60,
-      }),
-      confirmTimeSlot({
-        bookingRequestId: secondRequestId,
-        artistId,
-        startTime,
-        durationMinutes: 60,
-      }),
-    ]);
-
-    const successes = [first, second].filter((result) => result.success);
-    const failures = [first, second].filter((result) => !result.success);
-    expect(successes).toHaveLength(1);
-    expect(failures).toHaveLength(1);
-  });
-
-  it("does not block adjacent, non-overlapping slots for the same artist", async () => {
-    const firstRequestId = await createBookingRequest();
-    const secondRequestId = await createBookingRequest();
-
-    const first = await confirmTimeSlot({
-      bookingRequestId: firstRequestId,
+      bookingRequestId: "request-a",
       artistId,
       startTime: new Date("2026-11-06T11:00:00.000Z"),
       durationMinutes: 60, // 11:00 - 12:00
     });
-    expect(first.success).toBe(true);
-
     const second = await confirmTimeSlot({
-      bookingRequestId: secondRequestId,
+      bookingRequestId: "request-b",
       artistId,
-      startTime: new Date("2026-11-06T12:00:00.000Z"), // starts exactly when the first ends
+      startTime: new Date("2026-11-06T12:00:00.000Z"), // starts exactly when first ends
       durationMinutes: 60,
     });
 
+    expect(first.success).toBe(true);
     expect(second.success).toBe(true);
+    // Correctness rests on the DB constraint, not an app-level
+    // read-then-write check (architecture.md §8A).
+    expect(prismaMock.timeSlot.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.timeSlot.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("returns the slot-conflict error when the exclusion constraint rejects the insert", async () => {
+    prismaMock.timeSlot.create.mockRejectedValueOnce(EXCLUSION_ERROR);
+
+    const result = await confirmTimeSlot({
+      bookingRequestId,
+      artistId,
+      startTime: new Date("2026-11-03T14:00:00.000Z"),
+      durationMinutes: 60,
+    });
+
+    expect(result).toEqual({ success: false, error: SLOT_CONFLICT_ERROR_MESSAGE });
+  });
+
+  it("returns the slot-conflict error when only the second slot of an overflow booking conflicts", async () => {
+    stubCreateIds(["slot-1"]);
+    prismaMock.timeSlot.create.mockRejectedValueOnce(EXCLUSION_ERROR);
+
+    const result = await confirmTimeSlot({
+      bookingRequestId,
+      artistId,
+      startTime: new Date("2026-11-04T11:00:00.000Z"),
+      durationMinutes: 300,
+    });
+
+    expect(result).toEqual({ success: false, error: SLOT_CONFLICT_ERROR_MESSAGE });
+  });
+
+  it("rethrows errors that are not slot conflicts", async () => {
+    const failure = new Error("connection reset");
+    prismaMock.timeSlot.create.mockRejectedValueOnce(failure);
+
+    await expect(
+      confirmTimeSlot({
+        bookingRequestId,
+        artistId,
+        startTime: new Date("2026-11-05T17:30:00.000Z"),
+        durationMinutes: 60,
+      })
+    ).rejects.toBe(failure);
+  });
+});
+
+describe("isSlotConflict", () => {
+  it("is true for an error whose message carries the Postgres exclusion-violation code", () => {
+    expect(isSlotConflict(EXCLUSION_ERROR)).toBe(true);
+  });
+
+  it("is false for other errors and non-Error values", () => {
+    expect(isSlotConflict(new Error("something else"))).toBe(false);
+    expect(isSlotConflict("23P01")).toBe(false);
+    expect(isSlotConflict(null)).toBe(false);
   });
 });

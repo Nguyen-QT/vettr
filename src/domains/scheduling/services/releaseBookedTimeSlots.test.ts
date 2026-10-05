@@ -1,133 +1,48 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { releaseBookedTimeSlots } from "./releaseBookedTimeSlots";
 
-// Hits the real local Postgres database, same as the other scheduling
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7): the service's whole
+// behaviour is the updateMany filter + data. "Other request's slot / an
+// already-RELEASED slot is untouched" is guaranteed by the `where` below;
+// proving it against real rows is a 28.3 integration-tier candidate.
 describe("releaseBookedTimeSlots", () => {
-  let artistId: string;
+  it("releases only BOOKED slots belonging to the given request", async () => {
+    prismaMock.timeSlot.updateMany.mockResolvedValue({ count: 1 });
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Release Slots Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
+    await releaseBookedTimeSlots(prismaMock, "request-1");
+
+    expect(prismaMock.timeSlot.updateMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.timeSlot.updateMany).toHaveBeenCalledWith({
+      where: { bookingRequestId: "request-1", status: "BOOKED" },
+      data: { status: "RELEASED" },
     });
   });
 
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
+  it("releases every slot of a two-slot booking in one bulk update", async () => {
+    prismaMock.timeSlot.updateMany.mockResolvedValue({ count: 2 });
+
+    await releaseBookedTimeSlots(prismaMock, "request-2");
+
+    expect(prismaMock.timeSlot.updateMany).toHaveBeenCalledTimes(1);
   });
 
-  async function createBookingRequest(): Promise<string> {
-    const clientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-    const request = await prisma.bookingRequest.create({
-      data: { clientId, artistId, tier: "TIER_2", minPrice: 100, maxPrice: 200 },
-    });
-    return request.id;
-  }
+  it("scopes the update to the given request id, never another request's slots", async () => {
+    prismaMock.timeSlot.updateMany.mockResolvedValue({ count: 0 });
 
-  it("releases a BOOKED slot to RELEASED", async () => {
-    const bookingRequestId = await createBookingRequest();
-    const slot = await prisma.timeSlot.create({
-      data: {
-        artistId,
-        bookingRequestId,
-        startTime: new Date("2026-11-10T11:00:00.000Z"),
-        endTime: new Date("2026-11-10T12:00:00.000Z"),
-        status: "BOOKED",
-      },
-    });
+    await releaseBookedTimeSlots(prismaMock, "request-3");
 
-    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, bookingRequestId));
-
-    const updated = await prisma.timeSlot.findUnique({ where: { id: slot.id } });
-    expect(updated?.status).toBe("RELEASED");
+    const [args] = prismaMock.timeSlot.updateMany.mock.calls[0];
+    expect(args.where).toEqual({ bookingRequestId: "request-3", status: "BOOKED" });
   });
 
-  it("releases both slots of a two-slot booking", async () => {
-    const bookingRequestId = await createBookingRequest();
-    const slotA = await prisma.timeSlot.create({
-      data: {
-        artistId,
-        bookingRequestId,
-        startTime: new Date("2026-11-11T11:00:00.000Z"),
-        endTime: new Date("2026-11-11T12:00:00.000Z"),
-        status: "BOOKED",
-      },
-    });
-    const slotB = await prisma.timeSlot.create({
-      data: {
-        artistId,
-        bookingRequestId,
-        startTime: new Date("2026-11-11T12:00:00.000Z"),
-        endTime: new Date("2026-11-11T13:00:00.000Z"),
-        status: "BOOKED",
-      },
-    });
-
-    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, bookingRequestId));
-
-    const updated = await prisma.timeSlot.findMany({
-      where: { id: { in: [slotA.id, slotB.id] } },
-    });
-    expect(updated.every((slot) => slot.status === "RELEASED")).toBe(true);
-  });
-
-  it("does not touch a different request's BOOKED slot", async () => {
-    const bookingRequestId = await createBookingRequest();
-    const otherRequestId = await createBookingRequest();
-    const otherSlot = await prisma.timeSlot.create({
-      data: {
-        artistId,
-        bookingRequestId: otherRequestId,
-        startTime: new Date("2026-11-12T11:00:00.000Z"),
-        endTime: new Date("2026-11-12T12:00:00.000Z"),
-        status: "BOOKED",
-      },
-    });
-
-    await prisma.$transaction((tx) => releaseBookedTimeSlots(tx, bookingRequestId));
-
-    const untouched = await prisma.timeSlot.findUnique({
-      where: { id: otherSlot.id },
-    });
-    expect(untouched?.status).toBe("BOOKED");
-  });
-
-  it("leaves an already-RELEASED slot alone without erroring", async () => {
-    const bookingRequestId = await createBookingRequest();
-    const slot = await prisma.timeSlot.create({
-      data: {
-        artistId,
-        bookingRequestId,
-        startTime: new Date("2026-11-13T11:00:00.000Z"),
-        endTime: new Date("2026-11-13T12:00:00.000Z"),
-        status: "RELEASED",
-      },
-    });
+  it("resolves without erroring when nothing matches (already RELEASED / none booked)", async () => {
+    prismaMock.timeSlot.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
-      prisma.$transaction((tx) => releaseBookedTimeSlots(tx, bookingRequestId))
-    ).resolves.not.toThrow();
-
-    const unchanged = await prisma.timeSlot.findUnique({ where: { id: slot.id } });
-    expect(unchanged?.status).toBe("RELEASED");
+      releaseBookedTimeSlots(prismaMock, "request-4")
+    ).resolves.toBeUndefined();
   });
 });
