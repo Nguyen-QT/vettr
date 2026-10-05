@@ -188,6 +188,30 @@ describe("signupClient", () => {
     expect(prismaMock.account.updateMany).not.toHaveBeenCalled();
   });
 
+  it("never reclaims an unverified ARTIST-home account linked to the ClientProfile (27.8 takeover guard)", async () => {
+    prismaMock.clientProfile.findFirst.mockResolvedValue(
+      buildClientProfile(
+        buildAccount({ role: "ARTIST", artistId: "artist-1", emailVerifiedAt: null }),
+      ),
+    );
+
+    const result = await signupClient({
+      email: EMAIL,
+      password: "attacker-chosen-password",
+    });
+
+    expect(result).toEqual({
+      success: true,
+      pendingVerification: true,
+      clientProfileId: CLIENT_PROFILE_ID,
+    });
+    expect(prismaMock.account.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.account.update).not.toHaveBeenCalled();
+    expect(prismaMock.account.create).not.toHaveBeenCalled();
+    expect(sendVerificationEmailMock).not.toHaveBeenCalled();
+    expect(prismaMock.session.create).not.toHaveBeenCalled();
+  });
+
   describe("re-signup against an unverified (possibly squatted) account", () => {
     const ownerPassword = "owner-chosen-password";
 
