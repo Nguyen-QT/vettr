@@ -217,16 +217,35 @@ export async function submitBookingRequest(
 // Toggles an BookingRequest's status (CLAUDE.md 3.3: "Action Mutators").
 // Deliberately does not touch TimeSlots — slot promotion to BOOKED is
 // scheduling-domain territory and out of scope here, same as the
-// No-Auto-Booking note above.
+// No-Auto-Booking note above. Session + ownership guarded (28.7.3.1),
+// same posture as rescheduleApprovedBookingAction below.
 export async function approveBookingRequest(
   bookingRequestId: string
 ): Promise<RequestActionResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  if (!(await requireOwnedRequest(bookingRequestId, artistId))) {
+    return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
+  }
+
   return setBookingRequestStatus(bookingRequestId, "APPROVED");
 }
 
 export async function declineBookingRequest(
   bookingRequestId: string
 ): Promise<RequestActionResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  if (!(await requireOwnedRequest(bookingRequestId, artistId))) {
+    return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
+  }
+
   return setBookingRequestStatus(bookingRequestId, "DECLINED");
 }
 
@@ -239,6 +258,15 @@ export async function reviewBookingRequestAction(
   bookingRequestId: string,
   input: unknown
 ): Promise<ReviewBookingRequestResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  if (!(await requireOwnedRequest(bookingRequestId, artistId))) {
+    return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
+  }
+
   const parsed = reviewBookingRequestInputSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -262,6 +290,15 @@ export async function reviewBookingRequestAction(
 export async function confirmProposedBookingAction(
   bookingRequestId: string
 ): Promise<ConfirmProposedBookingResult> {
+  const artistId = await requireArtistId();
+  if (!artistId) {
+    return { success: false, error: NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE };
+  }
+
+  if (!(await requireOwnedRequest(bookingRequestId, artistId))) {
+    return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
+  }
+
   return confirmProposedBooking(bookingRequestId);
 }
 
