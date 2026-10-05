@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import type { RequestStatus } from "@/generated/prisma/client";
+import type { ComplexityTier, RequestStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 // Real-database integration tier helpers (28.3). Unlike prismaMock.ts this
@@ -29,6 +29,11 @@ export interface CreateBookingRequestInput {
   requestedStartTime?: Date;
   status?: RequestStatus;
   proposedDurationMinutes?: number;
+  tier?: ComplexityTier;
+  estimatedPrice?: number;
+  depositAmount?: number;
+  depositPaid?: boolean;
+  stripePaymentIntentId?: string;
 }
 
 // Creates a request for an already-tracked artist/client, so wipe() removes
@@ -40,12 +45,16 @@ export async function createBookingRequest(
     data: {
       artistId: input.artistId,
       clientId: input.clientId,
-      tier: "TIER_2",
+      tier: input.tier ?? "TIER_2",
       minPrice: 50,
       maxPrice: 100,
       requestedStartTime: input.requestedStartTime,
       status: input.status,
       proposedDurationMinutes: input.proposedDurationMinutes,
+      estimatedPrice: input.estimatedPrice,
+      depositAmount: input.depositAmount,
+      depositPaid: input.depositPaid,
+      stripePaymentIntentId: input.stripePaymentIntentId,
     },
     select: { id: true },
   });
