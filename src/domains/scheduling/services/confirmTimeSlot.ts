@@ -1,4 +1,4 @@
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 import { SLOT_CONFLICT_ERROR_MESSAGE } from "../constants";
@@ -16,10 +16,22 @@ type PrismaTransactionClient = Prisma.TransactionClient;
 // empty, so the message is the only reliable signal here.
 const POSTGRES_EXCLUSION_VIOLATION_CODE = "23P01";
 
+// Prisma's code for "write conflict or deadlock" (Postgres 40001/40P01).
+// Two transactions racing for the same window can have the loser aborted
+// this way instead of by the exclusion constraint; either way it lost the
+// race for the slot, so it maps to the same conflict result (no retry).
+const PRISMA_WRITE_CONFLICT_CODE = "P2034";
+
 // Exported for reuse by callers (e.g. booking's reviewBookingRequest, 4.1f)
 // that need to book slots as part of a larger transaction spanning
 // domains, rather than confirmTimeSlot's own self-contained one below.
 export function isSlotConflict(error: unknown): boolean {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === PRISMA_WRITE_CONFLICT_CODE
+  ) {
+    return true;
+  }
   return error instanceof Error && error.message.includes(POSTGRES_EXCLUSION_VIOLATION_CODE);
 }
 
