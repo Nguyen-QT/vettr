@@ -71,6 +71,59 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+  integration-tests:
+    runs-on: ubuntu-latest
+
+    # CLAUDE.md 28.3: real-Postgres tier (`*.integration.test.ts`). Needs
+    # no vendor secrets, so unlike stripe-integration-tests / e2e-tests
+    # it also runs for fork PRs.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vettr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # The database name must contain "test" -- assertSafeDatabaseUrl
+      # refuses to run the tier's data wipe otherwise.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/vettr_test?schema=public
+      # Non-secret placeholders, as in the `test` job, so module-load of
+      # `@/lib/*` can't throw if an integration test imports a service.
+      STRIPE_SECRET_KEY: sk_test_dummy
+      STRIPE_PUBLISHABLE_KEY: pk_test_dummy
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_dummy
+      STRIPE_WEBHOOK_SECRET: whsec_dummy
+      UPLOADTHING_TOKEN: dummy_uploadthing_token
+      RESEND_API_KEY: re_dummy
+      EMAIL_FROM: "Vettr <noreply@example.com>"
+      CRON_SECRET: dummy_cron_secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npx prisma generate
+
+      - run: npx prisma migrate deploy
+
+      - name: Real-database integration tests
+        run: npm run test:integration
+
   stripe-integration-tests:
     runs-on: ubuntu-latest
 
