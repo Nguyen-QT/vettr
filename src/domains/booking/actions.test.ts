@@ -79,6 +79,7 @@ import {
   updateClientProfileAction,
   updatePendingBookingRequestAction,
 } from "./actions";
+import { generateResponseMessage } from "./services/generateResponseMessage";
 
 const NOT_SIGNED_IN_AS_ARTIST = {
   success: false,
@@ -632,5 +633,155 @@ describe("updateBookingPaymentMethodAction", () => {
     expect(await updateBookingPaymentMethodAction("request-1", "CASH")).toEqual(
       REQUEST_NOT_FOUND
     );
+  });
+});
+
+describe("approveBookingRequest / declineBookingRequest (setBookingRequestStatus)", () => {
+  beforeEach(() => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+  });
+
+  const STATUS_ACTIONS = [
+    ["approveBookingRequest", approveBookingRequest, "APPROVED"],
+    ["declineBookingRequest", declineBookingRequest, "DECLINED"],
+  ] as const;
+
+  it.each(STATUS_ACTIONS)("%s returns the exact response message", async (_name, action, status) => {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "artist-1",
+    } as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
+
+    expect(await action("request-1")).toEqual({
+      success: true,
+      responseMessage: generateResponseMessage(status),
+    });
+  });
+
+  it.each(STATUS_ACTIONS)(
+    "%s checks ownership selecting only artistId, then re-reads the row",
+    async (_name, action) => {
+      prismaMock.bookingRequest.findUnique.mockResolvedValue({
+        artistId: "artist-1",
+      } as never);
+      prismaMock.bookingRequest.update.mockResolvedValue({} as never);
+
+      await action("request-1");
+
+      expect(prismaMock.bookingRequest.findUnique).toHaveBeenNthCalledWith(1, {
+        where: { id: "request-1" },
+        select: { artistId: true },
+      });
+      expect(prismaMock.bookingRequest.findUnique).toHaveBeenNthCalledWith(2, {
+        where: { id: "request-1" },
+      });
+    }
+  );
+
+  it.each(STATUS_ACTIONS)(
+    "%s reports a row deleted after the ownership check as not found without updating",
+    async (_name, action) => {
+      prismaMock.bookingRequest.findUnique
+        .mockResolvedValueOnce({ artistId: "artist-1" } as never)
+        .mockResolvedValueOnce(null);
+
+      expect(await action("request-1")).toEqual(REQUEST_NOT_FOUND);
+      expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+    }
+  );
+});
+
+describe("guard runs before validation (review)", () => {
+  it("reviewBookingRequestAction returns the sign-in error for invalid input when signed out", async () => {
+    getCurrentSessionMock.mockResolvedValue(null);
+
+    expect(await reviewBookingRequestAction("request-1", {})).toEqual(NOT_SIGNED_IN_AS_ARTIST);
+    expect(prismaMock.bookingRequest.findUnique).not.toHaveBeenCalled();
+    expect(reviewBookingRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("reviewBookingRequestAction checks ownership before parsing input", async () => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "other-artist",
+    } as never);
+
+    expect(await reviewBookingRequestAction("request-1", {})).toEqual(REQUEST_NOT_FOUND);
+    expect(reviewBookingRequestMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("reviewBookingRequestAction", () => {
+  beforeEach(() => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "artist-1",
+    } as never);
+  });
+
+  it.each([
+    [
+      "a duration below the minimum",
+      { ...REVIEW_INPUT, durationMinutes: 30 },
+      "The service duration must be at least 60 minutes.",
+    ],
+    ["a duration above the maximum", { ...REVIEW_INPUT, durationMinutes: 100_000 }, /cannot exceed/],
+    ["a non-integer duration", { ...REVIEW_INPUT, durationMinutes: 90.5 }, null],
+    ["a zero price", { ...REVIEW_INPUT, estimatedPrice: 0 }, "Enter an estimated price."],
+    ["a missing price", { durationMinutes: 120 }, null],
+  ] as const)("rejects %s without calling the service", async (_label, input, message) => {
+    const result = await reviewBookingRequestAction("request-1", input);
+
+    expect(result.success).toBe(false);
+    if (message && !result.success) expect(result.error).toMatch(message);
+    expect(reviewBookingRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("delegates only the parsed fields, ignoring hostile payload keys", async () => {
+    reviewBookingRequestMock.mockResolvedValue({
+      success: true,
+      outcome: "APPROVED",
+      responseMessage: "ok",
+    });
+
+    await reviewBookingRequestAction("request-1", {
+      ...REVIEW_INPUT,
+      artistId: "attacker-artist",
+      bookingRequestId: "attacker-request",
+      status: "APPROVED",
+    });
+
+    expect(reviewBookingRequestMock).toHaveBeenCalledWith({
+      bookingRequestId: "request-1",
+      durationMinutes: 120,
+      estimatedPrice: 300,
+    });
+  });
+
+  it("passes a proposal and service errors through unchanged", async () => {
+    const proposal = {
+      success: true,
+      outcome: "AWAITING_SLOT_CONFIRMATION",
+      responseMessage: "needs confirmation",
+    };
+    reviewBookingRequestMock.mockResolvedValueOnce(proposal);
+    expect(await reviewBookingRequestAction("request-1", REVIEW_INPUT)).toEqual(proposal);
+
+    const conflict = { success: false, error: "That slot is not available." };
+    reviewBookingRequestMock.mockResolvedValueOnce(conflict);
+    expect(await reviewBookingRequestAction("request-1", REVIEW_INPUT)).toEqual(conflict);
+  });
+});
+
+describe("confirmProposedBookingAction", () => {
+  it("passes a service error through unchanged", async () => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "artist-1",
+    } as never);
+    const failure = { success: false, error: "This request is not awaiting confirmation." };
+    confirmProposedBookingMock.mockResolvedValue(failure);
+
+    expect(await confirmProposedBookingAction("request-1")).toEqual(failure);
   });
 });
