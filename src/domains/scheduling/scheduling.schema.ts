@@ -39,17 +39,12 @@ export const getAvailableSlotsInputSchema = z.object({
   date: z.iso.date("Enter a valid date."),
 });
 
-// Shared by the business-hours read/write actions below (CLAUDE.md 4.3).
-export const artistIdInputSchema = z.object({
-  artistId: z.string().min(1),
-});
-
 const availableTimesInputSchema = z.array(z.enum(DAILY_SLOT_TIME_OPTIONS));
 
 // Structural validity only — see services/setWeeklyHours.ts for the
-// upsert itself.
+// upsert itself. artistId is deliberately absent from the three settings
+// schemas: the controller derives it from the session (validation.md §2).
 export const setWeeklyHoursInputSchema = z.object({
-  artistId: z.string().min(1),
   dayOfWeek: z
     .number()
     .int()
@@ -61,7 +56,6 @@ export const setWeeklyHoursInputSchema = z.object({
 // Structural validity only — see services/setScheduleOverride.ts for
 // the upsert itself.
 export const setScheduleOverrideInputSchema = z.object({
-  artistId: z.string().min(1),
   date: z.iso.date("Enter a valid date."),
   availableTimes: availableTimesInputSchema,
 });
@@ -74,7 +68,6 @@ export const setScheduleOverrideInputSchema = z.object({
 // declared order).
 export const setScheduleOverrideRangeInputSchema = z
   .object({
-    artistId: z.string().min(1),
     startDate: z.iso.date("Enter a valid start date."),
     endDate: z.iso.date("Enter a valid end date."),
     availableTimes: availableTimesInputSchema,
