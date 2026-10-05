@@ -1,140 +1,107 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SLOT_CONFLICT_ERROR_MESSAGE } from "@/domains/scheduling/constants";
-import { prisma } from "@/lib/prisma";
+import {
+  createBookedTimeSlots,
+  isSlotConflict,
+} from "@/domains/scheduling/services/confirmTimeSlot";
+import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 
 import { REQUEST_NOT_FOUND_ERROR_MESSAGE } from "../constants";
-import type { RequestStatus } from "../types";
 import { rescheduleApprovedBooking } from "./rescheduleApprovedBooking";
 
+vi.mock("@/domains/scheduling/services/confirmTimeSlot", () => ({
+  createBookedTimeSlots: vi.fn(),
+  isSlotConflict: vi.fn(),
+}));
+vi.mock("@/domains/scheduling/services/releaseBookedTimeSlots", () => ({
+  releaseBookedTimeSlots: vi.fn(),
+}));
+
+// Mocked-Prisma unit test (architecture.md §7): scheduling's slot services
+// are mocked at their public contracts. Slot overlap/double-booking
+// enforcement (the BOOKED-only exclusion constraint), adjacent-slot
+// overflow capping, and "conflict rolls the release back so the request is
+// never left slotless" are real-DB behaviours -> 28.3 integration-tier
+// candidates; here the call ordering and payloads are asserted.
 describe("rescheduleApprovedBooking", () => {
-  let artistId: string;
-  let clientId: string;
+  const requestId = "request-1";
+  const newStartTime = new Date("2099-09-01T14:00:00.000Z");
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Reschedule Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
+  beforeEach(() => {
+    vi.mocked(createBookedTimeSlots).mockReset();
+    vi.mocked(isSlotConflict).mockReset();
+    vi.mocked(releaseBookedTimeSlots).mockReset();
   });
 
-  afterEach(async () => {
-    await prisma.timeSlot.deleteMany({ where: { artistId } });
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  async function createRequest(
-    status: RequestStatus,
-    timeSlots: { startTime: Date; endTime: Date }[] = []
-  ): Promise<string> {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status,
-      },
-    });
-    for (const slot of timeSlots) {
-      await prisma.timeSlot.create({
-        data: {
-          artistId,
-          bookingRequestId: request.id,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          status: "BOOKED",
-        },
-      });
-    }
-    return request.id;
+  function stubRequest(status = "APPROVED"): void {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      id: requestId,
+      artistId: "artist-1",
+      status,
+    } as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
   }
 
-  it("moves a single-slot booking to a new time, releasing the old slot", async () => {
-    const oldStart = new Date("2099-06-01T11:00:00");
-    const requestId = await createRequest("APPROVED", [
-      { startTime: oldStart, endTime: new Date(oldStart.getTime() + 60 * 60_000) },
-    ]);
-    const newStart = new Date("2099-06-02T14:00:00");
+  it("moves a single-slot booking to a new time, releasing the old slot first", async () => {
+    stubRequest();
+    const order: string[] = [];
+    vi.mocked(releaseBookedTimeSlots).mockImplementation(async () => {
+      order.push("release");
+    });
+    vi.mocked(createBookedTimeSlots).mockImplementation(async () => {
+      order.push("create");
+      return undefined as never;
+    });
 
     const result = await rescheduleApprovedBooking({
       bookingRequestId: requestId,
-      newStartTime: newStart,
+      newStartTime,
       durationMinutes: 60,
     });
 
     expect(result).toEqual({ success: true });
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: requestId },
-      include: { timeSlots: true },
+    expect(order).toEqual(["release", "create"]);
+    expect(releaseBookedTimeSlots).toHaveBeenCalledWith(prismaMock, requestId);
+    expect(createBookedTimeSlots).toHaveBeenCalledWith(prismaMock, {
+      bookingRequestId: requestId,
+      artistId: "artist-1",
+      startTime: newStartTime,
+      durationMinutes: 60,
     });
-    expect(updated?.requestedStartTime).toEqual(newStart);
-    const oldSlot = updated?.timeSlots.find(
-      (slot) => slot.startTime.getTime() === oldStart.getTime()
-    );
-    const newSlot = updated?.timeSlots.find(
-      (slot) => slot.startTime.getTime() === newStart.getTime()
-    );
-    expect(oldSlot?.status).toBe("RELEASED");
-    expect(newSlot?.status).toBe("BOOKED");
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
+      where: { id: requestId },
+      data: { requestedStartTime: newStartTime },
+    });
   });
 
-  it("books two adjacent slots when the duration spills over", async () => {
-    const oldStart = new Date("2099-06-03T11:00:00");
-    const requestId = await createRequest("APPROVED", [
-      { startTime: oldStart, endTime: new Date(oldStart.getTime() + 60 * 60_000) },
-    ]);
-    const newStart = new Date("2099-06-04T11:00:00");
+  it("passes a spill-over duration through to the slot booking so two adjacent slots can be booked", async () => {
+    stubRequest();
 
     const result = await rescheduleApprovedBooking({
       bookingRequestId: requestId,
-      newStartTime: newStart,
+      newStartTime,
       durationMinutes: 300,
     });
 
     expect(result).toEqual({ success: true });
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: requestId },
-      include: { timeSlots: true },
-    });
-    const bookedSlots = updated?.timeSlots.filter((slot) => slot.status === "BOOKED");
-    expect(bookedSlots).toHaveLength(2);
+    expect(createBookedTimeSlots).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ durationMinutes: 300 })
+    );
   });
 
-  it("rejects rescheduling to a time that conflicts with another booking", async () => {
-    const conflictStart = new Date("2099-06-05T14:00:00");
-    await createRequest("APPROVED", [
-      {
-        startTime: conflictStart,
-        endTime: new Date(conflictStart.getTime() + 60 * 60_000),
-      },
-    ]);
-    const oldStart = new Date("2099-06-05T11:00:00");
-    const requestId = await createRequest("APPROVED", [
-      { startTime: oldStart, endTime: new Date(oldStart.getTime() + 60 * 60_000) },
-    ]);
+  it("rejects rescheduling to a time that conflicts with another booking, without updating the request", async () => {
+    stubRequest();
+    const conflict = new Error("slot taken");
+    vi.mocked(createBookedTimeSlots).mockRejectedValue(conflict);
+    vi.mocked(isSlotConflict).mockReturnValue(true);
 
     const result = await rescheduleApprovedBooking({
       bookingRequestId: requestId,
-      newStartTime: conflictStart,
+      newStartTime,
       durationMinutes: 60,
     });
 
@@ -142,23 +109,30 @@ describe("rescheduleApprovedBooking", () => {
       success: false,
       error: SLOT_CONFLICT_ERROR_MESSAGE,
     });
+    expect(isSlotConflict).toHaveBeenCalledWith(conflict);
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+  });
 
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: requestId },
-      include: { timeSlots: true },
-    });
-    // Rolled back entirely -- the original slot is still BOOKED, not
-    // left RELEASED with nothing to replace it.
-    expect(updated?.timeSlots[0]?.status).toBe("BOOKED");
-    expect(updated?.requestedStartTime).toBeNull();
+  it("rethrows an error that is not a slot conflict", async () => {
+    stubRequest();
+    vi.mocked(createBookedTimeSlots).mockRejectedValue(new Error("db down"));
+    vi.mocked(isSlotConflict).mockReturnValue(false);
+
+    await expect(
+      rescheduleApprovedBooking({
+        bookingRequestId: requestId,
+        newStartTime,
+        durationMinutes: 60,
+      })
+    ).rejects.toThrow("db down");
   });
 
   it("rejects rescheduling a request that is not APPROVED", async () => {
-    const requestId = await createRequest("PENDING");
+    stubRequest("PENDING");
 
     const result = await rescheduleApprovedBooking({
       bookingRequestId: requestId,
-      newStartTime: new Date("2099-06-06T11:00:00"),
+      newStartTime,
       durationMinutes: 60,
     });
 
@@ -166,12 +140,15 @@ describe("rescheduleApprovedBooking", () => {
       success: false,
       error: "Only an approved booking can be rescheduled.",
     });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects a request id that does not exist", async () => {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(null);
+
     const result = await rescheduleApprovedBooking({
-      bookingRequestId: randomUUID(),
-      newStartTime: new Date("2099-06-06T11:00:00"),
+      bookingRequestId: "missing",
+      newStartTime,
       durationMinutes: 60,
     });
 
@@ -179,5 +156,6 @@ describe("rescheduleApprovedBooking", () => {
       success: false,
       error: REQUEST_NOT_FOUND_ERROR_MESSAGE,
     });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });

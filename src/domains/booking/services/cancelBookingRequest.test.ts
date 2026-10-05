@@ -1,252 +1,215 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import { refundDeposit } from "@/domains/billing/services/refundDeposit";
+import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 
 import {
   CANCELLATION_WINDOW_ERROR_MESSAGE,
   REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE,
   REQUEST_NOT_FOUND_ERROR_MESSAGE,
 } from "../constants";
-import type { RequestStatus } from "../types";
 import { cancelBookingRequest } from "./cancelBookingRequest";
 
-const createRefundMock = vi.fn();
-
-// vi.mock calls are hoisted above imports by vitest's transform, so
-// this replaces the real Stripe client before refundDeposit (called
-// from cancelBookingRequest) ever sees it. Everything else -- the
-// cancellation itself, recordDepositRefund -- still hits the real
-// local Postgres, exercising the actual cross-domain call into
-// billing's refundDeposit (CLAUDE.md 7.3.4).
-vi.mock("@/lib/stripe", () => ({
-  stripe: {
-    refunds: {
-      create: (...args: unknown[]) => createRefundMock(...args),
-    },
-  },
+vi.mock("@/domains/billing/services/refundDeposit", () => ({
+  refundDeposit: vi.fn(),
+}));
+vi.mock("@/domains/scheduling/services/releaseBookedTimeSlots", () => ({
+  releaseBookedTimeSlots: vi.fn(),
 }));
 
+// Mocked-Prisma unit test (architecture.md §7): billing's refundDeposit and
+// scheduling's releaseBookedTimeSlots are mocked at their public contracts
+// (the Stripe call itself is covered by billing's own tests). Slot status
+// flipping to RELEASED and the transaction's all-or-nothing rollback are
+// real-DB behaviours -> 28.3 integration-tier candidates.
 describe("cancelBookingRequest", () => {
-  let artistId: string;
-  let clientId: string;
+  const now = new Date("2026-10-05T12:00:00.000Z");
+  const hour = 60 * 60_000;
+  const clientId = "client-1";
+  const requestId = "request-1";
 
-  beforeEach(async () => {
-    createRefundMock.mockReset();
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Cancel Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    vi.mocked(refundDeposit).mockReset();
+    vi.mocked(releaseBookedTimeSlots).mockReset();
   });
 
-  afterEach(async () => {
-    await prisma.timeSlot.deleteMany({ where: { artistId } });
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
-  async function createRequest(
-    status: RequestStatus,
-    timeSlots: { startTime: Date; endTime: Date }[] = [],
-    depositOverrides: { depositPaid?: boolean; stripePaymentIntentId?: string } = {}
-  ): Promise<string> {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status,
-        depositPaid: depositOverrides.depositPaid ?? false,
-        stripePaymentIntentId: depositOverrides.stripePaymentIntentId,
-      },
-    });
-    for (const slot of timeSlots) {
-      await prisma.timeSlot.create({
-        data: {
-          artistId,
-          bookingRequestId: request.id,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          status: "BOOKED",
-        },
-      });
-    }
-    return request.id;
+  function stubRequest(
+    status: string,
+    options: { slotStarts?: Date[]; depositPaid?: boolean; clientId?: string } = {}
+  ): void {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      id: requestId,
+      clientId: options.clientId ?? clientId,
+      status,
+      depositPaid: options.depositPaid ?? false,
+      timeSlots: (options.slotStarts ?? []).map((startTime) => ({
+        startTime,
+        endTime: new Date(startTime.getTime() + hour),
+      })),
+    } as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
+    prismaMock.clientProfile.update.mockResolvedValue({
+      cancellationCount: 1,
+    } as never);
   }
 
+  const farFuture = () => new Date(now.getTime() + 30 * 24 * hour);
+  const call = () =>
+    cancelBookingRequest({ bookingRequestId: requestId, clientProfileId: clientId });
+
   it("cancels a PENDING request with no locked slot", async () => {
-    const requestId = await createRequest("PENDING");
+    stubRequest("PENDING");
 
-    const result = await cancelBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
-    });
+    const result = await call();
 
     expect(result).toEqual({ success: true });
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: requestId },
-    });
-    expect(updated?.status).toBe("CANCELLED_BY_CLIENT");
-  });
-
-  it("does not apply a cancellation strike for a PENDING cancellation", async () => {
-    const requestId = await createRequest("PENDING");
-
-    await cancelBookingRequest({ bookingRequestId: requestId, clientProfileId: clientId });
-
-    const client = await prisma.clientProfile.findUnique({ where: { id: clientId } });
-    expect(client?.cancellationCount).toBe(0);
-    expect(client?.enforcePrecharge).toBe(false);
-  });
-
-  it("cancels an APPROVED request outside the window and releases its slot", async () => {
-    const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60_000);
-    const requestId = await createRequest("APPROVED", [
-      { startTime: farFuture, endTime: new Date(farFuture.getTime() + 60 * 60_000) },
-    ]);
-
-    const result = await cancelBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
-    });
-
-    expect(result).toEqual({ success: true });
-    const updated = await prisma.bookingRequest.findUnique({
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenCalledWith({
       where: { id: requestId },
       include: { timeSlots: true },
     });
-    expect(updated?.status).toBe("CANCELLED_BY_CLIENT");
-    expect(updated?.timeSlots[0]?.status).toBe("RELEASED");
+    expect(releaseBookedTimeSlots).toHaveBeenCalledWith(prismaMock, requestId);
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
+      where: { id: requestId },
+      data: { status: "CANCELLED_BY_CLIENT" },
+    });
+  });
+
+  it("does not apply a cancellation strike for a PENDING cancellation", async () => {
+    stubRequest("PENDING");
+
+    await call();
+
+    expect(prismaMock.clientProfile.update).not.toHaveBeenCalled();
+  });
+
+  it("cancels an APPROVED request outside the window and releases its slot", async () => {
+    stubRequest("APPROVED", { slotStarts: [farFuture()] });
+
+    const result = await call();
+
+    expect(result).toEqual({ success: true });
+    expect(releaseBookedTimeSlots).toHaveBeenCalledWith(prismaMock, requestId);
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
+      where: { id: requestId },
+      data: { status: "CANCELLED_BY_CLIENT" },
+    });
   });
 
   it("refunds a paid deposit in full when cancelling an APPROVED request outside the window", async () => {
-    const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60_000);
-    const requestId = await createRequest(
-      "APPROVED",
-      [{ startTime: farFuture, endTime: new Date(farFuture.getTime() + 60 * 60_000) }],
-      { depositPaid: true, stripePaymentIntentId: "pi_cancel_refund" }
-    );
-    createRefundMock.mockResolvedValue({ id: "re_cancel_refund" });
+    stubRequest("APPROVED", { slotStarts: [farFuture()], depositPaid: true });
+    vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
 
-    const result = await cancelBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
-    });
+    const result = await call();
 
     expect(result).toEqual({ success: true });
-    expect(createRefundMock).toHaveBeenCalledWith(
-      { payment_intent: "pi_cancel_refund" },
-      { idempotencyKey: `deposit-refund:${requestId}` }
-    );
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: requestId },
-    });
-    expect(updated?.depositRefunded).toBe(true);
+    expect(refundDeposit).toHaveBeenCalledWith(requestId);
+  });
+
+  it("logs, but still reports success, when the deposit refund fails after the cancellation committed", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    stubRequest("APPROVED", { slotStarts: [farFuture()], depositPaid: true });
+    vi.mocked(refundDeposit).mockResolvedValue({
+      success: false,
+      error: "stripe down",
+    } as never);
+
+    const result = await call();
+
+    expect(result).toEqual({ success: true });
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalled();
   });
 
   it("does not attempt a refund when the deposit was never paid", async () => {
-    const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60_000);
-    const requestId = await createRequest("APPROVED", [
-      { startTime: farFuture, endTime: new Date(farFuture.getTime() + 60 * 60_000) },
-    ]);
+    stubRequest("APPROVED", { slotStarts: [farFuture()] });
 
-    await cancelBookingRequest({ bookingRequestId: requestId, clientProfileId: clientId });
+    await call();
 
-    expect(createRefundMock).not.toHaveBeenCalled();
+    expect(refundDeposit).not.toHaveBeenCalled();
   });
 
   it("applies a cancellation strike and flags the client for an APPROVED cancellation", async () => {
-    const farFuture = new Date(Date.now() + 30 * 24 * 60 * 60_000);
-    const requestId = await createRequest("APPROVED", [
-      { startTime: farFuture, endTime: new Date(farFuture.getTime() + 60 * 60_000) },
-    ]);
+    stubRequest("APPROVED", { slotStarts: [farFuture()] });
 
-    await cancelBookingRequest({ bookingRequestId: requestId, clientProfileId: clientId });
+    await call();
 
-    const client = await prisma.clientProfile.findUnique({ where: { id: clientId } });
-    expect(client?.cancellationCount).toBe(1);
-    expect(client?.enforcePrecharge).toBe(true);
+    expect(prismaMock.clientProfile.update).toHaveBeenNthCalledWith(1, {
+      where: { id: clientId },
+      data: { cancellationCount: { increment: 1 } },
+    });
+    expect(prismaMock.clientProfile.update).toHaveBeenNthCalledWith(2, {
+      where: { id: clientId },
+      data: { enforcePrecharge: true },
+    });
   });
 
   it("rejects cancelling an APPROVED request inside the 48-hour window", async () => {
-    const soon = new Date(Date.now() + 10 * 60 * 60_000);
-    const requestId = await createRequest("APPROVED", [
-      { startTime: soon, endTime: new Date(soon.getTime() + 60 * 60_000) },
-    ]);
-
-    const result = await cancelBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
+    stubRequest("APPROVED", {
+      slotStarts: [new Date(now.getTime() + 10 * hour)],
+      depositPaid: true,
     });
+
+    const result = await call();
 
     expect(result).toEqual({
       success: false,
       error: CANCELLATION_WINDOW_ERROR_MESSAGE,
     });
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: requestId },
-    });
-    expect(updated?.status).toBe("APPROVED");
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+    expect(refundDeposit).not.toHaveBeenCalled();
+  });
+
+  it("rejects a cancellation 1ms inside the 48-hour window but allows exactly 48 hours out", async () => {
+    stubRequest("APPROVED", { slotStarts: [new Date(now.getTime() + 48 * hour - 1)] });
+    expect((await call()).success).toBe(false);
+
+    stubRequest("APPROVED", { slotStarts: [new Date(now.getTime() + 48 * hour)] });
+    expect((await call()).success).toBe(true);
   });
 
   it("rejects cancelling an already-CANCELLED request", async () => {
-    const requestId = await createRequest("CANCELLED_BY_CLIENT");
+    stubRequest("CANCELLED_BY_CLIENT");
 
-    const result = await cancelBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: clientId,
-    });
+    const result = await call();
 
     expect(result).toEqual({
       success: false,
       error: REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE,
     });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects cancelling a request that belongs to a different client", async () => {
-    const requestId = await createRequest("PENDING");
+    stubRequest("PENDING", { clientId: "someone-else" });
 
-    const result = await cancelBookingRequest({
-      bookingRequestId: requestId,
-      clientProfileId: randomUUID(),
-    });
+    const result = await call();
 
     expect(result).toEqual({
       success: false,
       error: REQUEST_NOT_FOUND_ERROR_MESSAGE,
     });
-    const updated = await prisma.bookingRequest.findUnique({
-      where: { id: requestId },
-    });
-    expect(updated?.status).toBe("PENDING");
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 
   it("rejects a request id that does not exist", async () => {
-    const result = await cancelBookingRequest({
-      bookingRequestId: randomUUID(),
-      clientProfileId: clientId,
-    });
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(null);
+
+    const result = await call();
 
     expect(result).toEqual({
       success: false,
       error: REQUEST_NOT_FOUND_ERROR_MESSAGE,
     });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 });

@@ -1,246 +1,145 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getUpcomingAppointments } from "./getUpcomingAppointments";
 
-// Hits the real local Postgres database, same as the other booking
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7). The APPROVED / own-artist /
+// future-slot / BOOKED-only filters are DB-side, so they are asserted on
+// the query payload (with the clock pinned); mapping and ordering are
+// asserted on stubbed rows.
 describe("getUpcomingAppointments", () => {
-  let artistId: string;
+  const artistId = "artist-1";
+  const now = new Date("2026-10-05T12:00:00.000Z");
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Upcoming Appointments Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
   });
 
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  async function createApprovedRequest(
-    slots: { startTime: Date; endTime: Date }[],
-    overrides: {
-      status?: "PENDING" | "APPROVED";
-      estimatedPrice?: number;
-      paymentMethod?: "CASH" | "CARD";
-    } = {}
-  ): Promise<string> {
-    const clientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
+  function slot(startIso: string, endIso: string) {
+    return { startTime: new Date(startIso), endTime: new Date(endIso) };
+  }
+
+  function row(
+    overrides: Partial<{
+      id: string;
+      paymentMethod: "CASH" | "CARD" | null;
+      timeSlots: { startTime: Date; endTime: Date }[];
+    }> = {}
+  ) {
+    return {
+      id: overrides.id ?? "request-1",
+      tier: "TIER_2",
+      estimatedPrice: null,
+      designTags: ["floral"],
+      aestheticTags: ["fine-line"],
+      clientNotes: "notes",
+      paymentMethod: overrides.paymentMethod ?? null,
+      client: {
+        instagramHandle: "test_client",
+        email: "test_client@example.com",
+        phone: "555-0100",
       },
-    });
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: overrides.status ?? "APPROVED",
-        estimatedPrice: overrides.estimatedPrice ?? 150,
-        paymentMethod: overrides.paymentMethod,
-      },
-    });
-    for (const slot of slots) {
-      await prisma.timeSlot.create({
-        data: {
-          artistId,
-          bookingRequestId: request.id,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          status: "BOOKED",
-        },
-      });
-    }
-    return request.id;
+      designReferences: [{ imageUrl: "https://utfs.io/f/a.jpg" }],
+      timeSlots: overrides.timeSlots ?? [
+        slot("2026-10-06T10:00:00.000Z", "2026-10-06T12:00:00.000Z"),
+      ],
+    } as never;
   }
 
   it("returns an APPROVED request with a future single slot", async () => {
-    const startTime = new Date("2099-05-01T11:00:00.000Z");
-    const endTime = new Date("2099-05-01T12:00:00.000Z");
-    const requestId = await createApprovedRequest([{ startTime, endTime }]);
+    prismaMock.bookingRequest.findMany.mockResolvedValue([row()]);
 
-    const result = await getUpcomingAppointments(artistId);
+    const [result] = await getUpcomingAppointments(artistId);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe(requestId);
-    expect(result[0].startTime).toEqual(startTime);
-    expect(result[0].endTime).toEqual(endTime);
-    expect(result[0].estimatedPrice).toBe(150);
+    expect(result).toEqual({
+      id: "request-1",
+      clientInstagramHandle: "test_client",
+      clientEmail: "test_client@example.com",
+      clientPhone: "555-0100",
+      tier: "TIER_2",
+      estimatedPrice: null,
+      designTags: ["floral"],
+      aestheticTags: ["fine-line"],
+      clientNotes: "notes",
+      designReferenceImageUrls: ["https://utfs.io/f/a.jpg"],
+      startTime: new Date("2026-10-06T10:00:00.000Z"),
+      endTime: new Date("2026-10-06T12:00:00.000Z"),
+      paymentMethod: null,
+    });
   });
 
   it("surfaces the client's payment method preference", async () => {
-    await createApprovedRequest(
-      [
-        {
-          startTime: new Date("2099-05-01T15:00:00.000Z"),
-          endTime: new Date("2099-05-01T16:00:00.000Z"),
-        },
-      ],
-      { paymentMethod: "CASH" }
-    );
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({ paymentMethod: "CARD" }),
+    ]);
 
-    const result = await getUpcomingAppointments(artistId);
+    const [result] = await getUpcomingAppointments(artistId);
 
-    expect(result[0].paymentMethod).toBe("CASH");
+    expect(result?.paymentMethod).toBe("CARD");
   });
 
   it("spans the earliest start and latest end across two adjacent slots", async () => {
-    const startTime = new Date("2099-05-02T11:00:00.000Z");
-    const middleTime = new Date("2099-05-02T14:00:00.000Z");
-    const endTime = new Date("2099-05-02T17:00:00.000Z");
-    await createApprovedRequest([
-      { startTime, endTime: middleTime },
-      { startTime: middleTime, endTime },
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({
+        timeSlots: [
+          slot("2026-10-06T12:00:00.000Z", "2026-10-06T14:00:00.000Z"),
+          slot("2026-10-06T10:00:00.000Z", "2026-10-06T12:00:00.000Z"),
+        ],
+      }),
     ]);
 
-    const result = await getUpcomingAppointments(artistId);
+    const [result] = await getUpcomingAppointments(artistId);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].startTime).toEqual(startTime);
-    expect(result[0].endTime).toEqual(endTime);
-  });
-
-  it("excludes a request that is not APPROVED", async () => {
-    await createApprovedRequest(
-      [
-        {
-          startTime: new Date("2099-05-03T11:00:00.000Z"),
-          endTime: new Date("2099-05-03T12:00:00.000Z"),
-        },
-      ],
-      { status: "PENDING" }
-    );
-
-    const result = await getUpcomingAppointments(artistId);
-
-    expect(result).toHaveLength(0);
-  });
-
-  it("excludes an APPROVED request whose slot is in the past", async () => {
-    await createApprovedRequest([
-      {
-        startTime: new Date("2020-01-01T11:00:00.000Z"),
-        endTime: new Date("2020-01-01T12:00:00.000Z"),
-      },
-    ]);
-
-    const result = await getUpcomingAppointments(artistId);
-
-    expect(result).toHaveLength(0);
-  });
-
-  it("does not let another artist's appointment show up", async () => {
-    const otherArtistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: otherArtistId,
-        name: "Other Artist",
-        instagramHandle: `test_artist_${otherArtistId.slice(0, 8)}`,
-        email: `${otherArtistId}@example.com`,
-      },
-    });
-    const otherClientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: otherClientId,
-        instagramHandle: `test_client_${otherClientId.slice(0, 8)}`,
-        email: `test_client_${otherClientId.slice(0, 8)}@example.com`,
-      },
-    });
-    const otherRequest = await prisma.bookingRequest.create({
-      data: {
-        clientId: otherClientId,
-        artistId: otherArtistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-        estimatedPrice: 150,
-      },
-    });
-    await prisma.timeSlot.create({
-      data: {
-        artistId: otherArtistId,
-        bookingRequestId: otherRequest.id,
-        startTime: new Date("2099-05-04T11:00:00.000Z"),
-        endTime: new Date("2099-05-04T12:00:00.000Z"),
-        status: "BOOKED",
-      },
-    });
-
-    const result = await getUpcomingAppointments(artistId);
-
-    expect(result).toHaveLength(0);
-
-    await prisma.bookingRequest.deleteMany({ where: { artistId: otherArtistId } });
-    await prisma.artist.delete({ where: { id: otherArtistId } });
+    expect(result?.startTime).toEqual(new Date("2026-10-06T10:00:00.000Z"));
+    expect(result?.endTime).toEqual(new Date("2026-10-06T14:00:00.000Z"));
   });
 
   it("orders multiple upcoming appointments by start time ascending", async () => {
-    const laterId = await createApprovedRequest([
-      {
-        startTime: new Date("2099-05-10T11:00:00.000Z"),
-        endTime: new Date("2099-05-10T12:00:00.000Z"),
-      },
-    ]);
-    const soonerId = await createApprovedRequest([
-      {
-        startTime: new Date("2099-05-06T11:00:00.000Z"),
-        endTime: new Date("2099-05-06T12:00:00.000Z"),
-      },
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({
+        id: "later",
+        timeSlots: [slot("2026-10-08T10:00:00.000Z", "2026-10-08T12:00:00.000Z")],
+      }),
+      row({
+        id: "earlier",
+        timeSlots: [slot("2026-10-06T10:00:00.000Z", "2026-10-06T12:00:00.000Z")],
+      }),
     ]);
 
     const result = await getUpcomingAppointments(artistId);
 
     expect(result.map((appointment) => appointment.id)).toEqual([
-      soonerId,
-      laterId,
+      "earlier",
+      "later",
     ]);
   });
 
-  it("ignores a RELEASED slot left behind by a reschedule, using only the current BOOKED one", async () => {
-    const requestId = await createApprovedRequest([
-      {
-        startTime: new Date("2099-05-12T14:00:00.000Z"),
-        endTime: new Date("2099-05-12T15:00:00.000Z"),
-      },
-    ]);
-    // Simulates rescheduleApprovedBooking (5.5.1): the old slot is
-    // released, not deleted, and a new one is booked in its place.
-    await prisma.timeSlot.updateMany({
-      where: { bookingRequestId: requestId },
-      data: { status: "RELEASED" },
-    });
-    await prisma.timeSlot.create({
-      data: {
-        artistId,
-        bookingRequestId: requestId,
-        startTime: new Date("2099-05-20T11:00:00.000Z"),
-        endTime: new Date("2099-05-20T12:00:00.000Z"),
-        status: "BOOKED",
-      },
-    });
+  // Excludes non-APPROVED requests, past slots, and other artists'
+  // appointments; reads only BOOKED slots so a RELEASED slot left behind
+  // by rescheduleApprovedBooking (5.5.1) can't widen the range.
+  it("filters to this artist's APPROVED requests with a future BOOKED slot, and includes only BOOKED slots", async () => {
+    prismaMock.bookingRequest.findMany.mockResolvedValue([]);
 
     const result = await getUpcomingAppointments(artistId);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].startTime).toEqual(new Date("2099-05-20T11:00:00.000Z"));
-    expect(result[0].endTime).toEqual(new Date("2099-05-20T12:00:00.000Z"));
+    expect(result).toEqual([]);
+    expect(prismaMock.bookingRequest.findMany).toHaveBeenCalledWith({
+      where: {
+        artistId,
+        status: "APPROVED",
+        timeSlots: { some: { status: "BOOKED", startTime: { gte: now } } },
+      },
+      include: {
+        client: true,
+        designReferences: true,
+        timeSlots: { where: { status: "BOOKED" } },
+      },
+    });
   });
 });

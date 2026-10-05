@@ -1,63 +1,29 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { getBookingRequestForCheckout } from "./getBookingRequestForCheckout";
 
-// Hits the real local Postgres database, same as the other booking
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7).
 describe("getBookingRequestForCheckout", () => {
-  let artistId: string;
-  let clientId: string;
+  it("returns the narrow view for an existing request, mapping Decimals to numbers", async () => {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      id: "request-1",
+      artistId: "artist-1",
+      status: "APPROVED",
+      estimatedPrice: "150",
+      depositAmount: "20",
+      depositPaid: true,
+    } as never);
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Checkout View Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-  });
+    const result = await getBookingRequestForCheckout("request-1");
 
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  it("returns the narrow view for an existing request", async () => {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-        estimatedPrice: 150,
-        depositAmount: 20,
-        depositPaid: true,
-      },
-    });
-
-    const result = await getBookingRequestForCheckout(request.id);
-
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "request-1" } })
+    );
     expect(result).toEqual({
-      id: request.id,
-      artistId,
+      id: "request-1",
+      artistId: "artist-1",
       status: "APPROVED",
       estimatedPrice: 150,
       depositAmount: 20,
@@ -66,22 +32,20 @@ describe("getBookingRequestForCheckout", () => {
   });
 
   it("returns null values for a request with no estimate or deposit yet", async () => {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "PENDING",
-      },
-    });
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      id: "request-1",
+      artistId: "artist-1",
+      status: "PENDING",
+      estimatedPrice: null,
+      depositAmount: null,
+      depositPaid: false,
+    } as never);
 
-    const result = await getBookingRequestForCheckout(request.id);
+    const result = await getBookingRequestForCheckout("request-1");
 
     expect(result).toEqual({
-      id: request.id,
-      artistId,
+      id: "request-1",
+      artistId: "artist-1",
       status: "PENDING",
       estimatedPrice: null,
       depositAmount: null,
@@ -90,7 +54,9 @@ describe("getBookingRequestForCheckout", () => {
   });
 
   it("returns null for a request that doesn't exist", async () => {
-    const result = await getBookingRequestForCheckout(randomUUID());
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(null);
+
+    const result = await getBookingRequestForCheckout("missing");
 
     expect(result).toBeNull();
   });

@@ -1,121 +1,107 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { REQUEST_NOT_FOUND_ERROR_MESSAGE } from "../constants";
-import type { RequestStatus } from "../types";
 import { markAppointmentCompleted } from "./markAppointmentCompleted";
 
+// Mocked-Prisma unit test (architecture.md §7), clock pinned.
 describe("markAppointmentCompleted", () => {
-  let artistId: string;
-  let clientId: string;
+  const now = new Date("2026-10-05T12:00:00.000Z");
+  const hour = 60 * 60_000;
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Completed Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
   });
 
-  afterEach(async () => {
-    await prisma.timeSlot.deleteMany({ where: { artistId } });
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  async function createRequest(
-    status: RequestStatus,
-    timeSlots: { startTime: Date; endTime: Date }[] = []
-  ): Promise<string> {
-    const request = await prisma.bookingRequest.create({
-      data: { clientId, artistId, tier: "TIER_2", minPrice: 100, maxPrice: 200, status },
-    });
-    for (const slot of timeSlots) {
-      await prisma.timeSlot.create({
-        data: {
-          artistId,
-          bookingRequestId: request.id,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          status: "BOOKED",
-        },
-      });
-    }
-    return request.id;
+  function stubRequest(
+    status: string,
+    slotStarts: Date[] = []
+  ): void {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      id: "request-1",
+      clientId: "client-1",
+      status,
+      timeSlots: slotStarts.map((startTime) => ({
+        startTime,
+        endTime: new Date(startTime.getTime() + hour),
+      })),
+    } as never);
   }
 
   it("marks a past-dated APPROVED appointment as completed", async () => {
-    const pastStart = new Date(Date.now() - 24 * 60 * 60_000);
-    const requestId = await createRequest("APPROVED", [
-      { startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) },
-    ]);
+    stubRequest("APPROVED", [new Date(now.getTime() - 24 * hour)]);
+    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
 
-    const result = await markAppointmentCompleted({ bookingRequestId: requestId });
+    const result = await markAppointmentCompleted({ bookingRequestId: "request-1" });
 
     expect(result).toEqual({ success: true });
-    const updated = await prisma.bookingRequest.findUnique({ where: { id: requestId } });
-    expect(updated?.status).toBe("COMPLETED");
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenCalledWith({
+      where: { id: "request-1" },
+      include: { timeSlots: { where: { status: "BOOKED" } } },
+    });
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
+      where: { id: "request-1" },
+      data: { status: "COMPLETED" },
+    });
   });
 
   it("never applies a cancellation strike", async () => {
-    const pastStart = new Date(Date.now() - 24 * 60 * 60_000);
-    const requestId = await createRequest("APPROVED", [
-      { startTime: pastStart, endTime: new Date(pastStart.getTime() + 60 * 60_000) },
-    ]);
+    stubRequest("APPROVED", [new Date(now.getTime() - 24 * hour)]);
+    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
 
-    await markAppointmentCompleted({ bookingRequestId: requestId });
+    await markAppointmentCompleted({ bookingRequestId: "request-1" });
 
-    const client = await prisma.clientProfile.findUnique({ where: { id: clientId } });
-    expect(client?.cancellationCount).toBe(0);
+    expect(prismaMock.clientProfile.update).not.toHaveBeenCalled();
   });
 
   it("rejects an appointment that hasn't happened yet", async () => {
-    const futureStart = new Date(Date.now() + 24 * 60 * 60_000);
-    const requestId = await createRequest("APPROVED", [
-      { startTime: futureStart, endTime: new Date(futureStart.getTime() + 60 * 60_000) },
-    ]);
+    stubRequest("APPROVED", [new Date(now.getTime() + 24 * hour)]);
 
-    const result = await markAppointmentCompleted({ bookingRequestId: requestId });
+    const result = await markAppointmentCompleted({ bookingRequestId: "request-1" });
 
     expect(result).toEqual({
       success: false,
       error: "This appointment hasn't happened yet.",
     });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+  });
+
+  it("treats a slot starting exactly now as not yet due", async () => {
+    stubRequest("APPROVED", [now]);
+
+    const result = await markAppointmentCompleted({ bookingRequestId: "request-1" });
+
+    expect(result.success).toBe(false);
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 
   it("rejects a request that is not APPROVED", async () => {
-    const requestId = await createRequest("PENDING");
+    stubRequest("PENDING");
 
-    const result = await markAppointmentCompleted({ bookingRequestId: requestId });
+    const result = await markAppointmentCompleted({ bookingRequestId: "request-1" });
 
     expect(result).toEqual({
       success: false,
       error: "Only an approved appointment can be marked as completed.",
     });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 
   it("rejects a request id that does not exist", async () => {
-    const result = await markAppointmentCompleted({ bookingRequestId: randomUUID() });
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(null);
+
+    const result = await markAppointmentCompleted({ bookingRequestId: "missing" });
 
     expect(result).toEqual({
       success: false,
       error: REQUEST_NOT_FOUND_ERROR_MESSAGE,
     });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   });
 });

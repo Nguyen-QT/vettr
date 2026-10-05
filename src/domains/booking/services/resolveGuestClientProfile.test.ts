@@ -1,134 +1,152 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import type { ClientProfile } from "@/generated/prisma/client";
 
 import { resolveGuestClientProfile } from "./resolveGuestClientProfile";
 
-// Hits the real local Postgres database, same as updateClientProfile.test.ts.
+// Mocked-Prisma unit test (architecture.md §7). The real unique-index
+// behaviour on instagramHandle/email (and the concurrent-guest P2002 race)
+// is a 28.3 integration-tier candidate.
 describe("resolveGuestClientProfile", () => {
-  const createdIds: string[] = [];
+  const input = {
+    instagramHandle: "new_handle",
+    email: "new@example.com",
+    phone: "555-0100",
+    firstName: "Jordan",
+    lastName: "Rivera",
+    dateOfBirth: new Date("1995-06-15T00:00:00.000Z"),
+  };
 
-  afterEach(async () => {
-    await prisma.clientProfile.deleteMany({ where: { id: { in: createdIds } } });
-    createdIds.length = 0;
-  });
+  function profile(overrides: Partial<ClientProfile> = {}): ClientProfile {
+    return {
+      id: "client-1",
+      instagramHandle: "existing_handle",
+      email: "existing@example.com",
+      phone: null,
+      firstName: null,
+      lastName: null,
+      dateOfBirth: null,
+      ...overrides,
+    } as ClientProfile;
+  }
 
   it("creates a new profile when neither the handle nor the email match", async () => {
-    const suffix = randomUUID().slice(0, 8);
+    prismaMock.clientProfile.findUnique.mockResolvedValue(null);
+    const created = profile({ id: "new-client" });
+    prismaMock.clientProfile.create.mockResolvedValue(created);
 
-    const client = await resolveGuestClientProfile({
-      instagramHandle: `new_handle_${suffix}`,
-      email: `new_${suffix}@example.com`,
-      phone: "555-0100",
-      firstName: "Jordan",
-      lastName: "Rivera",
-      dateOfBirth: new Date("1995-06-15T00:00:00.000Z"),
+    const client = await resolveGuestClientProfile(input);
+
+    expect(client).toBe(created);
+    expect(prismaMock.clientProfile.findUnique).toHaveBeenNthCalledWith(1, {
+      where: { instagramHandle: "new_handle" },
     });
-    createdIds.push(client.id);
-
-    expect(client.instagramHandle).toBe(`new_handle_${suffix}`);
-    expect(client.email).toBe(`new_${suffix}@example.com`);
+    expect(prismaMock.clientProfile.findUnique).toHaveBeenNthCalledWith(2, {
+      where: { email: "new@example.com" },
+    });
+    expect(prismaMock.clientProfile.create).toHaveBeenCalledWith({
+      data: {
+        instagramHandle: "new_handle",
+        email: "new@example.com",
+        phone: "555-0100",
+        firstName: "Jordan",
+        lastName: "Rivera",
+        dateOfBirth: input.dateOfBirth,
+      },
+    });
   });
 
   it("updates every field on a matching instagramHandle, unchanged from the original upsert", async () => {
-    const suffix = randomUUID().slice(0, 8);
-    const existing = await prisma.clientProfile.create({
+    prismaMock.clientProfile.findUnique.mockResolvedValueOnce(
+      profile({ id: "client-1", firstName: "Old" })
+    );
+    const updated = profile({ id: "client-1", firstName: "New" });
+    prismaMock.clientProfile.update.mockResolvedValue(updated);
+
+    const client = await resolveGuestClientProfile(input);
+
+    expect(client).toBe(updated);
+    expect(prismaMock.clientProfile.update).toHaveBeenCalledWith({
+      where: { id: "client-1" },
       data: {
-        instagramHandle: `handle_${suffix}`,
-        email: `old_${suffix}@example.com`,
-        firstName: "Old",
-        lastName: "Name",
-        dateOfBirth: new Date("1990-01-01T00:00:00.000Z"),
+        email: "new@example.com",
+        phone: "555-0100",
+        firstName: "Jordan",
+        lastName: "Rivera",
+        dateOfBirth: input.dateOfBirth,
       },
     });
-    createdIds.push(existing.id);
-
-    const client = await resolveGuestClientProfile({
-      instagramHandle: `handle_${suffix}`,
-      email: `updated_${suffix}@example.com`,
-      phone: "555-0200",
-      firstName: "New",
-      lastName: "Name2",
-      dateOfBirth: new Date("1995-06-15T00:00:00.000Z"),
-    });
-
-    expect(client.id).toBe(existing.id);
-    expect(client.email).toBe(`updated_${suffix}@example.com`);
-    expect(client.phone).toBe("555-0200");
-    expect(client.firstName).toBe("New");
-    expect(client.lastName).toBe("Name2");
-    expect(client.dateOfBirth?.toISOString().slice(0, 10)).toBe("1995-06-15");
+    expect(prismaMock.clientProfile.create).not.toHaveBeenCalled();
   });
 
   it("reuses the existing profile on a matching email under a different handle, filling only blanks", async () => {
-    const suffix = randomUUID().slice(0, 8);
-    const existing = await prisma.clientProfile.create({
+    prismaMock.clientProfile.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        profile({
+          id: "client-1",
+          instagramHandle: "personal",
+          email: "new@example.com",
+          firstName: "Existing",
+          // phone / lastName / dateOfBirth left blank to exercise fill-in.
+        })
+      );
+    const updated = profile({ id: "client-1" });
+    prismaMock.clientProfile.update.mockResolvedValue(updated);
+
+    const client = await resolveGuestClientProfile(input);
+
+    expect(client).toBe(updated);
+    // Never overwrites the handle or the already-set firstName.
+    expect(prismaMock.clientProfile.update).toHaveBeenCalledWith({
+      where: { id: "client-1" },
       data: {
-        instagramHandle: `personal_${suffix}`,
-        email: `shared_${suffix}@example.com`,
-        firstName: "Jordan",
-        // lastName/dateOfBirth left blank to exercise the fill-in path.
+        phone: "555-0100",
+        lastName: "Rivera",
+        dateOfBirth: input.dateOfBirth,
       },
     });
-    createdIds.push(existing.id);
-
-    const client = await resolveGuestClientProfile({
-      instagramHandle: `business_${suffix}`,
-      email: `shared_${suffix}@example.com`,
-      phone: "555-0300",
-      firstName: "SomeoneElse",
-      lastName: "Rivera",
-      dateOfBirth: new Date("1995-06-15T00:00:00.000Z"),
-    });
-
-    expect(client.id).toBe(existing.id);
-    // Handle stays whatever it already was -- never overwritten by an
-    // email match, and it's unique so the submitted handle belongs to
-    // nobody yet.
-    expect(client.instagramHandle).toBe(`personal_${suffix}`);
-    // Already-set field is untouched, not overwritten by the new
-    // submission's value.
-    expect(client.firstName).toBe("Jordan");
-    // Blank fields get filled in from this submission.
-    expect(client.phone).toBe("555-0300");
-    expect(client.lastName).toBe("Rivera");
-    expect(client.dateOfBirth?.toISOString().slice(0, 10)).toBe("1995-06-15");
-
-    const rowCount = await prisma.clientProfile.count({
-      where: { email: `shared_${suffix}@example.com` },
-    });
-    expect(rowCount).toBe(1);
+    expect(prismaMock.clientProfile.create).not.toHaveBeenCalled();
   });
 
-  it("returns the existing profile unchanged when every field is already set", async () => {
-    const suffix = randomUUID().slice(0, 8);
-    const existing = await prisma.clientProfile.create({
-      data: {
-        instagramHandle: `personal_${suffix}`,
-        email: `complete_${suffix}@example.com`,
-        phone: "555-0400",
-        firstName: "Jordan",
-        lastName: "Rivera",
-        dateOfBirth: new Date("1990-01-01T00:00:00.000Z"),
-      },
+  it("does not overwrite an already-set phone with the submitted one on an email match", async () => {
+    prismaMock.clientProfile.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        profile({ id: "client-1", phone: "555-0400", firstName: "Existing" })
+      );
+    prismaMock.clientProfile.update.mockResolvedValue(profile());
+
+    await resolveGuestClientProfile(input);
+
+    expect(prismaMock.clientProfile.update).toHaveBeenCalledWith({
+      where: { id: "client-1" },
+      data: { lastName: "Rivera", dateOfBirth: input.dateOfBirth },
     });
-    createdIds.push(existing.id);
+  });
+
+  it("returns the existing profile unchanged, without a write, when every field is already set", async () => {
+    const existing = profile({
+      id: "client-1",
+      phone: "555-0400",
+      firstName: "Jordan",
+      lastName: "Rivera",
+      dateOfBirth: new Date("1990-01-01T00:00:00.000Z"),
+    });
+    prismaMock.clientProfile.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(existing);
 
     const client = await resolveGuestClientProfile({
-      instagramHandle: `business_${suffix}`,
-      email: `complete_${suffix}@example.com`,
+      ...input,
       phone: "555-9999",
       firstName: "Different",
-      lastName: "Different",
-      dateOfBirth: new Date("1999-09-09T00:00:00.000Z"),
     });
 
-    expect(client.id).toBe(existing.id);
-    expect(client.phone).toBe("555-0400");
-    expect(client.firstName).toBe("Jordan");
-    expect(client.lastName).toBe("Rivera");
-    expect(client.dateOfBirth?.toISOString().slice(0, 10)).toBe("1990-01-01");
+    expect(client).toBe(existing);
+    expect(prismaMock.clientProfile.update).not.toHaveBeenCalled();
+    expect(prismaMock.clientProfile.create).not.toHaveBeenCalled();
   });
 });

@@ -1,87 +1,64 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 
 import { INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE } from "../constants";
 import { updateClientProfile } from "./updateClientProfile";
 
-// Hits the real local Postgres database, same as the rest of this
-// suite's DB-backed tests.
+// Mocked-Prisma unit test (architecture.md §7). The real unique-index
+// enforcement behind the handle-conflict case is a 28.3 integration-tier
+// candidate; here only the service's P2002 translation is asserted.
 describe("updateClientProfile", () => {
-  let clientId: string;
-  let otherClientId: string;
+  const input = {
+    clientProfileId: "client-1",
+    instagramHandle: "updated_handle",
+    email: "updated@example.com",
+    phone: "555-0100",
+    firstName: "Jordan",
+    lastName: "Rivera",
+    dateOfBirth: "1995-06-15",
+  };
 
-  beforeEach(async () => {
-    clientId = randomUUID();
-    otherClientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: otherClientId,
-        instagramHandle: `test_client_${otherClientId.slice(0, 8)}`,
-        email: `test_client_${otherClientId.slice(0, 8)}@example.com`,
-      },
-    });
-  });
+  it("updates every field, building dateOfBirth as UTC midnight", async () => {
+    prismaMock.clientProfile.update.mockResolvedValue({} as never);
 
-  afterEach(async () => {
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.clientProfile.delete({ where: { id: otherClientId } });
-  });
-
-  it("updates every field", async () => {
-    const newHandle = `updated_${clientId.slice(0, 8)}`;
-
-    const result = await updateClientProfile({
-      clientProfileId: clientId,
-      instagramHandle: newHandle,
-      email: "updated@example.com",
-      phone: "555-0100",
-      firstName: "Jordan",
-      lastName: "Rivera",
-      dateOfBirth: "1995-06-15",
-    });
+    const result = await updateClientProfile(input);
 
     expect(result).toEqual({ success: true });
-
-    const updated = await prisma.clientProfile.findUniqueOrThrow({
-      where: { id: clientId },
+    expect(prismaMock.clientProfile.update).toHaveBeenCalledWith({
+      where: { id: "client-1" },
+      data: {
+        instagramHandle: "updated_handle",
+        email: "updated@example.com",
+        phone: "555-0100",
+        firstName: "Jordan",
+        lastName: "Rivera",
+        dateOfBirth: new Date("1995-06-15T00:00:00.000Z"),
+      },
     });
-    expect(updated.instagramHandle).toBe(newHandle);
-    expect(updated.email).toBe("updated@example.com");
-    expect(updated.phone).toBe("555-0100");
-    expect(updated.firstName).toBe("Jordan");
-    expect(updated.lastName).toBe("Rivera");
-    // UTC comparison, matching updateClientProfile's own UTC-midnight
-    // construction for this pure calendar-date field.
-    expect(updated.dateOfBirth?.toISOString().slice(0, 10)).toBe("1995-06-15");
   });
 
-  it("rejects an Instagram handle already used by another profile", async () => {
-    const other = await prisma.clientProfile.findUniqueOrThrow({
-      where: { id: otherClientId },
-    });
+  it("rejects an Instagram handle already used by another profile (P2002)", async () => {
+    prismaMock.clientProfile.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      })
+    );
 
-    const result = await updateClientProfile({
-      clientProfileId: clientId,
-      instagramHandle: other.instagramHandle,
-      email: "updated@example.com",
-      firstName: "Jordan",
-      lastName: "Rivera",
-      dateOfBirth: "1995-06-15",
-    });
+    const result = await updateClientProfile(input);
 
     expect(result).toEqual({
       success: false,
       error: INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE,
     });
+  });
+
+  it("rethrows any other error", async () => {
+    prismaMock.clientProfile.update.mockRejectedValue(new Error("db down"));
+
+    await expect(updateClientProfile(input)).rejects.toThrow("db down");
   });
 });
