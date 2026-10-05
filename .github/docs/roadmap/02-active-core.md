@@ -169,7 +169,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [ ] **28.4.3.4** Controller — scheduling `actions.test.ts` (7 actions; `prismaMock` for the two `get*` actions; pins no-guard behaviour).
     - [ ] **28.4.3.5** *(SUPERSEDED by 54.5.3.3 / 54.5.3.4 / 54.6.3.1 — do not start)* Controller — booking `submitBookingRequest` (parse, artist missing, complexity fail, session-client fillable fields / no-update, guest path, `clientMaxEndTime`, design references, UTC DOB).
     - [x] **28.4.3.6** Controller — booking client-guarded: `cancelBookingRequestAction`, `updatePendingBookingRequestAction`, `updateClientProfileAction`.
-    - [ ] **28.4.3.7** Controller — booking artist-owned: reschedule (ownership + `combineRequestedDateAndTime`), cancel-as-artist, no-show, completed, `updateBookingPaymentMethodAction`.
+    - [x] **28.4.3.7** Controller — booking artist-owned: reschedule (ownership + `combineRequestedDateAndTime`), cancel-as-artist, no-show, completed, `updateBookingPaymentMethodAction`.
     - [ ] **28.4.3.8** Controller — booking unguarded: approve/decline (`setBookingRequestStatus`), review, confirmProposed; pins current behaviour.
     - [ ] **28.4.4.1–28.4.6.1** UI/Hook/View — N/A (reserved).
 - [ ] **28.7: Missing Session/Ownership Guards on Controller Actions**
