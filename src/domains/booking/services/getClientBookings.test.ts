@@ -1,240 +1,123 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { getClientBookings } from "./getClientBookings";
 
-// Hits the real local Postgres database, same as the other booking
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7). Row selection (this
+// client only) and ordering are asserted on the query payload; the
+// mapping is asserted on stubbed rows.
 describe("getClientBookings", () => {
-  let clientId: string;
-  const artistIds: string[] = [];
+  const clientId = "client-1";
 
-  beforeEach(async () => {
-    clientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
+  function row(
+    overrides: Partial<{
+      id: string;
+      artistName: string;
+      artistHandle: string;
+      createdAt: Date;
+      estimatedPrice: string | null;
+      depositPaid: boolean;
+      depositRefunded: boolean;
+      imageUrls: string[];
+    }> = {}
+  ) {
+    return {
+      id: overrides.id ?? "request-1",
+      status: "PENDING",
+      tier: "TIER_2",
+      minPrice: "100",
+      maxPrice: "200",
+      estimatedPrice: overrides.estimatedPrice ?? null,
+      clientNotes: "notes",
+      requestedStartTime: new Date("2026-11-01T10:00:00.000Z"),
+      createdAt: overrides.createdAt ?? new Date("2026-10-01T10:00:00.000Z"),
+      depositPaid: overrides.depositPaid ?? false,
+      depositRefunded: overrides.depositRefunded ?? false,
+      artist: {
+        name: overrides.artistName ?? "Test Artist",
+        instagramHandle: overrides.artistHandle ?? "test_artist",
       },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { clientId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.bookingRequest.deleteMany({
-      where: { artistId: { in: artistIds } },
-    });
-    await prisma.artist.deleteMany({ where: { id: { in: artistIds } } });
-    artistIds.length = 0;
-  });
-
-  async function createArtist(name: string): Promise<string> {
-    const artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name,
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    artistIds.push(artistId);
-    return artistId;
+      designReferences: (overrides.imageUrls ?? []).map((imageUrl) => ({
+        imageUrl,
+      })),
+    } as never;
   }
 
   it("returns a booking with the artist's name and handle attached", async () => {
-    const artistId = await createArtist("Booking Test Artist");
+    prismaMock.bookingRequest.findMany.mockResolvedValue([row()]);
 
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "PENDING",
-      },
-    });
+    const [result] = await getClientBookings(clientId);
 
-    const result = await getClientBookings(clientId);
-
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
-      id: request.id,
+    expect(result).toEqual({
+      id: "request-1",
       status: "PENDING",
+      artistName: "Test Artist",
+      artistInstagramHandle: "test_artist",
       tier: "TIER_2",
       minPrice: 100,
       maxPrice: 200,
-    });
-    expect(result[0].artistInstagramHandle).toMatch(/^test_artist_/);
-  });
-
-  it("returns the deposit status fields", async () => {
-    const artistId = await createArtist("Deposit Status Test Artist");
-    const paid = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-        depositPaid: true,
-      },
-    });
-    const refunded = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_3",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "CANCELLED_BY_CLIENT",
-        depositPaid: true,
-        depositRefunded: true,
-      },
-    });
-
-    const result = await getClientBookings(clientId);
-
-    expect(result.find((booking) => booking.id === paid.id)).toMatchObject({
-      depositPaid: true,
+      estimatedPrice: null,
+      clientNotes: "notes",
+      requestedStartTime: new Date("2026-11-01T10:00:00.000Z"),
+      createdAt: new Date("2026-10-01T10:00:00.000Z"),
+      designReferenceImageUrls: [],
+      depositPaid: false,
       depositRefunded: false,
     });
-    expect(result.find((booking) => booking.id === refunded.id)).toMatchObject({
-      depositPaid: true,
-      depositRefunded: true,
-    });
+  });
+
+  it("returns the deposit status fields and maps a Decimal estimatedPrice to a number", async () => {
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({ estimatedPrice: "150", depositPaid: true, depositRefunded: true }),
+    ]);
+
+    const [result] = await getClientBookings(clientId);
+
+    expect(result?.estimatedPrice).toBe(150);
+    expect(result?.depositPaid).toBe(true);
+    expect(result?.depositRefunded).toBe(true);
   });
 
   it("returns the request's existing design reference image URLs", async () => {
-    const artistId = await createArtist("Design Reference Test Artist");
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "PENDING",
-        designReferences: {
-          create: [
-            { imageUrl: "https://example.com/one.jpg" },
-            { imageUrl: "https://example.com/two.jpg" },
-          ],
-        },
-      },
-    });
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({
+        imageUrls: ["https://utfs.io/f/a.jpg", "https://utfs.io/f/b.jpg"],
+      }),
+    ]);
 
-    const result = await getClientBookings(clientId);
+    const [result] = await getClientBookings(clientId);
 
-    expect(
-      result.find((booking) => booking.id === request.id)
-        ?.designReferenceImageUrls
-    ).toEqual(
-      expect.arrayContaining([
-        "https://example.com/one.jpg",
-        "https://example.com/two.jpg",
-      ])
-    );
-  });
-
-  it("spans bookings across multiple artists for the same client", async () => {
-    const firstArtistId = await createArtist("First Artist");
-    const secondArtistId = await createArtist("Second Artist");
-
-    await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId: firstArtistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "PENDING",
-      },
-    });
-    await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId: secondArtistId,
-        tier: "TIER_3",
-        minPrice: 200,
-        maxPrice: 300,
-        status: "APPROVED",
-      },
-    });
-
-    const result = await getClientBookings(clientId);
-
-    expect(result).toHaveLength(2);
-    expect(result.map((booking) => booking.artistName).sort()).toEqual([
-      "First Artist",
-      "Second Artist",
+    expect(result?.designReferenceImageUrls).toEqual([
+      "https://utfs.io/f/a.jpg",
+      "https://utfs.io/f/b.jpg",
     ]);
   });
 
-  it("does not include another client's booking", async () => {
-    const artistId = await createArtist("Isolation Test Artist");
-    const otherClientId = randomUUID();
-    await prisma.clientProfile.create({
-      data: {
-        id: otherClientId,
-        instagramHandle: `test_client_${otherClientId.slice(0, 8)}`,
-        email: `test_client_${otherClientId.slice(0, 8)}@example.com`,
-      },
-    });
-    await prisma.bookingRequest.create({
-      data: {
-        clientId: otherClientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "PENDING",
-      },
-    });
+  it("spans bookings across multiple artists for the same client", async () => {
+    prismaMock.bookingRequest.findMany.mockResolvedValue([
+      row({ id: "request-1", artistName: "Artist A", artistHandle: "artist_a" }),
+      row({ id: "request-2", artistName: "Artist B", artistHandle: "artist_b" }),
+    ]);
 
     const result = await getClientBookings(clientId);
 
-    expect(result).toHaveLength(0);
-
-    await prisma.bookingRequest.deleteMany({ where: { clientId: otherClientId } });
-    await prisma.clientProfile.delete({ where: { id: otherClientId } });
+    expect(result.map((booking) => booking.artistInstagramHandle)).toEqual([
+      "artist_a",
+      "artist_b",
+    ]);
   });
 
-  it("orders bookings by createdAt descending", async () => {
-    const artistId = await createArtist("Ordering Test Artist");
-
-    const older = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "PENDING",
-        createdAt: new Date("2099-01-01T00:00:00.000Z"),
-      },
-    });
-    const newer = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "PENDING",
-        createdAt: new Date("2099-01-02T00:00:00.000Z"),
-      },
-    });
+  it("scopes the query to this client only and orders by createdAt descending", async () => {
+    prismaMock.bookingRequest.findMany.mockResolvedValue([]);
 
     const result = await getClientBookings(clientId);
 
-    expect(result.map((booking) => booking.id)).toEqual([newer.id, older.id]);
+    expect(result).toEqual([]);
+    expect(prismaMock.bookingRequest.findMany).toHaveBeenCalledWith({
+      where: { clientId },
+      include: { artist: true, designReferences: true },
+      orderBy: { createdAt: "desc" },
+    });
   });
 });

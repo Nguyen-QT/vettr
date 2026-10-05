@@ -1,65 +1,38 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { getBookingRequestForDeposit } from "./getBookingRequestForDeposit";
 
-// Hits the real local Postgres database, same as the other booking
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7).
 describe("getBookingRequestForDeposit", () => {
-  let artistId: string;
-  let clientId: string;
-
-  beforeEach(async () => {
-    artistId = randomUUID();
-    clientId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Deposit View Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    await prisma.clientProfile.create({
-      data: {
-        id: clientId,
-        instagramHandle: `test_client_${clientId.slice(0, 8)}`,
-        email: `test_client_${clientId.slice(0, 8)}@example.com`,
-      },
-    });
-  });
-
-  afterEach(async () => {
-    await prisma.bookingRequest.deleteMany({ where: { artistId } });
-    await prisma.clientProfile.delete({ where: { id: clientId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
+  function row(enforcePrecharge: boolean) {
+    return {
+      id: "request-1",
+      clientId: "client-1",
+      artistId: "artist-1",
+      tier: "TIER_2",
+      status: "APPROVED",
+      depositPaid: true,
+      stripePaymentIntentId: "pi_view_123",
+      depositRefunded: false,
+      estimatedPrice: "150",
+      client: { enforcePrecharge },
+    } as never;
+  }
 
   it("returns the narrow view for an existing request", async () => {
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-        depositPaid: true,
-        stripePaymentIntentId: "pi_view_123",
-        depositRefunded: false,
-        estimatedPrice: 150,
-      },
-    });
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(row(false));
 
-    const result = await getBookingRequestForDeposit(request.id);
+    const result = await getBookingRequestForDeposit("request-1");
 
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "request-1" } })
+    );
     expect(result).toEqual({
-      id: request.id,
-      clientId,
-      artistId,
+      id: "request-1",
+      clientId: "client-1",
+      artistId: "artist-1",
       tier: "TIER_2",
       status: "APPROVED",
       depositPaid: true,
@@ -71,28 +44,17 @@ describe("getBookingRequestForDeposit", () => {
   });
 
   it("reflects the client's enforcePrecharge flag", async () => {
-    await prisma.clientProfile.update({
-      where: { id: clientId },
-      data: { enforcePrecharge: true },
-    });
-    const request = await prisma.bookingRequest.create({
-      data: {
-        clientId,
-        artistId,
-        tier: "TIER_2",
-        minPrice: 100,
-        maxPrice: 200,
-        status: "APPROVED",
-      },
-    });
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(row(true));
 
-    const result = await getBookingRequestForDeposit(request.id);
+    const result = await getBookingRequestForDeposit("request-1");
 
     expect(result?.clientEnforcePrecharge).toBe(true);
   });
 
   it("returns null for a request that doesn't exist", async () => {
-    const result = await getBookingRequestForDeposit(randomUUID());
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(null);
+
+    const result = await getBookingRequestForDeposit("missing");
 
     expect(result).toBeNull();
   });
