@@ -1,54 +1,25 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { deleteSession } from "./deleteSession";
 
+// Mocked-Prisma unit test (architecture.md §7): assert the exact delete
+// payload; "row no longer findable" was real-DB behavior, not service logic.
 describe("deleteSession", () => {
-  let artistId: string;
-  let accountId: string;
+  it("deletes the session by id", async () => {
+    prismaMock.session.deleteMany.mockResolvedValue({ count: 1 });
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Delete Session Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
+    await deleteSession("session-1");
+
+    expect(prismaMock.session.deleteMany).toHaveBeenCalledWith({
+      where: { id: "session-1" },
     });
-    const account = await prisma.account.create({
-      data: {
-        email: `${artistId}-account@example.com`,
-        passwordHash: "irrelevant-for-this-test",
-        role: "ARTIST",
-        artistId,
-      },
-    });
-    accountId = account.id;
-  });
-
-  afterEach(async () => {
-    await prisma.session.deleteMany({ where: { accountId } });
-    await prisma.account.delete({ where: { id: accountId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  it("removes the session row so it can no longer be found", async () => {
-    const session = await prisma.session.create({
-      data: { accountId, expiresAt: new Date(Date.now() + 60_000), activeRole: "ARTIST" },
-    });
-
-    await deleteSession(session.id);
-
-    const found = await prisma.session.findUnique({ where: { id: session.id } });
-    expect(found).toBeNull();
   });
 
   it("does not throw when the session id does not exist", async () => {
-    await expect(deleteSession(randomUUID())).resolves.not.toThrow();
+    prismaMock.session.deleteMany.mockResolvedValue({ count: 0 });
+
+    await expect(deleteSession("missing-session")).resolves.toBeUndefined();
   });
 });

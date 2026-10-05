@@ -1,52 +1,62 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import type { Session } from "@/generated/prisma/client";
 
 import { SESSION_DURATION_MS } from "../constants";
 import { createSession } from "./createSession";
 
-describe("createSession", () => {
-  let artistId: string;
-  let accountId: string;
+// Mocked-Prisma unit test (architecture.md §7): assert the exact create
+// payload, with the clock pinned so expiresAt is deterministic.
+const NOW = new Date("2026-03-01T12:00:00.000Z");
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Create Session Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-    const account = await prisma.account.create({
-      data: {
-        email: `${artistId}-account@example.com`,
-        passwordHash: "irrelevant-for-this-test",
-        role: "ARTIST",
-        artistId,
-      },
-    });
-    accountId = account.id;
+function buildSession(overrides: Partial<Session> = {}): Session {
+  return {
+    id: "session-1",
+    expiresAt: new Date(NOW.getTime() + SESSION_DURATION_MS),
+    createdAt: NOW,
+    accountId: "account-1",
+    activeRole: "ARTIST",
+    ...overrides,
+  };
+}
+
+describe("createSession", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
   });
 
-  afterEach(async () => {
-    await prisma.session.deleteMany({ where: { accountId } });
-    await prisma.account.delete({ where: { id: accountId } });
-    await prisma.artist.delete({ where: { id: artistId } });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("creates a session row tied to the account with a future expiry", async () => {
-    const before = Date.now();
-    const session = await createSession(accountId, "ARTIST");
+    prismaMock.session.create.mockResolvedValue(buildSession());
 
-    expect(session.accountId).toBe(accountId);
+    const session = await createSession("account-1", "ARTIST");
+
+    expect(prismaMock.session.create).toHaveBeenCalledWith({
+      data: {
+        accountId: "account-1",
+        activeRole: "ARTIST",
+        expiresAt: new Date(NOW.getTime() + SESSION_DURATION_MS),
+      },
+    });
+    expect(session.accountId).toBe("account-1");
     expect(session.activeRole).toBe("ARTIST");
-    expect(session.expiresAt.getTime()).toBeGreaterThan(before);
-    expect(session.expiresAt.getTime()).toBeLessThanOrEqual(
-      before + SESSION_DURATION_MS + 1000
+  });
+
+  it("passes the CLIENT role through to the created row", async () => {
+    prismaMock.session.create.mockResolvedValue(
+      buildSession({ activeRole: "CLIENT" })
     );
+
+    await createSession("account-1", "CLIENT");
+
+    expect(prismaMock.session.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ activeRole: "CLIENT" }),
+    });
   });
 });
