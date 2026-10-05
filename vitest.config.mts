@@ -15,6 +15,12 @@ export default defineConfig({
     // *.stripe-integration.test.ts (CLAUDE.md 14.1.1) is this suite's own
     // separate project (npm run test:stripe) -- it makes real, unmocked
     // Stripe test-mode API calls, which this default run must never do.
-    exclude: ["node_modules/**", "e2e/**", "**/*.stripe-integration.test.ts"],
+    exclude: [
+      "node_modules/**",
+      "e2e/**",
+      "**/*.stripe-integration.test.ts",
+      // 28.3: real-database tier, its own project (npm run test:integration).
+      "**/*.integration.test.ts",
+    ],
   },
 });
