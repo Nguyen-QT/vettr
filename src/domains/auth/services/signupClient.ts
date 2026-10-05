@@ -43,6 +43,17 @@ export async function signupClient(input: LoginInput): Promise<SignupClientResul
   const now = new Date();
   const { code, codeHash, expiresAt } = generateEmailVerificationCode(now);
 
+  if (existingAccount && existingAccount.role !== "CLIENT") {
+    // Takeover guard (27.8): a dual-role artist's Account is linked to a
+    // ClientProfile too, and artist accounts are never email-verified, so
+    // the reclaim below would otherwise overwrite the artist's
+    // passwordHash. Never touch a non-CLIENT account. Returns the same
+    // pending result as the cooldown no-op (count === 0) below -- no new
+    // error message, so no new enumeration vector -- and hashPassword has
+    // already run above so timing matches that path.
+    return { success: true, pendingVerification: true, clientProfileId: clientProfile.id };
+  }
+
   if (existingAccount) {
     // Pre-verification squatting defense (27.3.2.8): an *unverified*
     // account is reclaimable, so the real owner can always replace a

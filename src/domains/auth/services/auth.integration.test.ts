@@ -3,7 +3,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { createIntegrationTracker, uniqueSuffix } from "@/testUtils/integrationDb";
 
+import { hashPassword } from "./hashPassword";
 import { linkOrCreateClientProfileForAccount } from "./linkOrCreateClientProfileForAccount";
+import { loginArtist } from "./loginArtist";
 import { signupClient } from "./signupClient";
 
 // External side effect only -- never hit Resend from the integration tier.
@@ -104,6 +106,38 @@ describe("auth integration", () => {
       });
       expect(accounts).toHaveLength(1);
       tracker.trackAccount(accounts[0].id);
+    });
+  });
+
+  describe("signupClient against a dual-role artist account (27.8)", () => {
+    it("leaves the artist's passwordHash unchanged so the attacker's password cannot log in", async () => {
+      const artist = await tracker.createArtist();
+      const client = await tracker.createClientProfile();
+      const artistPassword = "artist-real-password-1";
+      const originalHash = await hashPassword(artistPassword);
+      const account = await prisma.account.create({
+        data: {
+          email: `it_artist_${uniqueSuffix()}@example.com`,
+          passwordHash: originalHash,
+          role: "ARTIST",
+          artistId: artist.id,
+          clientProfileId: client.id,
+        },
+      });
+      tracker.trackAccount(account.id);
+
+      const attackerPassword = "attacker-chosen-password";
+      const result = await signupClient({ email: client.email, password: attackerPassword });
+
+      expect(result).toMatchObject({ success: true, pendingVerification: true });
+      const after = await prisma.account.findUniqueOrThrow({ where: { id: account.id } });
+      expect(after.passwordHash).toBe(originalHash);
+      expect(after.emailVerificationCodeHash).toBeNull();
+
+      const attackerLogin = await loginArtist({ email: account.email, password: attackerPassword });
+      expect(attackerLogin.success).toBe(false);
+      const ownerLogin = await loginArtist({ email: account.email, password: artistPassword });
+      expect(ownerLogin.success).toBe(true);
     });
   });
 
