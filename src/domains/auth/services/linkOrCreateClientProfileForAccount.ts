@@ -7,9 +7,24 @@ import {
   SET_UP_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE,
 } from "../constants";
 import type {
+  AuditReasonCodeValue,
   LinkOrCreateClientProfileInput,
   LinkOrCreateClientProfileResult,
 } from "../types";
+import { recordAuditEvent } from "./recordAuditEvent";
+
+// Private to this file: the public result can't distinguish "created" from
+// "matched existing", so the transaction also carries the audit reasonCode.
+interface LinkOutcome {
+  result: LinkOrCreateClientProfileResult;
+  reasonCode: Extract<
+    AuditReasonCodeValue,
+    | "ALREADY_HAS_CLIENT_PROFILE"
+    | "CLIENT_PROFILE_ALREADY_LINKED"
+    | "CLIENT_PROFILE_CREATED"
+    | "CLIENT_PROFILE_MATCHED_EXISTING"
+  >;
+}
 
 function isClientProfileUniqueConflict(
   error: unknown
@@ -48,15 +63,18 @@ export async function linkOrCreateClientProfileForAccount(
   // double-submit or a genuine two-user collision, so it gets the same
   // generic, retryable error and is only distinguished in the log.
   try {
-    return await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx): Promise<LinkOutcome> => {
       const account = await tx.account.findUniqueOrThrow({
         where: { id: accountId },
       });
 
       if (account.clientProfileId) {
         return {
-          success: false,
-          error: ACCOUNT_ALREADY_HAS_CLIENT_PROFILE_ERROR_MESSAGE,
+          result: {
+            success: false,
+            error: ACCOUNT_ALREADY_HAS_CLIENT_PROFILE_ERROR_MESSAGE,
+          },
+          reasonCode: "ALREADY_HAS_CLIENT_PROFILE",
         };
       }
 
@@ -75,8 +93,11 @@ export async function linkOrCreateClientProfileForAccount(
       if (matched) {
         if (matched.account) {
           return {
-            success: false,
-            error: CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE,
+            result: {
+              success: false,
+              error: CLIENT_PROFILE_ALREADY_LINKED_ERROR_MESSAGE,
+            },
+            reasonCode: "CLIENT_PROFILE_ALREADY_LINKED",
           };
         }
 
@@ -93,7 +114,10 @@ export async function linkOrCreateClientProfileForAccount(
           data: { clientProfileId: matched.id },
         });
 
-        return { success: true, clientProfileId: matched.id };
+        return {
+          result: { success: true, clientProfileId: matched.id },
+          reasonCode: "CLIENT_PROFILE_MATCHED_EXISTING",
+        };
       }
 
       const created = await tx.clientProfile.create({
@@ -112,8 +136,23 @@ export async function linkOrCreateClientProfileForAccount(
         data: { clientProfileId: created.id },
       });
 
-      return { success: true, clientProfileId: created.id };
+      return {
+        result: { success: true, clientProfileId: created.id },
+        reasonCode: "CLIENT_PROFILE_CREATED",
+      };
     });
+
+    // After the transaction resolves so a rollback/throw never records an
+    // event for a link that didn't happen. recordAuditEvent never throws,
+    // so it can't divert a decided result into the generic-error catch.
+    await recordAuditEvent({
+      eventType: "CLIENT_PROFILE_LINK",
+      outcome: outcome.result.success ? "SUCCESS" : "REJECTED",
+      reasonCode: outcome.reasonCode,
+      accountId,
+    });
+
+    return outcome.result;
   } catch (error) {
     // accountId only -- never the email or instagram handle (PII).
     if (isClientProfileUniqueConflict(error)) {
