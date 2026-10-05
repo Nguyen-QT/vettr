@@ -145,7 +145,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **28.4.1.1** Data Gateway — N/A, no schema change.
     - [x] **28.4.2.1** Domain Service — N/A, no service change.
     - [x] **28.4.3.1** Controller (test infra) — redirect helper (real-`redirect` spike, else digest-faithful mock) + `authSessionMock.ts`, each with a self-test.
-    - [ ] **28.4.3.2** Controller — auth: `loginAction`, `setUpClientProfileAction`, `switchActiveRoleAction`, `logoutAction`, `getCurrentSession`; extend existing `actions.test.ts`.
+    - [x] **28.4.3.2** Controller — auth: `loginAction`, `setUpClientProfileAction`, `switchActiveRoleAction`, `logoutAction`, `getCurrentSession`; extend existing `actions.test.ts`.
     - [ ] **28.4.3.3** Controller — billing `actions.test.ts` (8 actions, guard table + parse failures).
     - [ ] **28.4.3.4** Controller — scheduling `actions.test.ts` (7 actions; `prismaMock` for the two `get*` actions; pins no-guard behaviour).
     - [ ] **28.4.3.5** Controller — booking `submitBookingRequest` (parse, artist missing, complexity fail, session-client fillable fields / no-update, guest path, `clientMaxEndTime`, design references, UTC DOB).
