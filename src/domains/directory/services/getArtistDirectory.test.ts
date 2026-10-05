@@ -1,83 +1,106 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { prisma } from "@/lib/prisma";
+import type { Artist } from "@/generated/prisma/client";
 
 import { getArtistDirectory } from "./getArtistDirectory";
 
-// Hits the real local Postgres database, same as the other domain
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7): the service is a query
+// plus a field mapping, so we stub findMany's rows and assert both the
+// mapped output and the exact query payload sent.
+function buildArtist(overrides: Partial<Artist> = {}): Artist {
+  return {
+    id: "artist-1",
+    name: "Directory Test Artist",
+    instagramHandle: "directory_test_artist",
+    email: "artist-1@example.com",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    avatarUrl: null,
+    bio: null,
+    location: null,
+    stripeConnectAccountId: null,
+    stripeConnectChargesEnabled: false,
+    stripeConnectPayoutsEnabled: false,
+    ...overrides,
+  };
+}
+
 describe("getArtistDirectory", () => {
-  const artistIds: string[] = [];
-
-  afterEach(async () => {
-    await prisma.artist.deleteMany({ where: { id: { in: artistIds } } });
-    artistIds.length = 0;
-  });
-
-  async function createArtist(overrides: {
-    name: string;
-    avatarUrl?: string;
-    bio?: string;
-    location?: string;
-  }): Promise<string> {
-    const artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: overrides.name,
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-        avatarUrl: overrides.avatarUrl,
-        bio: overrides.bio,
-        location: overrides.location,
-      },
-    });
-    artistIds.push(artistId);
-    return artistId;
-  }
-
   it("returns an artist with directory fields populated", async () => {
-    const artistId = await createArtist({
-      name: "Directory Test Artist",
-      avatarUrl: "https://utfs.io/f/e2e-fixture-avatar.jpg",
-      bio: "Fine line and botanical work.",
-      location: "London, UK",
-    });
+    prismaMock.artist.findMany.mockResolvedValue([
+      buildArtist({
+        avatarUrl: "https://utfs.io/f/e2e-fixture-avatar.jpg",
+        bio: "Fine line and botanical work.",
+        location: "London, UK",
+      }),
+    ]);
 
     const result = await getArtistDirectory();
-    const entry = result.find((artist) => artist.id === artistId);
 
-    expect(entry).toMatchObject({
-      id: artistId,
-      name: "Directory Test Artist",
-      avatarUrl: "https://utfs.io/f/e2e-fixture-avatar.jpg",
-      bio: "Fine line and botanical work.",
-      location: "London, UK",
-    });
+    expect(result).toEqual([
+      {
+        id: "artist-1",
+        name: "Directory Test Artist",
+        instagramHandle: "directory_test_artist",
+        avatarUrl: "https://utfs.io/f/e2e-fixture-avatar.jpg",
+        bio: "Fine line and botanical work.",
+        location: "London, UK",
+      },
+    ]);
   });
 
   it("includes an artist with no directory fields set, as nulls", async () => {
-    const artistId = await createArtist({ name: "Bare Test Artist" });
+    prismaMock.artist.findMany.mockResolvedValue([buildArtist()]);
 
     const result = await getArtistDirectory();
-    const entry = result.find((artist) => artist.id === artistId);
 
-    expect(entry).toMatchObject({
+    expect(result[0]).toMatchObject({
       avatarUrl: null,
       bio: null,
       location: null,
     });
   });
 
-  it("orders artists by name ascending", async () => {
-    const laterId = await createArtist({ name: "Zeta Studio" });
-    const soonerId = await createArtist({ name: "Alpha Studio" });
+  it("queries artists ordered by name ascending and preserves that order", async () => {
+    prismaMock.artist.findMany.mockResolvedValue([
+      buildArtist({ id: "a", name: "Alpha Studio" }),
+      buildArtist({ id: "z", name: "Zeta Studio" }),
+    ]);
 
     const result = await getArtistDirectory();
-    const ids = result.map((artist) => artist.id);
 
-    expect(ids.indexOf(soonerId)).toBeLessThan(ids.indexOf(laterId));
+    expect(prismaMock.artist.findMany).toHaveBeenCalledWith({
+      orderBy: { name: "asc" },
+    });
+    expect(result.map((artist) => artist.id)).toEqual(["a", "z"]);
+  });
+
+  it("exposes only the directory DTO fields (no email or Stripe data)", async () => {
+    prismaMock.artist.findMany.mockResolvedValue([
+      buildArtist({
+        stripeConnectAccountId: "acct_123",
+        stripeConnectChargesEnabled: true,
+        stripeConnectPayoutsEnabled: true,
+      }),
+    ]);
+
+    const [entry] = await getArtistDirectory();
+
+    expect(Object.keys(entry).sort()).toEqual([
+      "avatarUrl",
+      "bio",
+      "id",
+      "instagramHandle",
+      "location",
+      "name",
+    ]);
+  });
+
+  it("returns an empty list when there are no artists", async () => {
+    prismaMock.artist.findMany.mockResolvedValue([]);
+
+    await expect(getArtistDirectory()).resolves.toEqual([]);
   });
 });
