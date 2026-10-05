@@ -123,7 +123,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine; all Domain Service layer — no other layer touched):
     - [x] **28.2.2.1** Domain Service — migrate `directory` (1 file: `getArtistDirectory.test.ts`). Pattern-proving PR.
     - [x] **28.2.2.2** Domain Service — migrate `auth` (9 DB-backed service tests; `hashPassword`/`verifyPassword` untouched). Existing hook tests are already action-mocked and untouched.
-    - [ ] **28.2.2.3** Domain Service — migrate `scheduling` (8 service tests; `scheduling.schema.test.ts` untouched).
+    - [x] **28.2.2.3** Domain Service — migrate `scheduling` (8 service tests; `scheduling.schema.test.ts` untouched).
     - [ ] **28.2.2.4** Domain Service — migrate `billing` (15 service tests; the Stripe SDK stays mocked via `@/lib/stripe` exactly as today; both `*.stripe-integration.test.ts` files untouched).
     - [ ] **28.2.2.5** Domain Service — migrate `booking` (32 service tests; `booking.schema.test.ts` untouched). Largest, last.
     - [ ] **28.2.1.1 / 28.2.3.1–28.2.6.1** Data Gateway/Controller/UI/Hook/View — N/A.

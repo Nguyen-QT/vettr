@@ -1,43 +1,31 @@
-import { randomUUID } from "node:crypto";
+import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { prisma } from "@/lib/prisma";
+import { describe, expect, it } from "vitest";
 
 import { setWeeklyHours } from "./setWeeklyHours";
 
-// Hits the real local Postgres database, same as the other scheduling
-// service tests.
+// Mocked-Prisma unit test (architecture.md §7): asserts the exact upsert
+// payload. "No duplicate row" is the (artistId, dayOfWeek) unique key's
+// job in Postgres -- a 28.3 integration-tier candidate, not faked here.
 describe("setWeeklyHours", () => {
-  let artistId: string;
+  const artistId = "artist-1";
 
-  beforeEach(async () => {
-    artistId = randomUUID();
-    await prisma.artist.create({
-      data: {
-        id: artistId,
-        name: "Weekly Hours Test Artist",
-        instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
-        email: `${artistId}@example.com`,
-      },
-    });
-  });
+  it("upserts keyed on artist + day of week with the same times for create and update", async () => {
+    prismaMock.artistWeeklyHours.upsert.mockResolvedValue({} as never);
 
-  afterEach(async () => {
-    await prisma.artistWeeklyHours.deleteMany({ where: { artistId } });
-    await prisma.artist.delete({ where: { id: artistId } });
-  });
-
-  it("creates a row when none exists for that day of week", async () => {
     await setWeeklyHours({ artistId, dayOfWeek: 1, availableTimes: ["11:00"] });
 
-    const row = await prisma.artistWeeklyHours.findUnique({
+    expect(prismaMock.artistWeeklyHours.upsert).toHaveBeenCalledTimes(1);
+    expect(prismaMock.artistWeeklyHours.upsert).toHaveBeenCalledWith({
       where: { artistId_dayOfWeek: { artistId, dayOfWeek: 1 } },
+      update: { availableTimes: ["11:00"] },
+      create: { artistId, dayOfWeek: 1, availableTimes: ["11:00"] },
     });
-    expect(row?.availableTimes).toEqual(["11:00"]);
   });
 
-  it("updates the existing row instead of creating a duplicate", async () => {
+  it("targets the same unique key on a repeat call so the existing row is updated", async () => {
+    prismaMock.artistWeeklyHours.upsert.mockResolvedValue({} as never);
+
     await setWeeklyHours({ artistId, dayOfWeek: 2, availableTimes: ["11:00"] });
     await setWeeklyHours({
       artistId,
@@ -45,28 +33,32 @@ describe("setWeeklyHours", () => {
       availableTimes: ["14:00", "17:30"],
     });
 
-    const rows = await prisma.artistWeeklyHours.findMany({
-      where: { artistId, dayOfWeek: 2 },
-    });
-    expect(rows).toHaveLength(1);
-    expect(rows[0].availableTimes).toEqual(["14:00", "17:30"]);
+    const [first, second] = prismaMock.artistWeeklyHours.upsert.mock.calls;
+    expect(first[0].where).toEqual(second[0].where);
+    expect(second[0].update).toEqual({ availableTimes: ["14:00", "17:30"] });
   });
 
-  it("allows closing a day entirely with an empty availableTimes array", async () => {
+  it("passes an empty availableTimes array through to close a day entirely", async () => {
+    prismaMock.artistWeeklyHours.upsert.mockResolvedValue({} as never);
+
     await setWeeklyHours({ artistId, dayOfWeek: 3, availableTimes: [] });
 
-    const row = await prisma.artistWeeklyHours.findUnique({
-      where: { artistId_dayOfWeek: { artistId, dayOfWeek: 3 } },
-    });
-    expect(row?.availableTimes).toEqual([]);
+    expect(prismaMock.artistWeeklyHours.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: { availableTimes: [] },
+        create: { artistId, dayOfWeek: 3, availableTimes: [] },
+      })
+    );
   });
 
-  it("does not affect a different day of week for the same artist", async () => {
+  it("only touches the requested day of week", async () => {
+    prismaMock.artistWeeklyHours.upsert.mockResolvedValue({} as never);
+
     await setWeeklyHours({ artistId, dayOfWeek: 4, availableTimes: ["11:00"] });
 
-    const otherDay = await prisma.artistWeeklyHours.findUnique({
-      where: { artistId_dayOfWeek: { artistId, dayOfWeek: 5 } },
+    expect(prismaMock.artistWeeklyHours.upsert).toHaveBeenCalledTimes(1);
+    expect(prismaMock.artistWeeklyHours.upsert.mock.calls[0][0].where).toEqual({
+      artistId_dayOfWeek: { artistId, dayOfWeek: 4 },
     });
-    expect(otherDay).toBeNull();
   });
 });
