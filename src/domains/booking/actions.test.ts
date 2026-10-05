@@ -11,6 +11,11 @@ const {
   cancelBookingRequestMock,
   updatePendingBookingRequestMock,
   updateClientProfileMock,
+  rescheduleApprovedBookingMock,
+  cancelApprovedBookingAsArtistMock,
+  markAppointmentNoShowMock,
+  markAppointmentCompletedMock,
+  updateBookingPaymentMethodMock,
 } = vi.hoisted(() => ({
   getCurrentSessionMock: vi.fn(),
   reviewBookingRequestMock: vi.fn(),
@@ -18,6 +23,11 @@ const {
   cancelBookingRequestMock: vi.fn(),
   updatePendingBookingRequestMock: vi.fn(),
   updateClientProfileMock: vi.fn(),
+  rescheduleApprovedBookingMock: vi.fn(),
+  cancelApprovedBookingAsArtistMock: vi.fn(),
+  markAppointmentNoShowMock: vi.fn(),
+  markAppointmentCompletedMock: vi.fn(),
+  updateBookingPaymentMethodMock: vi.fn(),
 }));
 
 vi.mock("@/domains/auth/actions", () => ({
@@ -39,12 +49,33 @@ vi.mock("./services/updateClientProfile", () => ({
   updateClientProfile: updateClientProfileMock,
 }));
 
+vi.mock("./services/rescheduleApprovedBooking", () => ({
+  rescheduleApprovedBooking: rescheduleApprovedBookingMock,
+}));
+vi.mock("./services/cancelApprovedBookingAsArtist", () => ({
+  cancelApprovedBookingAsArtist: cancelApprovedBookingAsArtistMock,
+}));
+vi.mock("./services/markAppointmentNoShow", () => ({
+  markAppointmentNoShow: markAppointmentNoShowMock,
+}));
+vi.mock("./services/markAppointmentCompleted", () => ({
+  markAppointmentCompleted: markAppointmentCompletedMock,
+}));
+vi.mock("./services/updateBookingPaymentMethod", () => ({
+  updateBookingPaymentMethod: updateBookingPaymentMethodMock,
+}));
+
 import {
   approveBookingRequest,
+  cancelApprovedBookingAsArtistAction,
   cancelBookingRequestAction,
   confirmProposedBookingAction,
   declineBookingRequest,
+  markAppointmentCompletedAction,
+  markAppointmentNoShowAction,
+  rescheduleApprovedBookingAction,
   reviewBookingRequestAction,
+  updateBookingPaymentMethodAction,
   updateClientProfileAction,
   updatePendingBookingRequestAction,
 } from "./actions";
@@ -84,6 +115,11 @@ const REJECTED_ARTIST_SESSIONS: Array<[string, SessionWithAccount | null]> = [
 ];
 
 const REVIEW_INPUT = { durationMinutes: 120, estimatedPrice: 300 };
+const VALID_RESCHEDULE = {
+  requestedDate: "2099-06-01",
+  requestedTime: "14:00",
+  durationMinutes: 240,
+};
 
 type GuardedCase = [string, () => Promise<unknown>];
 
@@ -92,12 +128,26 @@ const GUARDED_ACTIONS: GuardedCase[] = [
   ["declineBookingRequest", () => declineBookingRequest("request-1")],
   ["reviewBookingRequestAction", () => reviewBookingRequestAction("request-1", REVIEW_INPUT)],
   ["confirmProposedBookingAction", () => confirmProposedBookingAction("request-1")],
+  [
+    "rescheduleApprovedBookingAction",
+    () => rescheduleApprovedBookingAction("request-1", VALID_RESCHEDULE),
+  ],
+  [
+    "cancelApprovedBookingAsArtistAction",
+    () => cancelApprovedBookingAsArtistAction("request-1"),
+  ],
+  ["markAppointmentNoShowAction", () => markAppointmentNoShowAction("request-1")],
+  ["markAppointmentCompletedAction", () => markAppointmentCompletedAction("request-1")],
 ];
 
 function expectNoMutation(): void {
   expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   expect(reviewBookingRequestMock).not.toHaveBeenCalled();
   expect(confirmProposedBookingMock).not.toHaveBeenCalled();
+  expect(rescheduleApprovedBookingMock).not.toHaveBeenCalled();
+  expect(cancelApprovedBookingAsArtistMock).not.toHaveBeenCalled();
+  expect(markAppointmentNoShowMock).not.toHaveBeenCalled();
+  expect(markAppointmentCompletedMock).not.toHaveBeenCalled();
 }
 
 beforeEach(() => {
@@ -406,5 +456,181 @@ describe("updateClientProfileAction", () => {
     };
     updateClientProfileMock.mockResolvedValueOnce(taken);
     expect(await updateClientProfileAction(VALID_PROFILE)).toEqual(taken);
+  });
+});
+
+describe("guard runs before validation (artist actions)", () => {
+  it("rescheduleApprovedBookingAction returns the sign-in error for invalid input when signed out", async () => {
+    getCurrentSessionMock.mockResolvedValue(null);
+
+    expect(await rescheduleApprovedBookingAction("request-1", {})).toEqual(
+      NOT_SIGNED_IN_AS_ARTIST
+    );
+    expect(rescheduleApprovedBookingMock).not.toHaveBeenCalled();
+  });
+
+  it("rescheduleApprovedBookingAction checks ownership before parsing input", async () => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "other-artist",
+    } as never);
+
+    expect(await rescheduleApprovedBookingAction("request-1", {})).toEqual(REQUEST_NOT_FOUND);
+    expect(rescheduleApprovedBookingMock).not.toHaveBeenCalled();
+  });
+
+  it("updateBookingPaymentMethodAction returns the sign-in error for invalid input when signed out", async () => {
+    getCurrentSessionMock.mockResolvedValue(null);
+
+    expect(await updateBookingPaymentMethodAction("request-1", "BITCOIN")).toEqual(
+      NOT_SIGNED_IN_AS_ARTIST
+    );
+    expect(updateBookingPaymentMethodMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("rescheduleApprovedBookingAction", () => {
+  beforeEach(() => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "artist-1",
+    } as never);
+  });
+
+  it.each([
+    [
+      "a past date",
+      { ...VALID_RESCHEDULE, requestedDate: "2000-01-01" },
+      "Choose a date and time in the future.",
+    ],
+    [
+      "a duration below the minimum",
+      { ...VALID_RESCHEDULE, durationMinutes: 30 },
+      "The service duration must be at least 60 minutes.",
+    ],
+    [
+      "a time outside the slot options",
+      { ...VALID_RESCHEDULE, requestedTime: "09:00" },
+      null,
+    ],
+  ])("rejects %s without calling the service", async (_label, input, message) => {
+    const result = (await rescheduleApprovedBookingAction("request-1", input)) as {
+      success: boolean;
+      error: string;
+    };
+
+    expect(result.success).toBe(false);
+    if (message) expect(result.error).toBe(message);
+    expect(rescheduleApprovedBookingMock).not.toHaveBeenCalled();
+  });
+
+  it("looks up ownership by id selecting only artistId", async () => {
+    rescheduleApprovedBookingMock.mockResolvedValue({ success: true });
+
+    await rescheduleApprovedBookingAction("request-1", VALID_RESCHEDULE);
+
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenCalledWith({
+      where: { id: "request-1" },
+      select: { artistId: true },
+    });
+  });
+
+  it("delegates the combined start time, ignoring hostile payload keys", async () => {
+    rescheduleApprovedBookingMock.mockResolvedValue({ success: true });
+
+    await rescheduleApprovedBookingAction("request-1", {
+      ...VALID_RESCHEDULE,
+      artistId: "attacker-artist",
+      bookingRequestId: "attacker-request",
+    });
+
+    expect(rescheduleApprovedBookingMock).toHaveBeenCalledWith({
+      bookingRequestId: "request-1",
+      newStartTime: new Date("2099-06-01T14:00:00"),
+      durationMinutes: 240,
+    });
+  });
+
+  it("passes success and service errors through unchanged", async () => {
+    rescheduleApprovedBookingMock.mockResolvedValueOnce({ success: true });
+    expect(await rescheduleApprovedBookingAction("request-1", VALID_RESCHEDULE)).toEqual({
+      success: true,
+    });
+
+    const conflict = { success: false, error: "That slot is not available." };
+    rescheduleApprovedBookingMock.mockResolvedValueOnce(conflict);
+    expect(await rescheduleApprovedBookingAction("request-1", VALID_RESCHEDULE)).toEqual(
+      conflict
+    );
+  });
+});
+
+describe("artist id-only actions (owned request)", () => {
+  beforeEach(() => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "artist-1",
+    } as never);
+  });
+
+  it.each([
+    ["cancelApprovedBookingAsArtistAction", cancelApprovedBookingAsArtistAction, cancelApprovedBookingAsArtistMock],
+    ["markAppointmentNoShowAction", markAppointmentNoShowAction, markAppointmentNoShowMock],
+    ["markAppointmentCompletedAction", markAppointmentCompletedAction, markAppointmentCompletedMock],
+  ] as const)("%s delegates the id and passes results through", async (_name, action, service) => {
+    service.mockResolvedValueOnce({ success: true });
+    expect(await action("request-1")).toEqual({ success: true });
+    expect(service).toHaveBeenCalledWith({ bookingRequestId: "request-1" });
+
+    const failure = { success: false, error: "Only approved bookings can be changed." };
+    service.mockResolvedValueOnce(failure);
+    expect(await action("request-1")).toEqual(failure);
+  });
+});
+
+describe("updateBookingPaymentMethodAction", () => {
+  it.each(REJECTED_ARTIST_SESSIONS)(
+    "rejects when %s without calling the service",
+    async (_label, current) => {
+      getCurrentSessionMock.mockResolvedValue(current);
+
+      expect(await updateBookingPaymentMethodAction("request-1", "CARD")).toEqual(
+        NOT_SIGNED_IN_AS_ARTIST
+      );
+      expect(updateBookingPaymentMethodMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it("returns the first schema issue for an invalid method without calling the service", async () => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+
+    const result = await updateBookingPaymentMethodAction("request-1", "BITCOIN");
+
+    expect(result.success).toBe(false);
+    expect(updateBookingPaymentMethodMock).not.toHaveBeenCalled();
+  });
+
+  it("delegates the session artistId and leaves ownership to the service", async () => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+    updateBookingPaymentMethodMock.mockResolvedValue({ success: true });
+
+    const result = await updateBookingPaymentMethodAction("request-1", "CARD");
+
+    expect(prismaMock.bookingRequest.findUnique).not.toHaveBeenCalled();
+    expect(updateBookingPaymentMethodMock).toHaveBeenCalledWith({
+      bookingRequestId: "request-1",
+      artistId: "artist-1",
+      paymentMethod: "CARD",
+    });
+    expect(result).toEqual({ success: true });
+  });
+
+  it("passes a service error through unchanged", async () => {
+    getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
+    updateBookingPaymentMethodMock.mockResolvedValue(REQUEST_NOT_FOUND);
+
+    expect(await updateBookingPaymentMethodAction("request-1", "CASH")).toEqual(
+      REQUEST_NOT_FOUND
+    );
   });
 });
