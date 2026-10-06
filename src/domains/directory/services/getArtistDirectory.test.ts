@@ -14,6 +14,7 @@ function buildArtist(overrides: Partial<Artist> = {}): Artist {
     id: "artist-1",
     name: "Directory Test Artist",
     instagramHandle: "directory_test_artist",
+    handle: "directory_test_artist",
     email: "artist-1@example.com",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),

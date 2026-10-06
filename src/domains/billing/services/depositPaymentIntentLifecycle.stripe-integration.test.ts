@@ -33,6 +33,7 @@ describe("deposit PaymentIntent lifecycle (real Stripe test mode)", () => {
         id: artistId,
         name: "Stripe Integration Test Artist",
         instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
+        handle: `test_artist_${artistId.slice(0, 8)}`,
         email: `${artistId}@example.com`,
       },
     });

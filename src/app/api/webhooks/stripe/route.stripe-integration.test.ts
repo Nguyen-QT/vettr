@@ -38,6 +38,7 @@ describe("Stripe webhook route -- signature verification (real Stripe test mode)
         id: artistId,
         name: "Stripe Webhook Integration Test Artist",
         instagramHandle: `test_artist_${artistId.slice(0, 8)}`,
+        handle: `test_artist_${artistId.slice(0, 8)}`,
         email: `${artistId}@example.com`,
       },
     });

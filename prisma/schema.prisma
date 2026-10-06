@@ -122,6 +122,9 @@ model Artist {
   id              String   @id @default(cuid())
   name            String
   instagramHandle String   @unique
+  // Public URL handle for /@handle (54.1). Lowercase; lowercase + format
+  // CHECK constraints live in the migration (Prisma cannot express them).
+  handle          String   @unique
   email           String   @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
