@@ -14,3 +14,16 @@ export interface ArtistDirectoryEntry {
   bio: string | null;
   location: string | null;
 }
+
+// Public `/@handle` read model (54.1). Deliberately no email or Stripe
+// fields. `id` is included so the page can compose the billing/booking
+// reads for the same artist.
+export interface PublicArtistProfile {
+  id: string;
+  handle: string;
+  name: string;
+  instagramHandle: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  location: string | null;
+}
