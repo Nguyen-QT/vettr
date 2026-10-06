@@ -106,6 +106,13 @@ export interface E2eFixture {
   // comment near its creation for why.
   imageClientEmail: string;
   imageClientPassword: string;
+  // Pre-created, already-valid CLIENT Session ids (CLAUDE.md 54.2.6.1),
+  // one per login-capable client Account above -- the client-side
+  // counterpart of authenticatedSessionId, so client specs can skip the
+  // login UI (which Phase 54 turns passwordless) via loginAsClient.
+  clientLoginSessionId: string;
+  onboardedClientSessionId: string;
+  imageClientSessionId: string;
   // A dynamically-dated (always "today"), already-started APPROVED
   // booking for the artist dashboard spec (Phase 22).
   dashboardTodayClientHandle: string;
@@ -829,15 +836,23 @@ export default async function globalSetup() {
     [refundedDepositRequestId, clientLoginProfileId, artistId]
   );
 
+  const clientLoginAccountId = randomUUID();
+  const clientLoginSessionId = randomUUID();
+
   await client.query(
     `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
      VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
     [
-      randomUUID(),
+      clientLoginAccountId,
       clientLoginEmail,
       hashPasswordForFixture(clientLoginPassword),
       clientLoginProfileId,
     ]
+  );
+  await client.query(
+    `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
+     VALUES ($1, $2, $3, 'CLIENT')`,
+    [clientLoginSessionId, sessionExpiresAt, clientLoginAccountId]
   );
 
   // A separate login-capable ClientProfile that already has its
@@ -861,15 +876,23 @@ export default async function globalSetup() {
       "2000-01-01",
     ]
   );
+  const onboardedClientAccountId = randomUUID();
+  const onboardedClientSessionId = randomUUID();
+
   await client.query(
     `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
      VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
     [
-      randomUUID(),
+      onboardedClientAccountId,
       onboardedClientEmail,
       hashPasswordForFixture(onboardedClientPassword),
       onboardedClientId,
     ]
+  );
+  await client.query(
+    `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
+     VALUES ($1, $2, $3, 'CLIENT')`,
+    [onboardedClientSessionId, sessionExpiresAt, onboardedClientAccountId]
   );
 
   // A fully separate login-capable client, entirely off
@@ -936,15 +959,23 @@ export default async function globalSetup() {
       imageRejectRequestId,
     ]
   );
+  const imageClientAccountId = randomUUID();
+  const imageClientSessionId = randomUUID();
+
   await client.query(
     `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
      VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
     [
-      randomUUID(),
+      imageClientAccountId,
       imageClientEmail,
       hashPasswordForFixture(imageClientPassword),
       imageClientId,
     ]
+  );
+  await client.query(
+    `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
+     VALUES ($1, $2, $3, 'CLIENT')`,
+    [imageClientSessionId, sessionExpiresAt, imageClientAccountId]
   );
 
   await client.end();
@@ -1011,6 +1042,9 @@ export default async function globalSetup() {
     onboardedClientPassword,
     imageClientEmail,
     imageClientPassword,
+    clientLoginSessionId,
+    onboardedClientSessionId,
+    imageClientSessionId,
     maxEndTimeClientHandle,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
