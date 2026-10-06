@@ -27,6 +27,7 @@ describe("integration tracker isolation", () => {
     const a = await tracker.createArtist();
     const b = await tracker.createArtist();
     expect(a.instagramHandle).not.toBe(b.instagramHandle);
+    expect(a.handle).not.toBe(b.handle);
     expect(a.email).not.toBe(b.email);
   });
 
@@ -66,6 +67,7 @@ describe("integration tracker isolation", () => {
       data: {
         name: "Untracked Bystander",
         instagramHandle: `it_bystander_${suffix}`,
+        handle: `it_bystander_${suffix}`,
         email: `it_bystander_${suffix}@example.com`,
       },
     });

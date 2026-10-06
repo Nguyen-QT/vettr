@@ -21,6 +21,9 @@ function hashPasswordForFixture(password: string): string {
 
 export interface E2eFixture {
   artistId: string;
+  // Public /@handle values (54.1) for the fixture artists.
+  artistHandle: string;
+  dualRoleArtistHandle: string;
   clientProfileIds: string[];
   bookingRequestIds: string[];
   approveClientHandle: string;
@@ -238,11 +241,18 @@ export default async function globalSetup() {
   const bookedSlotClientHandle = "e2e_client_booked";
   const bookedSlotDate = "2099-06-15";
   const bookedSlotTime = "11:00";
+  const artistHandle = "e2e_fixture_artist";
 
   await client.query(
-    `INSERT INTO "Artist" (id, name, "instagramHandle", email, "updatedAt")
-     VALUES ($1, $2, $3, $4, now())`,
-    [artistId, "E2E Fixture Artist", "e2e_fixture_artist", "e2e-fixture-artist@example.com"]
+    `INSERT INTO "Artist" (id, name, "instagramHandle", handle, email, "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, now())`,
+    [
+      artistId,
+      "E2E Fixture Artist",
+      "e2e_fixture_artist",
+      artistHandle,
+      "e2e-fixture-artist@example.com",
+    ]
   );
 
   // Only TIER_2 has an example image -- lets a spec confirm the gallery
@@ -710,17 +720,19 @@ export default async function globalSetup() {
   // fixture Account has from the start (see dualRoleArtistId's comment
   // on E2eFixture above for why this can't reuse artistAccountId).
   const dualRoleArtistId = randomUUID();
+  const dualRoleArtistHandle = "e2e_fixture_dual_role_artist";
   const dualRoleClientProfileId = randomUUID();
   const dualRoleAccountId = randomUUID();
   const dualRoleSessionId = randomUUID();
 
   await client.query(
-    `INSERT INTO "Artist" (id, name, "instagramHandle", email, "updatedAt")
-     VALUES ($1, $2, $3, $4, now())`,
+    `INSERT INTO "Artist" (id, name, "instagramHandle", handle, email, "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, now())`,
     [
       dualRoleArtistId,
       "E2E Dual-Role Fixture Artist",
       "e2e_fixture_dual_role_artist",
+      dualRoleArtistHandle,
       "e2e-fixture-dual-role-artist@example.com",
     ]
   );
@@ -1032,6 +1044,8 @@ export default async function globalSetup() {
     artistLoginPassword,
     authenticatedSessionId,
     dualRoleArtistId,
+    dualRoleArtistHandle,
+    artistHandle,
     dualRoleClientProfileId,
     dualRoleSessionId,
     clientLoginEmail,

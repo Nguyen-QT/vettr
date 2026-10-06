@@ -23,6 +23,10 @@ export interface TrackedIdentity {
   email: string;
 }
 
+export interface TrackedArtist extends TrackedIdentity {
+  handle: string;
+}
+
 export interface CreateBookingRequestInput {
   artistId: string;
   clientId: string;
@@ -62,7 +66,7 @@ export async function createBookingRequest(
 }
 
 export interface IntegrationTracker {
-  createArtist(): Promise<TrackedIdentity>;
+  createArtist(): Promise<TrackedArtist>;
   createClientProfile(): Promise<TrackedIdentity>;
   // Registers ids of rows the test created itself (e.g. through a service
   // under test) so wipe() removes them too.
@@ -78,12 +82,13 @@ export function createIntegrationTracker(): IntegrationTracker {
   const clientProfileIds = new Set<string>();
 
   return {
-    async createArtist(): Promise<TrackedIdentity> {
+    async createArtist(): Promise<TrackedArtist> {
       const suffix = uniqueSuffix();
       const artist = await prisma.artist.create({
         data: {
           name: "Integration Test Artist",
           instagramHandle: `it_artist_${suffix}`,
+          handle: `it_artist_${suffix}`,
           email: `it_artist_${suffix}@example.com`,
         },
       });
@@ -91,6 +96,7 @@ export function createIntegrationTracker(): IntegrationTracker {
       return {
         id: artist.id,
         instagramHandle: artist.instagramHandle,
+        handle: artist.handle,
         email: artist.email,
       };
     },
