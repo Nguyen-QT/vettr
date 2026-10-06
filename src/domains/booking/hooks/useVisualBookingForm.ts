@@ -17,7 +17,10 @@ import {
   clientBookingInputSchema,
   combineRequestedDateAndTime,
 } from "@/domains/booking/booking.schema";
-import type { ClientProfileContactDetails } from "@/domains/booking/types";
+import type {
+  ClientProfileContactDetails,
+  ComplexityTier,
+} from "@/domains/booking/types";
 import { getAvailableSlotsAction } from "@/domains/scheduling/actions";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
 import type { AvailableSlot } from "@/domains/scheduling/services/getAvailableSlots";
@@ -29,6 +32,10 @@ interface UseVisualBookingFormArgs {
   // already on file. Undefined for a signed-out/guest visitor, same
   // as today.
   initialClientDetails?: ClientProfileContactDetails;
+  // The tier preselected from the profile's service menu (?service=,
+  // 54.1), already parsed by the route -- seeds both the tier and that
+  // tier's baseline budget. Undefined falls back to TIER_2, same as today.
+  initialTier?: ComplexityTier;
 }
 
 // A @db.Date column has no time-of-day meaning, so this reads its UTC
@@ -48,14 +55,16 @@ function toDateOfBirthInputValue(date: Date): string {
 export function useVisualBookingForm({
   artistId,
   initialClientDetails,
+  initialTier = "TIER_2",
 }: UseVisualBookingFormArgs) {
   const form = useForm({
     resolver: zodResolver(clientBookingInputSchema),
     defaultValues: {
       instagramHandle: initialClientDetails?.instagramHandle ?? "",
       designReferenceImageUrls: [] as string[],
-      tier: "TIER_2" as const,
-      clientBudgetRange: TIER_BASELINE_BUDGETS.TIER_2,
+      tier: initialTier,
+      // Copied so the form never holds a reference to the shared constant.
+      clientBudgetRange: { ...TIER_BASELINE_BUDGETS[initialTier] },
       designTags: [],
       aestheticTags: [],
       email: initialClientDetails?.email ?? "",
