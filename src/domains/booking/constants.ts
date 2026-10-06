@@ -5,6 +5,15 @@ export const MAX_DESIGN_REFERENCE_IMAGES = 5;
 
 export const COMPLEXITY_TIERS = ["TIER_2", "TIER_3", "TIER_4", "FREESTYLE"] as const;
 
+// Client-facing display names per tier (54.1 public service menu).
+// Placeholder copy — tune to the actual service names.
+export const COMPLEXITY_TIER_LABELS: Record<ComplexityTier, string> = {
+  TIER_2: "Tier 2",
+  TIER_3: "Tier 3",
+  TIER_4: "Tier 4",
+  FREESTYLE: "Freestyle",
+};
+
 // A client's stated preference for settling the final on-the-day balance
 // (CLAUDE.md 23.1) -- deposits stay card-only/Stripe regardless, so this
 // only ever describes the final-bill payment, not the deposit.
