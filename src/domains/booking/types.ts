@@ -308,6 +308,13 @@ export interface ServiceMenuItem {
   baselineBudget: ClientBudgetRange;
 }
 
+// Pure view props (54.1.4.2). `artistHandle` is the normalised handle
+// from the PublicArtistProfile DTO, used only to build the request link.
+export interface ServiceMenuProps {
+  artistHandle: string;
+  items: ServiceMenuItem[];
+}
+
 // Write command (CLAUDE.md 5.6): artist-initiated cancellation of an
 // already-APPROVED booking. No clientProfileId -- ownership-checked
 // against the artist's own session at the Controller/Action layer,
