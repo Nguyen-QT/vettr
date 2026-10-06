@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-import { loginAsClient } from "./authHelpers";
+import { loginAsClient, loginWithSessionId } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -32,7 +32,7 @@ test.describe("logged-in client booking & search access", () => {
     const fixture = await readFixture();
     await loginAsClient(page, fixture.clientLoginSessionId);
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     const instagramHandle = page.getByLabel("Instagram handle");
@@ -54,7 +54,7 @@ test.describe("logged-in client booking & search access", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     const instagramHandle = page.getByLabel("Instagram handle");
@@ -64,5 +64,33 @@ test.describe("logged-in client booking & search access", () => {
     await expect(email).toHaveValue("");
     await expect(instagramHandle).toBeEnabled();
     await expect(email).toBeEnabled();
+  });
+
+  // Same dual-role Account (home role ARTIST) in both views (54.1.6.2):
+  // prefill follows the session's activeRole, not the account's role.
+  test("prefills for a dual-role account in client view", async ({ page }) => {
+    const fixture = await readFixture();
+    await loginWithSessionId(page, fixture.dualRoleClientViewSessionId);
+
+    await page.goto(`/@${fixture.artistHandle}/book`);
+    await page.waitForLoadState("networkidle");
+
+    const instagramHandle = page.getByLabel("Instagram handle");
+    await expect(instagramHandle).toHaveValue("e2e_client_dual_role");
+    await expect(instagramHandle).toBeDisabled();
+  });
+
+  test("treats a dual-role account in artist view as a guest", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginWithSessionId(page, fixture.dualRoleArtistViewSessionId);
+
+    await page.goto(`/@${fixture.artistHandle}/book`);
+    await page.waitForLoadState("networkidle");
+
+    const instagramHandle = page.getByLabel("Instagram handle");
+    await expect(instagramHandle).toHaveValue("");
+    await expect(instagramHandle).toBeEnabled();
   });
 });

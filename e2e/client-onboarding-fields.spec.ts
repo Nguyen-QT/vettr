@@ -19,7 +19,7 @@ test.describe("client onboarding required fields", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await page.getByRole("button", { name: "Next", exact: true }).click();
@@ -33,7 +33,7 @@ test.describe("client onboarding required fields", () => {
     const under18 = new Date();
     under18.setFullYear(under18.getFullYear() - 17);
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await page
@@ -55,7 +55,7 @@ test.describe("client onboarding required fields", () => {
     const fixture = await readFixture();
     await loginAsClient(page, fixture.onboardedClientSessionId);
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await expect(
@@ -73,7 +73,7 @@ test.describe("client onboarding required fields", () => {
     const fixture = await readFixture();
     await loginAsClient(page, fixture.clientLoginSessionId);
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     const firstName = page.getByLabel("First name");

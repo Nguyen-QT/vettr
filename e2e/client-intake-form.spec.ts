@@ -22,7 +22,7 @@ test.describe("client booking form -- requested slot", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page);
@@ -39,7 +39,7 @@ test.describe("client booking form -- requested slot", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page);
@@ -58,7 +58,7 @@ test.describe("client booking form -- requested slot", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     // Rendered by the page itself above the wizard (unaffected by
@@ -73,7 +73,7 @@ test.describe("client booking form -- requested slot", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     // Wait for hydration before the first interaction -- filling an input
     // before Next.js attaches its event handlers silently drops the fill.
     await page.waitForLoadState("networkidle");
@@ -95,7 +95,7 @@ test.describe("client booking form -- requested slot", () => {
   test("requires an email address to advance past Step 1", async ({ page }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await page.getByLabel("First name").fill("Test");
@@ -114,7 +114,7 @@ test.describe("client booking form -- requested slot", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page);
@@ -134,7 +134,7 @@ test.describe("client booking form -- requested slot", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page);
@@ -160,7 +160,7 @@ test.describe("client booking form -- requested slot", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page);

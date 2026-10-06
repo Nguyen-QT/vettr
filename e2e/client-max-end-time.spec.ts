@@ -20,7 +20,7 @@ test.describe("client max end time", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page);
@@ -34,7 +34,7 @@ test.describe("client max end time", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page);
@@ -60,7 +60,7 @@ test.describe("client max end time", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page);

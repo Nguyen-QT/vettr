@@ -1,39 +1,29 @@
-import { BackNav } from "@/components/ui/back-nav";
-import { getCurrentSession } from "@/domains/auth/actions";
-import { BookingProcessExplainer } from "@/domains/booking/components/BookingProcessExplainer";
-import { VisualBookingForm } from "@/domains/booking/components/VisualBookingForm";
-import { getClientProfileContactDetails } from "@/domains/booking/services/getClientProfileContactDetails";
-import { getTierReferenceImages } from "@/domains/booking/services/getTierReferenceImages";
+import { notFound, permanentRedirect } from "next/navigation";
 
-interface BookPageProps {
+import { getArtistHandleById } from "@/domains/directory/services/getArtistHandleById";
+
+interface LegacyBookPageProps {
   params: Promise<{ artistId: string }>;
 }
 
-export default async function BookPage({ params }: BookPageProps) {
+// Legacy booking URL (pre-54.1): 308s to the canonical `/@handle/book`
+// (54.1.6.2) so existing links keep working. Unknown id -> 404. DB
+// failures log a non-PII context and become a generic 500; notFound()
+// and the redirect stay outside the catch so their throws aren't
+// swallowed.
+export default async function LegacyBookPage({ params }: LegacyBookPageProps) {
   const { artistId } = await params;
-  const tierReferenceImages = await getTierReferenceImages(artistId);
 
-  // Prefills the form for a signed-in client (CLAUDE.md 6.1) instead
-  // of asking them to retype what's already on file -- this route was
-  // never actually session-gated (src/proxy.ts's matcher only covers
-  // /artist/:path*/client/:path*), so a signed-out/guest visitor still
-  // reaches this same page unaffected.
-  const session = await getCurrentSession();
-  const initialClientDetails =
-    session?.role === "CLIENT" && session.clientProfileId
-      ? await getClientProfileContactDetails(session.clientProfileId)
-      : null;
+  const handle = await getArtistHandleById(artistId).catch(() => {
+    console.error("redirectLegacyBookPage failed", {
+      reason: "HANDLE_LOOKUP_FAILED",
+      artistId,
+    });
+    throw new Error("Booking page unavailable");
+  });
+  if (!handle) {
+    notFound();
+  }
 
-  return (
-    <main>
-      <BackNav href="/artists" />
-      <h1>Request a booking</h1>
-      <BookingProcessExplainer />
-      <VisualBookingForm
-        artistId={artistId}
-        tierReferenceImages={tierReferenceImages}
-        initialClientDetails={initialClientDetails ?? undefined}
-      />
-    </main>
-  );
+  permanentRedirect(`/@${handle}/book`);
 }
