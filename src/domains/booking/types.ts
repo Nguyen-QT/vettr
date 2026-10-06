@@ -315,6 +315,12 @@ export interface ServiceMenuProps {
   items: ServiceMenuItem[];
 }
 
+// Pure view props (54.1.4.3). getTierReferenceImages' result passes
+// straight through -- every tier is always a key (possibly empty).
+export interface PortfolioGalleryProps {
+  imagesByTier: TierReferenceImages;
+}
+
 // Write command (CLAUDE.md 5.6): artist-initiated cancellation of an
 // already-APPROVED booking. No clientProfileId -- ownership-checked
 // against the artist's own session at the Controller/Action layer,

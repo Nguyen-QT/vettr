@@ -227,7 +227,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.1.3.1** Controller/Action — N/A. Read-only server components; reserved explicitly per the vertical-slice requirement.
     - [x] **54.1.4.1** UI Primitive — `directory/components/ArtistProfileHeader.tsx`.
     - [x] **54.1.4.2** UI Primitive — `booking/components/ServiceMenu.tsx` (card grid, deposit pill, "Request" → `/@h/book?service=T`).
-    - [ ] **54.1.4.3** UI Primitive — `booking/components/PortfolioGallery.tsx` (tier-grouped grid, empty state).
+    - [x] **54.1.4.3** UI Primitive — `booking/components/PortfolioGallery.tsx` (tier-grouped grid, empty state).
     - [ ] **54.1.4.4** UI Primitive — `booking/components/BookingPolicies.tsx` (all values passed in as props).
     - [ ] **54.1.5.1** Domain Hook — `useVisualBookingForm({ initialTier })` sets the default tier + baseline budget (+ new `useVisualBookingForm.test.ts`).
     - [ ] **54.1.6.1** View & Route — rewrites, `src/app/at/[handle]/page.tsx`, `src/app/not-found.tsx`, root `metadataBase`; `e2e/artist-profile.spec.ts` (sections render, 404, uppercase → 308, no-cookie request 200, `toHaveScreenshot()`).
