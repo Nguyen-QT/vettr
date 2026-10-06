@@ -292,6 +292,22 @@ export type RescheduleApprovedBookingResult =
 // whether a tier was omitted vs. genuinely has no images yet.
 export type TierReferenceImages = Record<ComplexityTier, string[]>;
 
+// Per-tier deposit amounts as buildServiceMenu's input (54.1.2.4); null
+// means the artist hasn't configured a deposit for that tier. Declared
+// here rather than imported from billing (billing already imports
+// booking -- architecture.md §4); structurally identical to billing's
+// ArtistDepositSettings, so that result can be passed straight in.
+export type TierDepositAmounts = Record<ComplexityTier, number | null>;
+
+// One card of the public artist profile's service menu (54.1) -- narrow
+// DTO, no artist identifiers.
+export interface ServiceMenuItem {
+  tier: ComplexityTier;
+  label: string;
+  depositAmount: number | null;
+  baselineBudget: ClientBudgetRange;
+}
+
 // Write command (CLAUDE.md 5.6): artist-initiated cancellation of an
 // already-APPROVED booking. No clientProfileId -- ownership-checked
 // against the artist's own session at the Controller/Action layer,
