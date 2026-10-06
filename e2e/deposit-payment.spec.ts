@@ -4,6 +4,7 @@ import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
 import { loginAsArtist } from "./authHelpers";
+import { loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -13,11 +14,9 @@ async function readFixture(): Promise<E2eFixture> {
   return JSON.parse(raw);
 }
 
-async function loginAsClient(page: Page, fixture: E2eFixture) {
-  await page.goto("/client/login");
-  await page.getByLabel("Email").fill(fixture.clientLoginEmail);
-  await page.getByLabel("Password").fill(fixture.clientLoginPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
+async function openClientDashboard(page: Page, sessionId: string) {
+  await loginAsClient(page, sessionId);
+  await page.goto("/client");
   await expect(page).toHaveURL("http://localhost:3000/client");
 }
 
@@ -56,7 +55,7 @@ test.describe("deposit payment (client dashboard)", () => {
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await openClientDashboard(page, fixture.clientLoginSessionId);
 
     const card = page.locator("article", { hasText: "TIER_4" });
     await expect(card.getByText("Deposit required: £40")).toBeVisible();
@@ -74,7 +73,7 @@ test.describe("deposit refund status (client dashboard)", () => {
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await openClientDashboard(page, fixture.clientLoginSessionId);
 
     const card = page.locator("article", { hasText: "FREESTYLE" });
     await expect(card.getByText("Deposit refunded")).toBeVisible();
@@ -84,7 +83,7 @@ test.describe("deposit refund status (client dashboard)", () => {
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await openClientDashboard(page, fixture.clientLoginSessionId);
 
     const card = page.locator("article", { hasText: "TIER_3" });
     await expect(card.getByText("Deposit refunded")).not.toBeVisible();

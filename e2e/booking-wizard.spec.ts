@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
+import { loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 import { completeContactDetailsStep, completeServiceCanvasStep } from "./wizardHelpers";
 
@@ -11,14 +12,6 @@ const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 async function readFixture(): Promise<E2eFixture> {
   const raw = await readFile(FIXTURE_PATH, "utf-8");
   return JSON.parse(raw);
-}
-
-async function loginAsClient(page: Page, email: string, password: string) {
-  await page.goto("/client/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("http://localhost:3000/client");
 }
 
 test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
@@ -78,11 +71,7 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
       if (message.type() === "error") consoleErrors.push(message.text());
     });
 
-    await loginAsClient(
-      page,
-      fixture.onboardedClientEmail,
-      fixture.onboardedClientPassword
-    );
+    await loginAsClient(page, fixture.onboardedClientSessionId);
 
     await page.goto(`/book/${fixture.artistId}`);
     await page.waitForLoadState("networkidle");

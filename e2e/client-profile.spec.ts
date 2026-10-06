@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -12,11 +13,9 @@ async function readFixture(): Promise<E2eFixture> {
   return JSON.parse(raw);
 }
 
-async function loginAsClient(page: Page, fixture: E2eFixture) {
-  await page.goto("/client/login");
-  await page.getByLabel("Email").fill(fixture.onboardedClientEmail);
-  await page.getByLabel("Password").fill(fixture.onboardedClientPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
+async function openClientDashboard(page: Page, sessionId: string) {
+  await loginAsClient(page, sessionId);
+  await page.goto("/client");
   await expect(page).toHaveURL("http://localhost:3000/client");
 }
 
@@ -25,7 +24,7 @@ test.describe("client profile page", () => {
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await openClientDashboard(page, fixture.onboardedClientSessionId);
 
     await page.getByRole("link", { name: "Your profile" }).click();
     await page.waitForLoadState("networkidle");
@@ -43,7 +42,7 @@ test.describe("client profile page", () => {
 
   test("saves an edited field", async ({ page }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await openClientDashboard(page, fixture.onboardedClientSessionId);
 
     await page.goto("/client/profile");
     await page.waitForLoadState("networkidle");

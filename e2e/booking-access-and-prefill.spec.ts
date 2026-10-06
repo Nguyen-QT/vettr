@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -12,21 +13,12 @@ async function readFixture(): Promise<E2eFixture> {
   return JSON.parse(raw);
 }
 
-async function loginAsClient(
-  page: import("@playwright/test").Page,
-  fixture: E2eFixture
-) {
-  await page.goto("/client/login");
-  await page.getByLabel("Email").fill(fixture.clientLoginEmail);
-  await page.getByLabel("Password").fill(fixture.clientLoginPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("http://localhost:3000/client");
-}
-
 test.describe("logged-in client booking & search access", () => {
   test("finds an artist from the client dashboard", async ({ page }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await loginAsClient(page, fixture.clientLoginSessionId);
+    await page.goto("/client");
+    await expect(page).toHaveURL("http://localhost:3000/client");
 
     await page.getByRole("link", { name: "Find an artist" }).click();
 
@@ -38,7 +30,7 @@ test.describe("logged-in client booking & search access", () => {
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await loginAsClient(page, fixture.clientLoginSessionId);
 
     await page.goto(`/book/${fixture.artistId}`);
     await page.waitForLoadState("networkidle");
