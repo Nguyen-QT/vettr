@@ -14,7 +14,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 3. **28.4.3.6, 28.4.3.7** — booking controller tests for the already-guarded actions.
 4. **54.2 → 54.1 → 54.3 → 54.4 → 54.5 → 54.6 → 54.7 → 54.8** — Phase 54 in numeric order (54.2 is e2e-only infra and unblocks 54.3.6.1 and 54.8).
 5. **28.8** — `updateClientProfile` unexpected-error isolation (unscoped; needs its own layered breakdown pass *after 54.7*, which rewrites the same service/hook and drops the email-conflict path — fixing it earlier would be rewritten). Must land before go-live and before 28.5, whose `useClientProfile` hook test would otherwise pin the current uncaught throw.
-6. **53.1** (after 54.1: its runbook needs `NEXT_PUBLIC_APP_URL` + the handle requirement), then **50** (after 54.4; same client layout), then 53.2/53.3 (go-live waits for 28.7, 28.8 and the end of Phase 54).
+6. **53.1** (after 54.1: its runbook needs `NEXT_PUBLIC_APP_URL` + the handle requirement), then **53.2** staging on `staging.vettr.studio` (proposed: before 54.3, so the email-code flows are built against real Resend delivery), then **50** (after 54.4; same client layout), then **53.4–53.8** pre-launch hardening (unscoped), then **53.3** go-live on `vettr.studio` (waits for 28.7, 28.8, 53.4–53.8 and the end of Phase 54).
 7. **28.5** — hook tests (smaller once Phase 54's hooks ship with their own tests).
 - *Superseded by Phase 54:* 27.7 (→ 54.3.2.6), 28.6 (→ 54.5.2.2 / 54.5.2.6), 28.4.3.5 (→ 54.5.3.3 / 54.5.3.4 / 54.6.3.1), 38.1 (→ 54.1.6.2).
 
@@ -223,8 +223,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.1.2.1** Domain Service — `src/lib/artistHandle.ts` (+ tests: strips `@`, lowercases, length 1–30, edge punctuation, reserved words).
     - [x] **54.1.2.2** Domain Service — `directory/services/getPublicArtistProfileByHandle.ts` (mocked-Prisma tests: found, null, exact `where`, DTO keys).
     - [x] **54.1.2.3** Domain Service — `directory/services/getArtistHandleById.ts` (+ tests).
-    - [ ] **54.1.2.4** Domain Service — booking `COMPLEXITY_TIER_LABELS` + pure `booking/lib/buildServiceMenu.ts` (+ tests: all 4 tiers present, null deposits).
-    - [ ] **54.1.3.1** Controller/Action — N/A. Read-only server components; reserved explicitly per the vertical-slice requirement.
+    - [x] **54.1.2.4** Domain Service — booking `COMPLEXITY_TIER_LABELS` + pure `booking/lib/buildServiceMenu.ts` (+ tests: all 4 tiers present, null deposits).
+    - [x] **54.1.3.1** Controller/Action — N/A. Read-only server components; reserved explicitly per the vertical-slice requirement.
     - [ ] **54.1.4.1** UI Primitive — `directory/components/ArtistProfileHeader.tsx`.
     - [ ] **54.1.4.2** UI Primitive — `booking/components/ServiceMenu.tsx` (card grid, deposit pill, "Request" → `/@h/book?service=T`).
     - [ ] **54.1.4.3** UI Primitive — `booking/components/PortfolioGallery.tsx` (tier-grouped grid, empty state).
