@@ -221,7 +221,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.1.1.1** Data Gateway — `Artist.handle` + the guarded migration above. Fixture-only edits forced by NOT NULL: `e2e/global-setup.ts` artist inserts (+ `artistHandle`/`dualRoleArtistHandle` in `.fixture.json`), `src/testUtils/integrationDb.ts` `createArtist` + its self-test, three `*.stripe-integration.test.ts` `artist.create` calls, the `getArtistDirectory.test.ts` builder (`prisma/seed.ts` inserts no artists — no change).
     - [x] **54.1.2.1** Domain Service — `src/lib/artistHandle.ts` (+ tests: strips `@`, lowercases, length 1–30, edge punctuation, reserved words).
-    - [ ] **54.1.2.2** Domain Service — `directory/services/getPublicArtistProfileByHandle.ts` (mocked-Prisma tests: found, null, exact `where`, DTO keys).
+    - [x] **54.1.2.2** Domain Service — `directory/services/getPublicArtistProfileByHandle.ts` (mocked-Prisma tests: found, null, exact `where`, DTO keys).
     - [ ] **54.1.2.3** Domain Service — `directory/services/getArtistHandleById.ts` (+ tests).
     - [ ] **54.1.2.4** Domain Service — booking `COMPLEXITY_TIER_LABELS` + pure `booking/lib/buildServiceMenu.ts` (+ tests: all 4 tiers present, null deposits).
     - [ ] **54.1.3.1** Controller/Action — N/A. Read-only server components; reserved explicitly per the vertical-slice requirement.
