@@ -27,3 +27,9 @@ export interface PublicArtistProfile {
   bio: string | null;
   location: string | null;
 }
+
+// Pure view props (54.1.4.1). Omits `id`: the header never needs it, and
+// the page can pass the PublicArtistProfile DTO straight through.
+export interface ArtistProfileHeaderProps {
+  artist: Omit<PublicArtistProfile, "id">;
+}
