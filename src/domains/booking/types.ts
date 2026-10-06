@@ -321,6 +321,16 @@ export interface PortfolioGalleryProps {
   imagesByTier: TierReferenceImages;
 }
 
+// Pure view props (54.1.4.4). The page passes booking's
+// CANCELLATION_WINDOW_HOURS / STRIKE_THRESHOLD and billing's
+// PRECHARGE_PERCENTAGE straight through, so the copy can't drift from
+// the rules the services enforce. prechargePercentage is a fraction (0.5).
+export interface BookingPoliciesProps {
+  cancellationWindowHours: number;
+  strikeThreshold: number;
+  prechargePercentage: number;
+}
+
 // Write command (CLAUDE.md 5.6): artist-initiated cancellation of an
 // already-APPROVED booking. No clientProfileId -- ownership-checked
 // against the artist's own session at the Controller/Action layer,
