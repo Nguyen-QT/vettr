@@ -31,6 +31,14 @@ export async function loginAsArtist(page: Page, fixture: E2eFixture) {
   await loginWithSessionId(page, fixture.authenticatedSessionId);
 }
 
+// Sets one of the pre-seeded CLIENT session cookies from global-setup.ts
+// (CLAUDE.md 54.2.6.1) -- takes the id rather than the fixture since
+// there are several client Accounts (clientLoginSessionId,
+// onboardedClientSessionId, imageClientSessionId).
+export async function loginAsClient(page: Page, sessionId: string) {
+  await loginWithSessionId(page, sessionId);
+}
+
 // Where the dev server's sendVerificationEmail writes instead of calling
 // Resend (src/lib/emailCaptureSink.ts) -- wired into the webServer env in
 // playwright.config.ts. Absolute so server and specs agree on cwd.
