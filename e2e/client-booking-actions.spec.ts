@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -12,30 +13,16 @@ async function readFixture(): Promise<E2eFixture> {
   return JSON.parse(raw);
 }
 
-async function loginAsClient(page: Page, fixture: E2eFixture) {
-  await page.goto("/client/login");
-  await page.getByLabel("Email").fill(fixture.clientLoginEmail);
-  await page.getByLabel("Password").fill(fixture.clientLoginPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("http://localhost:3000/client");
-}
-
-// Dedicated login for the image add/remove/preview specs below (CLAUDE.md
-// 13.2.5) -- see the fixture-setup comment in global-setup.ts near
-// imageClientId for why these live on their own client/login rather than
-// clientLoginProfileId.
-async function loginAsImageClient(page: Page, fixture: E2eFixture) {
-  await page.goto("/client/login");
-  await page.getByLabel("Email").fill(fixture.imageClientEmail);
-  await page.getByLabel("Password").fill(fixture.imageClientPassword);
-  await page.getByRole("button", { name: "Sign in" }).click();
+async function openClientDashboard(page: Page, sessionId: string) {
+  await loginAsClient(page, sessionId);
+  await page.goto("/client");
   await expect(page).toHaveURL("http://localhost:3000/client");
 }
 
 test.describe("client self-service booking modification and cancellation", () => {
   test("cancels a pending booking", async ({ page }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await openClientDashboard(page, fixture.clientLoginSessionId);
 
     const card = page.locator("article", { hasText: "TIER_2" });
     await expect(card.getByText("Pending review")).toBeVisible();
@@ -54,7 +41,7 @@ test.describe("client self-service booking modification and cancellation", () =>
 
   test("edits a pending booking's budget range", async ({ page }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture);
+    await openClientDashboard(page, fixture.clientLoginSessionId);
 
     const card = page.locator("article", { hasText: "TIER_3" });
     await expect(card.getByText("£150 – £300")).toBeVisible();
@@ -87,7 +74,7 @@ test.describe("client self-service booking modification and cancellation", () =>
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsImageClient(page, fixture);
+    await openClientDashboard(page, fixture.imageClientSessionId);
 
     const card = page.locator("article", { hasText: "TIER_2" });
     await card.getByRole("button", { name: "Edit", exact: true }).click();
@@ -129,7 +116,7 @@ test.describe("client self-service booking modification and cancellation", () =>
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsImageClient(page, fixture);
+    await openClientDashboard(page, fixture.imageClientSessionId);
 
     // Same dedicated client as the test above, second booking (TIER_3,
     // one seeded image) -- both live on this client rather than

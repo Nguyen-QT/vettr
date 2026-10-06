@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -59,11 +60,7 @@ test.describe("landing page and artist directory", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto("/client/login");
-    await page.getByLabel("Email").fill(fixture.clientLoginEmail);
-    await page.getByLabel("Password").fill(fixture.clientLoginPassword);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL("http://localhost:3000/client");
+    await loginAsClient(page, fixture.clientLoginSessionId);
 
     await page.goto("/");
     await expect(page).toHaveURL("http://localhost:3000/client");

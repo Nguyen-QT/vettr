@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -10,18 +11,6 @@ const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 async function readFixture(): Promise<E2eFixture> {
   const raw = await readFile(FIXTURE_PATH, "utf-8");
   return JSON.parse(raw);
-}
-
-async function loginAsClient(
-  page: import("@playwright/test").Page,
-  email: string,
-  password: string
-) {
-  await page.goto("/client/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL("http://localhost:3000/client");
 }
 
 test.describe("client onboarding required fields", () => {
@@ -64,11 +53,7 @@ test.describe("client onboarding required fields", () => {
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsClient(
-      page,
-      fixture.onboardedClientEmail,
-      fixture.onboardedClientPassword
-    );
+    await loginAsClient(page, fixture.onboardedClientSessionId);
 
     await page.goto(`/book/${fixture.artistId}`);
     await page.waitForLoadState("networkidle");
@@ -86,7 +71,7 @@ test.describe("client onboarding required fields", () => {
     page,
   }) => {
     const fixture = await readFixture();
-    await loginAsClient(page, fixture.clientLoginEmail, fixture.clientLoginPassword);
+    await loginAsClient(page, fixture.clientLoginSessionId);
 
     await page.goto(`/book/${fixture.artistId}`);
     await page.waitForLoadState("networkidle");

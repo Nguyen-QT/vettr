@@ -236,7 +236,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.2.1.1–54.2.5.1** Data/Domain/Controller/UI/Hook — N/A.
     - [x] **54.2.6.1** View & Route (e2e) — `global-setup.ts` seeds CLIENT `Session` rows for the client fixtures; `authHelpers.loginAsClient(page, sessionId)` logs in by cookie injection (mirrors `loginAsArtist`).
-    - [ ] **54.2.6.2** View & Route (e2e) — move booking-access-and-prefill, booking-wizard, client-booking-actions, client-onboarding-fields, client-profile, deposit-payment, landing-and-directory and role-switcher off the password UI login.
+    - [x] **54.2.6.2** View & Route (e2e) — move booking-access-and-prefill, booking-wizard, client-booking-actions, client-onboarding-fields, client-profile, deposit-payment, landing-and-directory and role-switcher off the password UI login.
 - [ ] **54.3: Passwordless Client Sign-In (Email Code)**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [ ] **54.3.1.1** Data Gateway — `EmailOtpPurpose`, `EmailOtpChallenge` (email unique + lowercase CHECK), audit enum values for OTP sign-in. No app code.
