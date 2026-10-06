@@ -51,6 +51,9 @@ export const viewport: Viewport = {
 
 // 3. Metadata Configuration
 export const metadata: Metadata = {
+  // Resolves relative canonical URLs (e.g. `/@handle`). The fallback
+  // matches createConnectOnboardingLink and playwright.config.ts baseURL.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   title: "Vettr | Booking & Curation Engine",
   description: "Automated booking, curation, and scheduling engine for high-demand artists.",
 };
