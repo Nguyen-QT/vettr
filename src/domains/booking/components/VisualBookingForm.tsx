@@ -44,6 +44,7 @@ import {
 import { useVisualBookingForm } from "@/domains/booking/hooks/useVisualBookingForm";
 import type {
   ClientProfileContactDetails,
+  ComplexityTier,
   TierReferenceImages,
 } from "@/domains/booking/types";
 import { DAILY_SLOT_TIME_OPTIONS } from "@/domains/scheduling/constants";
@@ -58,6 +59,9 @@ interface VisualBookingFormProps {
   // through to prefill the form. Undefined for a signed-out/guest
   // visitor.
   initialClientDetails?: ClientProfileContactDetails;
+  // The tier preselected via `?service=` (54.1.6.2), passed through to
+  // the hook. Undefined keeps the hook's default.
+  initialTier?: ComplexityTier;
 }
 
 const BUDGET_SLIDER_MIN = 0;
@@ -94,6 +98,7 @@ export function VisualBookingForm({
   artistId,
   tierReferenceImages,
   initialClientDetails,
+  initialTier,
 }: VisualBookingFormProps) {
   const {
     form,
@@ -110,7 +115,7 @@ export function VisualBookingForm({
     availableSlots,
     isLoadingAvailability,
     complexityWarning,
-  } = useVisualBookingForm({ artistId, initialClientDetails });
+  } = useVisualBookingForm({ artistId, initialClientDetails, initialTier });
 
   const {
     control,

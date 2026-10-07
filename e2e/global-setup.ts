@@ -87,6 +87,13 @@ export interface E2eFixture {
   dualRoleArtistId: string;
   dualRoleClientProfileId: string;
   dualRoleSessionId: string;
+  // Two more Sessions on the same dual-role Account (54.1.6.2), one per
+  // activeRole and never switched -- role-switcher.spec.ts flips
+  // dualRoleSessionId mid-run, so the booking prefill spec can't share
+  // it. Same Account (role ARTIST) in both views is what proves the
+  // prefill keys on activeRole rather than role.
+  dualRoleClientViewSessionId: string;
+  dualRoleArtistViewSessionId: string;
   // An existing ClientProfile's email with no Account linked yet, for
   // the signup spec to exercise the real signupClient check against --
   // reuses freestylePendingClientId, which nothing else ever links an
@@ -761,6 +768,19 @@ export default async function globalSetup() {
     [dualRoleSessionId, sessionExpiresAt, dualRoleAccountId]
   );
 
+  const dualRoleClientViewSessionId = randomUUID();
+  const dualRoleArtistViewSessionId = randomUUID();
+  await client.query(
+    `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
+     VALUES ($1, $2, $4, 'CLIENT'), ($3, $2, $4, 'ARTIST')`,
+    [
+      dualRoleClientViewSessionId,
+      sessionExpiresAt,
+      dualRoleArtistViewSessionId,
+      dualRoleAccountId,
+    ]
+  );
+
   // A dedicated ClientProfile + Account for the client login spec
   // (5.2.4), with its own booking so the dashboard has something to
   // show once logged in.
@@ -1048,6 +1068,8 @@ export default async function globalSetup() {
     artistHandle,
     dualRoleClientProfileId,
     dualRoleSessionId,
+    dualRoleClientViewSessionId,
+    dualRoleArtistViewSessionId,
     clientLoginEmail,
     clientLoginPassword,
     clientSignupEmail,

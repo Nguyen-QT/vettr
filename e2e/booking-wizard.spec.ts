@@ -20,7 +20,7 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page, {
@@ -73,7 +73,7 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
 
     await loginAsClient(page, fixture.onboardedClientSessionId);
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText(/Booking as Jamie Rivera/)).toBeVisible();
@@ -89,7 +89,7 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     await completeContactDetailsStep(page, {
@@ -117,7 +117,7 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
   }) => {
     const fixture = await readFixture();
 
-    await page.goto(`/book/${fixture.artistId}`);
+    await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
     // Still on Step 1, never clicked Next -- the progress bar's Step 3

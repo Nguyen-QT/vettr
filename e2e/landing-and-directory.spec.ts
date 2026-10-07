@@ -35,8 +35,12 @@ test.describe("landing page and artist directory", () => {
     await page.getByRole("link", { name: "I want to book an artist" }).click();
     await expect(page).toHaveURL(/\/artists$/);
 
+    // The directory card still links the legacy /book/[artistId], which
+    // 308s to the canonical handle URL (54.1.6.2).
     await page.getByRole("link", { name: /E2E Fixture Artist/ }).click();
-    await expect(page).toHaveURL(`http://localhost:3000/book/${fixture.artistId}`);
+    await expect(page).toHaveURL(
+      `http://localhost:3000/@${fixture.artistHandle}/book`
+    );
   });
 
   test("returning-client path leads to client login", async ({ page }) => {
