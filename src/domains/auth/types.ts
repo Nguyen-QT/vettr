@@ -96,10 +96,22 @@ export interface RequestClientSignInCodeInput {
 // accounts. Only a DB failure differs, with a retryable message.
 export type RequestClientSignInCodeResult = { success: true } | { success: false; error: string };
 
+// signInClientWithEmailOtp (54.3.2.7) -- resolves to ClientAuthResult, the
+// same shape verifyEmailCode returns, so the action sets the cookie the
+// same way.
+export interface SignInClientWithEmailOtpInput {
+  email: string;
+  code: string;
+}
+
 
 // recordAuditEvent (CLAUDE.md 27.5.2.1) -- literal unions kept structurally
 // in sync by hand with the AuditEvent* enums in schema.prisma.
-export type AuditEventTypeValue = "LOGIN_FAILED" | "ROLE_SWITCH" | "CLIENT_PROFILE_LINK";
+export type AuditEventTypeValue =
+  | "LOGIN_FAILED"
+  | "ROLE_SWITCH"
+  | "CLIENT_PROFILE_LINK"
+  | "EMAIL_OTP_SIGN_IN";
 
 export type AuditEventOutcomeValue = "SUCCESS" | "REJECTED";
 
@@ -113,7 +125,9 @@ export type AuditReasonCodeValue =
   | "ALREADY_HAS_CLIENT_PROFILE"
   | "CLIENT_PROFILE_ALREADY_LINKED"
   | "CLIENT_PROFILE_CREATED"
-  | "CLIENT_PROFILE_MATCHED_EXISTING";
+  | "CLIENT_PROFILE_MATCHED_EXISTING"
+  | "INVALID_EMAIL_OTP"
+  | "SIGNED_IN_WITH_EMAIL_OTP";
 
 export interface RecordAuditEventInput {
   eventType: AuditEventTypeValue;
