@@ -73,6 +73,9 @@ export interface IntegrationTracker {
   trackAccount(id: string): void;
   trackArtist(id: string): void;
   trackClientProfile(id: string): void;
+  // Email-keyed rows with no FK to a tracked row: EmailOtpChallenge, and
+  // AuditEvent rows written with attemptedEmail instead of an accountId.
+  trackEmail(email: string): void;
   wipe(): Promise<void>;
 }
 
@@ -80,6 +83,7 @@ export function createIntegrationTracker(): IntegrationTracker {
   const accountIds = new Set<string>();
   const artistIds = new Set<string>();
   const clientProfileIds = new Set<string>();
+  const emails = new Set<string>();
 
   return {
     async createArtist(): Promise<TrackedArtist> {
@@ -126,11 +130,22 @@ export function createIntegrationTracker(): IntegrationTracker {
     trackClientProfile(id: string): void {
       clientProfileIds.add(id);
     },
+    trackEmail(email: string): void {
+      emails.add(email);
+    },
 
     async wipe(): Promise<void> {
       const accounts = [...accountIds];
       const artists = [...artistIds];
       const clients = [...clientProfileIds];
+      const trackedEmails = [...emails];
+
+      await prisma.emailOtpChallenge.deleteMany({
+        where: { email: { in: trackedEmails } },
+      });
+      await prisma.auditEvent.deleteMany({
+        where: { attemptedEmail: { in: trackedEmails } },
+      });
 
       // Accounts hold the FK to Artist/ClientProfile, so they go first
       // (Session cascades; AuditEvent.accountId is SetNull, so audit rows
@@ -180,6 +195,7 @@ export function createIntegrationTracker(): IntegrationTracker {
       accountIds.clear();
       artistIds.clear();
       clientProfileIds.clear();
+      emails.clear();
     },
   };
 }
