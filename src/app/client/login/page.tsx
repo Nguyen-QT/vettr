@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { BackNav } from "@/components/ui/back-nav";
-import { ClientLoginForm } from "@/domains/auth/components/ClientLoginForm";
+import { ClientSignInContainer } from "@/domains/auth/components/ClientSignInContainer";
 
 export default function ClientLoginPage() {
   return (
@@ -9,7 +9,7 @@ export default function ClientLoginPage() {
       <BackNav href="/" />
       <h1>Sign in</h1>
       <Suspense>
-        <ClientLoginForm />
+        <ClientSignInContainer />
       </Suspense>
     </main>
   );
