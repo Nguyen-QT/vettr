@@ -8,7 +8,30 @@ import { createIntegrationTracker, uniqueSuffix } from "./integrationDb";
 // wipe() removes exactly what a test created and nothing else, and that
 // state does not bleed from one test to the next.
 const tracker = createIntegrationTracker();
-const bystander: { artistId?: string } = {};
+const bystander: { artistId?: string; email?: string } = {};
+
+async function createEmailKeyedRows(email: string): Promise<void> {
+  const now = new Date();
+  await prisma.emailOtpChallenge.create({
+    data: {
+      email,
+      purpose: "CLIENT_SIGN_IN",
+      codeHash: "x",
+      expiresAt: new Date(now.getTime() + 60_000),
+      sentAt: now,
+      windowStartedAt: now,
+      windowSendCount: 1,
+    },
+  });
+  await prisma.auditEvent.create({
+    data: {
+      eventType: "EMAIL_OTP_SIGN_IN",
+      outcome: "REJECTED",
+      reasonCode: "INVALID_EMAIL_OTP",
+      attemptedEmail: email,
+    },
+  });
+}
 
 describe("integration tracker isolation", () => {
   beforeEach(async () => {
@@ -19,6 +42,10 @@ describe("integration tracker isolation", () => {
     await tracker.wipe();
     if (bystander.artistId) {
       await prisma.artist.deleteMany({ where: { id: bystander.artistId } });
+    }
+    if (bystander.email) {
+      await prisma.emailOtpChallenge.deleteMany({ where: { email: bystander.email } });
+      await prisma.auditEvent.deleteMany({ where: { attemptedEmail: bystander.email } });
     }
     await prisma.$disconnect();
   });
@@ -104,5 +131,21 @@ describe("integration tracker isolation", () => {
       await prisma.session.count({ where: { accountId: account.id } }),
     ).toBe(0);
     expect(await prisma.artist.count({ where: { id: artist.id } })).toBe(0);
+  });
+
+  it("removes OTP challenges and attemptedEmail audit rows for tracked emails only", async () => {
+    const tracked = `it_email_${uniqueSuffix()}@example.com`;
+    const untracked = `it_bystander_${uniqueSuffix()}@example.com`;
+    bystander.email = untracked;
+    await createEmailKeyedRows(tracked);
+    await createEmailKeyedRows(untracked);
+    tracker.trackEmail(tracked);
+
+    await tracker.wipe();
+
+    expect(await prisma.emailOtpChallenge.count({ where: { email: tracked } })).toBe(0);
+    expect(await prisma.auditEvent.count({ where: { attemptedEmail: tracked } })).toBe(0);
+    expect(await prisma.emailOtpChallenge.count({ where: { email: untracked } })).toBe(1);
+    expect(await prisma.auditEvent.count({ where: { attemptedEmail: untracked } })).toBe(1);
   });
 });
