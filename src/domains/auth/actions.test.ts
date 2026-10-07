@@ -22,6 +22,8 @@ const {
   linkOrCreateClientProfileForAccountMock,
   switchActiveRoleMock,
   deleteSessionMock,
+  requestClientSignInCodeMock,
+  signInClientWithEmailOtpMock,
 } = vi.hoisted(() => ({
   verifyEmailCodeMock: vi.fn(),
   resendVerificationCodeMock: vi.fn(),
@@ -31,6 +33,8 @@ const {
   linkOrCreateClientProfileForAccountMock: vi.fn(),
   switchActiveRoleMock: vi.fn(),
   deleteSessionMock: vi.fn(),
+  requestClientSignInCodeMock: vi.fn(),
+  signInClientWithEmailOtpMock: vi.fn(),
 }));
 
 vi.mock("./services/verifyEmailCode", () => ({ verifyEmailCode: verifyEmailCodeMock }));
@@ -45,16 +49,24 @@ vi.mock("./services/loginArtist", () => ({ loginArtist: loginArtistMock }));
 vi.mock("./services/loginClient", () => ({ loginClient: loginClientMock }));
 vi.mock("./services/signupClient", () => ({ signupClient: signupClientMock }));
 vi.mock("./services/switchActiveRole", () => ({ switchActiveRole: switchActiveRoleMock }));
+vi.mock("./services/requestClientSignInCode", () => ({
+  requestClientSignInCode: requestClientSignInCodeMock,
+}));
+vi.mock("./services/signInClientWithEmailOtp", () => ({
+  signInClientWithEmailOtp: signInClientWithEmailOtpMock,
+}));
 
 import {
   getCurrentSession,
   loginAction,
   loginClientAction,
   logoutAction,
+  requestClientSignInCodeAction,
   resendVerificationCodeAction,
   setUpClientProfileAction,
   signupClientAction,
   switchActiveRoleAction,
+  verifyClientSignInCodeAction,
   verifyEmailCodeAction,
 } from "./actions";
 import {
@@ -244,6 +256,103 @@ const hostileIdentity = {
   userId: "attacker-user",
   sessionId: "attacker-session",
 };
+
+describe("requestClientSignInCodeAction", () => {
+  it("passes a success result through and sets no cookie", async () => {
+    requestClientSignInCodeMock.mockResolvedValue({ success: true });
+
+    const result = await requestClientSignInCodeAction({ email: "client@example.com" });
+
+    expect(result).toEqual({ success: true });
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
+
+  it("passes a service failure through unchanged", async () => {
+    requestClientSignInCodeMock.mockResolvedValue({ success: false, error: "try again" });
+
+    const result = await requestClientSignInCodeAction({ email: "client@example.com" });
+
+    expect(result).toEqual({ success: false, error: "try again" });
+  });
+
+  it("delegates only the normalised email, dropping identity in the payload", async () => {
+    requestClientSignInCodeMock.mockResolvedValue({ success: true });
+
+    await requestClientSignInCodeAction({ email: "  Client@Example.COM ", ...hostileIdentity });
+
+    expect(requestClientSignInCodeMock).toHaveBeenCalledWith({ email: "client@example.com" });
+  });
+
+  it("rejects an invalid email without calling the service", async () => {
+    const result = await requestClientSignInCodeAction({ email: "nope" });
+
+    expect(result).toEqual({ success: false, error: "Enter a valid email address." });
+    expect(requestClientSignInCodeMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("verifyClientSignInCodeAction", () => {
+  const validSignInInput = { email: "client@example.com", code: "123456" };
+
+  it("sets the session cookie and returns only clientProfileId on success", async () => {
+    const expiresAt = new Date("2030-01-01T00:00:00Z");
+    signInClientWithEmailOtpMock.mockResolvedValue({
+      success: true,
+      sessionId: "session-1",
+      expiresAt,
+      clientProfileId: "client-1",
+    });
+
+    const result = await verifyClientSignInCodeAction(validSignInInput);
+
+    expect(result).toEqual({ success: true, clientProfileId: "client-1" });
+    expect(cookieSet).toHaveBeenCalledWith(
+      SESSION_COOKIE_NAME,
+      "session-1",
+      expect.objectContaining({ httpOnly: true, sameSite: "lax", path: "/", expires: expiresAt })
+    );
+  });
+
+  it("delegates the normalised email and code only, dropping identity in the payload", async () => {
+    signInClientWithEmailOtpMock.mockResolvedValue({ success: false, error: "generic failure" });
+
+    await verifyClientSignInCodeAction({
+      email: "  Client@Example.COM ",
+      code: "001234",
+      ...hostileIdentity,
+    });
+
+    expect(signInClientWithEmailOtpMock).toHaveBeenCalledWith({
+      email: "client@example.com",
+      code: "001234",
+    });
+  });
+
+  it("returns the service error and sets no cookie on failure", async () => {
+    signInClientWithEmailOtpMock.mockResolvedValue({ success: false, error: "generic failure" });
+
+    const result = await verifyClientSignInCodeAction(validSignInInput);
+
+    expect(result).toEqual({ success: false, error: "generic failure" });
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid code without calling the service or setting a cookie", async () => {
+    const result = await verifyClientSignInCodeAction({ ...validSignInInput, code: "12" });
+
+    expect(result).toEqual({ success: false, error: "Enter the 6-digit code." });
+    expect(signInClientWithEmailOtpMock).not.toHaveBeenCalled();
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid email without calling the service or setting a cookie", async () => {
+    const result = await verifyClientSignInCodeAction({ ...validSignInInput, email: "nope" });
+
+    expect(result).toEqual({ success: false, error: "Enter a valid email address." });
+    expect(signInClientWithEmailOtpMock).not.toHaveBeenCalled();
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
+});
 
 describe("loginAction", () => {
   const expiresAt = new Date("2030-01-01T00:00:00Z");

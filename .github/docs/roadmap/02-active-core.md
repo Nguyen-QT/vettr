@@ -248,7 +248,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.3.2.6** Domain Service — `auth/services/requestClientSignInCode.ts` + `types.ts` mirrors (fake-timer tests: eligible sends/ineligible doesn't, floor holds, Resend failure still succeeds, DB failure → generic error, no PII logged).
     - [x] **54.3.2.7** Domain Service — `auth/services/signInClientWithEmailOtp.ts` + `createSession(…, tx?)` (tests: success, wrong/expired/consumed/capped code, ARTIST-home rejected, concurrent loser, DB failure).
     - [x] **54.3.2.8** Domain Service — `auth/services/pruneExpiredEmailOtpChallenges.ts` (batched raw delete) (+ tests).
-    - [ ] **54.3.2.9** Domain Service (integration) — `auth.otp.integration.test.ts`: parallel requests send exactly once; parallel guesses never exceed the cap; parallel correct verifications yield one session.
+    - [x] **54.3.2.9** Domain Service (integration) — `auth.otp.integration.test.ts`: parallel requests send exactly once; parallel guesses never exceed the cap; parallel correct verifications yield one session.
     - [ ] **54.3.3.1** Controller/Action — schemas + `requestClientSignInCodeAction`/`verifyClientSignInCodeAction` (cookie only on success) (+ `actions.test.ts`).
     - [ ] **54.3.3.2** Controller/Action — cron route also prunes OTP challenges in its own try/catch (+ `route.test.ts`).
     - [ ] **54.3.4.1** UI Primitive — `auth/components/OtpCodeInput.tsx` (no `<form>`, `one-time-code` autocomplete, resend countdown).
