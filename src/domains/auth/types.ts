@@ -235,10 +235,10 @@ export interface ClientSignInFormProps extends OtpCodeInputProps {
   step: ClientSignInStep;
   email: string;
   onEmailChange: (value: string) => void;
-  onRequestCode: (event: React.FormEvent<HTMLFormElement>) => void;
+  onRequestCode: (event: React.SubmitEvent<HTMLFormElement>) => void;
   isRequestingCode?: boolean;
   onChangeEmail: () => void; // back to the email step
-  onVerifyCode: (event: React.FormEvent<HTMLFormElement>) => void;
+  onVerifyCode: (event: React.SubmitEvent<HTMLFormElement>) => void;
   isVerifying?: boolean;
 }
 

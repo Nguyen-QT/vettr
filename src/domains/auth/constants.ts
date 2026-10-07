@@ -75,6 +75,15 @@ export const INVALID_EMAIL_OTP_ERROR_MESSAGE =
 export const SIGN_IN_WITH_EMAIL_OTP_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong signing you in. Please try again.";
 
+// Digits in an EmailOtpChallenge code -- matches generateEmailVerificationCode
+// and the sign-in schema's /^\d{6}$/. Caps the sanitised code input.
+export const EMAIL_OTP_CODE_LENGTH = 6;
+
+// Deliberately generic, like the code step's copy -- a resend looks the
+// same whether or not the address has a client account (54.3.5.2).
+export const CLIENT_SIGN_IN_CODE_RESENT_MESSAGE =
+  "If this email has a client account with us, we've sent it a new code.";
+
 export const RESEND_VERIFICATION_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong resending the verification code. Please try again.";
 
@@ -129,6 +138,15 @@ export const SESSION_COOKIE_NAME = "vettr_session";
 export const ARTIST_LOGIN_PATH = "/artist/login";
 export const CLIENT_LOGIN_PATH = "/client/login";
 export const CLIENT_VERIFY_EMAIL_PATH = "/client/verify-email";
+
+// The session-derived client dashboard (CLAUDE.md 5.2.4), and the fallback
+// for any rejected post-sign-in redirectTo.
+export const CLIENT_DASHBOARD_PATH = "/client";
+
+// Post-sign-in redirectTo allow-list for useClientSignIn (54.3.5.2), checked
+// by safeRedirectPath. The proxy only ever sets redirectTo from a /client
+// route, and a CLIENT session can open nothing outside it.
+export const CLIENT_SIGN_IN_REDIRECT_PREFIXES: readonly string[] = [CLIENT_DASHBOARD_PATH];
 
 // Rows deleted per batched DELETE in pruneExpiredSessions (CLAUDE.md 27.4).
 // Bounds each statement's lock/transaction time on a large backlog.
