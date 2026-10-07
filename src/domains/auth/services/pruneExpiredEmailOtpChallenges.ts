@@ -14,6 +14,12 @@ import {
 // sentAt and judges the window on that clock, and the pg adapter binds a
 // Date as a UTC timestamp, matching how Prisma stores the column.
 //
+// Plan: the batch is collected once into an array (an InitPlan) that the
+// DELETE looks up by primary key. Measured on Postgres 16, this stayed a
+// pkey index scan at 200k and 1M rows (custom and generic plans), while
+// the usual `id IN (SELECT ... LIMIT)` hash-joined over a full scan of
+// every dead row per batch.
+//
 // Concurrency: Postgres re-checks the outer sentAt predicate against a row
 // a concurrent rollover refreshed while this DELETE waited on its lock, so
 // a just-sent code is skipped rather than deleted. If the DELETE wins
@@ -27,11 +33,11 @@ export async function pruneExpiredEmailOtpChallenges(): Promise<number> {
     const deleted = await prisma.$executeRaw`
       DELETE FROM "EmailOtpChallenge"
       WHERE "sentAt" < ${cutoff}
-        AND id IN (
+        AND id = ANY(ARRAY(
           SELECT id FROM "EmailOtpChallenge"
           WHERE "sentAt" < ${cutoff}
           LIMIT ${EMAIL_OTP_CLEANUP_BATCH_SIZE}
-        )
+        ))
     `;
 
     totalDeleted += deleted;
