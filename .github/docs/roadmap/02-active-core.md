@@ -253,7 +253,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.3.3.2** Controller/Action — cron route also prunes OTP challenges in its own try/catch (+ `route.test.ts`).
     - [x] **54.3.4.1** UI Primitive — `auth/components/OtpCodeInput.tsx` (no `<form>`, `one-time-code` autocomplete, resend countdown).
     - [x] **54.3.4.2** UI Primitive — `auth/components/ClientSignInForm.tsx` (email step → code step, generic copy, "no code?" help).
-    - [ ] **54.3.5.1** Domain Hook — `useResendCooldown` (+ tests).
+    - [x] **54.3.5.1** Domain Hook — `useResendCooldown` (+ tests).
     - [ ] **54.3.5.2** Domain Hook — `useClientSignIn` (`redirectTo` through `safeRedirectPath`, default `/client`) (+ tests incl. open-redirect cases).
     - [ ] **54.3.6.1** View & Route — `/client/login` renders the OTP container; rewrite `client-auth.spec` (code from the capture sink, wrong code, ineligible email gets the same message and leaves no sink record, logout); `dbHelpers.resetEmailOtpChallenge`; `otpClientEmail` fixture; `toHaveScreenshot()`.
 - [ ] **54.4: Private Portal Gate at `/`**
