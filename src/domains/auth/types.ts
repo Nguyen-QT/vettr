@@ -211,6 +211,20 @@ export interface VerifyEmailCodeFormProps {
   resendMessage?: string;
 }
 
+// OtpCodeInput (54.3.4.1) -- a field fragment, not a form: ClientSignInForm
+// (54.3.4.2) and the booking wizard's verify step (54.5.4.3) own the <form>
+// and its submit. `code` arrives already sanitized; onCodeChange gets the raw
+// input value.
+export interface OtpCodeInputProps {
+  code: string;
+  onCodeChange: (value: string) => void;
+  onResend: () => void;
+  resendCooldownSeconds: number; // 0 = resend available
+  isResending?: boolean;
+  error?: string;
+  resendMessage?: string;
+}
+
 export interface RoleSwitcherProps {
   activeRole: "ARTIST" | "CLIENT";
   isVisible: boolean;
