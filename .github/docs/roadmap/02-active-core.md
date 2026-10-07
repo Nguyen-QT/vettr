@@ -251,7 +251,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.3.2.9** Domain Service (integration) — `auth.otp.integration.test.ts`: parallel requests send exactly once; parallel guesses never exceed the cap; parallel correct verifications yield one session.
     - [x] **54.3.3.1** Controller/Action — schemas + `requestClientSignInCodeAction`/`verifyClientSignInCodeAction` (cookie only on success) (+ `actions.test.ts`).
     - [x] **54.3.3.2** Controller/Action — cron route also prunes OTP challenges in its own try/catch (+ `route.test.ts`).
-    - [ ] **54.3.4.1** UI Primitive — `auth/components/OtpCodeInput.tsx` (no `<form>`, `one-time-code` autocomplete, resend countdown).
+    - [x] **54.3.4.1** UI Primitive — `auth/components/OtpCodeInput.tsx` (no `<form>`, `one-time-code` autocomplete, resend countdown).
     - [ ] **54.3.4.2** UI Primitive — `auth/components/ClientSignInForm.tsx` (email step → code step, generic copy, "no code?" help).
     - [ ] **54.3.5.1** Domain Hook — `useResendCooldown` (+ tests).
     - [ ] **54.3.5.2** Domain Hook — `useClientSignIn` (`redirectTo` through `safeRedirectPath`, default `/client`) (+ tests incl. open-redirect cases).
