@@ -1,7 +1,7 @@
 ---
 globs: ["**/docs/roadmap/04-future-epics.md"]
 ---
-# 🗺️ Future Epics & Long-Term Strategic Backlog (Phases 32–36, 41–48, 51–52, 55)
+# 🗺️ Future Epics & Long-Term Strategic Backlog (Phases 32–36, 41–48, 51–52, 55, 57)
 
 This tracking file contains large-lift feature sets, complex multi-domain subsystems, security/infra hardening, and speculative architecture designs. All items listed here require a rigorous, individual *Mandatory Task Breakdown Rule* pass to map out concrete technical layers before execution begins. Phase numbers are stable IDs, not a priority rank — the work order lives in the Priority Queue at the top of `02-active-core.md` (see `03-polish-and-config.md` for the lower-lift/cosmetic phases; Phases 27, 28, 50 and 54 have been promoted into `02-active-core.md`).
 
@@ -76,3 +76,20 @@ This tracking file contains large-lift feature sets, complex multi-domain subsys
 ### 📦 Phase 55: SMS OTP Channel
 - **Status:** Unscoped. Deferred from Phase 54 (user decision: email code first, SMS later).
 - **Objectives:** Add phone/SMS as a second one-time-code channel for Phase 54's booking-submission gate and portal sign-in. Open questions for the scoping pass: SMS provider (e.g. Twilio Verify, which owns code storage/rate limiting itself, vs. sending raw codes through the existing `EmailOtpChallenge` model generalised with a channel column), per-message cost, E.164 normalisation (`ClientProfile.phone` is free-form and unverified today), a verified unique phone on `Account`, whether a phone-only identity is allowed (`Account.email` and `ClientProfile.email` are required and unique today), and an e2e capture sink mirroring the email one.
+
+### 📦 Phase 57: Payment Event Ledger & Billing-Owned Payment State
+- **Status:** Unscoped. Found on 2026-10-07 alongside Phase 56 (`02-active-core.md`). This is the long-term version of that work, not a go-live gate.
+- **Objectives:**
+  1. **Append-only `PaymentEvent` log owned by billing.**
+     - Every Stripe webhook is stored once, unique on the Stripe event id, before it is processed. Local intents (payment created, refund requested) are stored too.
+     - Payment and refund status are derived from this timeline instead of from mutable flags.
+     - Today's idempotency only works because `depositPaid`/`depositRefunded` only ever flip to true. That stops holding once Phase 56 adds pending/failed refunds and disputes.
+  2. **Remove billing's imports of booking.**
+     - `createDepositPaymentIntent`, `confirmDepositPayment`, `confirmDepositRefund`, `refundDeposit` and `finalizeCheckout` all call booking services, while booking's cancel paths call billing's `refundDeposit`.
+     - That two-way dependency breaks `architecture.md` §4: booking is the higher-level orchestrator, so billing must not call it.
+     - Moving deposit state (`depositAmount`, `depositPaid`, `stripePaymentIntentId`, `depositRefunded`, `stripeRefundId`) into billing-owned tables keyed by `bookingRequestId` means billing never writes booking's table. Booking then reads deposit status through billing's public interface.
+- **Open questions for scoping:**
+  - Does booking still need a copy of `depositPaid` on `BookingRequest` for its own queries?
+  - How is `finalizeCheckout`'s billing → booking call reversed?
+  - Does Phase 36's read-only finance reporting read from this ledger?
+  - How is any state Phase 56 already put into billing-owned tables folded into the ledger?

@@ -1,7 +1,7 @@
 ---
 globs: ["**/docs/roadmap/02-active-core.md"]
 ---
-# ⚡ Active Core Sprint Plane (Phases 25–28, 50, 54)
+# ⚡ Active Core Sprint Plane (Phases 25–28, 50, 54, 56)
 
 > ⚠️ **Global Structural Mandate:** Any task introducing domain input validation MUST follow the `constants.ts` / `types.ts` / `[domain].schema.ts` split defined in the global architecture rules.
 
@@ -14,7 +14,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 3. **28.4.3.6, 28.4.3.7** — booking controller tests for the already-guarded actions.
 4. **54.2 → 54.1 → 54.3 → 54.4 → 54.5 → 54.6 → 54.7 → 54.8** — Phase 54 in numeric order (54.2 is e2e-only infra and unblocks 54.3.6.1 and 54.8).
 5. **28.8** — `updateClientProfile` unexpected-error isolation (unscoped; needs its own layered breakdown pass *after 54.7*, which rewrites the same service/hook and drops the email-conflict path — fixing it earlier would be rewritten). Must land before go-live and before 28.5, whose `useClientProfile` hook test would otherwise pin the current uncaught throw.
-6. **53.1** (after 54.1: its runbook needs `NEXT_PUBLIC_APP_URL` + the handle requirement), then **53.2** staging on `staging.vettr.studio` (proposed: before 54.3, so the email-code flows are built against real Resend delivery), then **50** (after 54.4; same client layout), then **53.4–53.8** pre-launch hardening (unscoped), then **53.3** go-live on `vettr.studio` (waits for 28.7, 28.8, 53.4–53.8 and the end of Phase 54).
+6. **53.1** (after 54.1: its runbook needs `NEXT_PUBLIC_APP_URL` + the handle requirement), then **53.2** staging on `staging.vettr.studio` (proposed: before 54.3, so the email-code flows are built against real Resend delivery), then **50** (after 54.4; same client layout), then **53.4–53.8** pre-launch hardening (unscoped) and **Phase 56** deposit payment integrity (unscoped; 56.1 first), then **53.3** go-live on `vettr.studio` (waits for 28.7, 28.8, 53.4–53.8, Phase 56 and the end of Phase 54).
 7. **28.5** — hook tests (smaller once Phase 54's hooks ship with their own tests).
 - *Superseded by Phase 54:* 27.7 (→ 54.3.2.6), 28.6 (→ 54.5.2.2 / 54.5.2.6), 28.4.3.5 (→ 54.5.3.3 / 54.5.3.4 / 54.6.3.1), 38.1 (→ 54.1.6.2).
 
@@ -307,4 +307,63 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [ ] **54.8.3.1** Controller/Action — delete the signup, client-login, verify and resend actions with their schemas, types and tests.
     - [ ] **54.8.2.1** Domain Service — delete `signupClient`, `loginClient`, `verifyEmailCode`, `resendVerificationCode`, `getArtistDirectory` (+ tests, the integration signup-race case, dead constants).
     - [ ] **54.8.1.1** Data Gateway — drop the four `emailVerification*` code columns (keep `emailVerifiedAt`); set CLIENT `passwordHash` to NULL; CHECK (ARTIST ⇒ NOT NULL, CLIENT ⇒ NULL); fixture-only edits: typed Account builders, integration `createClientAccount`, `seed.ts` client accounts.
+
+---
+
+### 📦 Phase 56: Deposit Payment Integrity (pre-go-live)
+> Found on 2026-10-07 by checking the deposit flow against the idempotency key → record-the-intent-first → webhook-timeline design. No real money moves until 53.3 (staging stays in Stripe test mode), so nothing here interrupts Phase 54, but every item gates 53.3. Every item is *unscoped* and needs its own 6-layer breakdown pass before any code. Phase 57 (`04-future-epics.md`) is the long-term version: an append-only payment event ledger and a fix for the booking ↔ billing dependency.
+- **Design constraint (proposed):** new payment state (refund status, dispute records) goes into billing-owned tables keyed by `bookingRequestId`. It must not become new `BookingRequest` columns written through booking's narrow functions, so that Phase 57 builds on this work instead of migrating it.
+- **Order:** numeric. 56.1 is a cheap spike that decides which refund events 56.6/56.7 listen for. 56.3 is the Data Gateway prerequisite for 56.4. 56.4 and 56.5 share a root cause (the fixed idempotency key): design them together, ship them as separate items.
+- [ ] **56.1: Prove Which Stripe Events a Deposit Refund Emits** — *unscoped, spike.*
+  - The webhook only handles `refund.updated` with status `succeeded`, but the comments in `refundDeposit.ts` and `confirmDepositRefund.ts` name `charge.refunded`.
+  - A card refund that is created already `succeeded` may never emit `refund.updated`. If so, the refund backstop is dead code.
+  - Nothing proves delivery today: `depositRefundLifecycle.stripe-integration.test.ts` calls `confirmDepositRefund` directly.
+  - Use the Stripe CLI (`stripe listen`) in test mode to record which events fire for an immediate card refund, a pending refund and a failed refund. Subscribe the route to the right events and fix the stale comments.
+  - This is the first proof of the refund backstop, so 53.3.1.2's live-money refund is no longer that first proof.
+- [ ] **56.2: Deposit Paid on a Cancelled or Declined Booking** — *unscoped.*
+  - `confirmDepositPayment` sets `depositPaid` without checking the booking's status.
+  - Both cancel paths (`cancelBookingRequest`, `cancelApprovedBookingAsArtist`) only refund when `depositPaid` is already true.
+  - So a webhook delayed by an outage (Stripe retries for days), or a payment made from a tab left open after cancelling, leaves a `CANCELLED_*` booking with `depositPaid = true`. Nobody refunds the money.
+  - Declining an `APPROVED` booking has the same result (28.7 flagged-not-fixed item 2: `setBookingRequestStatus` has no status check).
+  - Design pass: when a payment is confirmed on a non-`APPROVED` booking, record it and issue a full refund. Decide whether cancelling should also cancel an open PaymentIntent.
+  - Concurrency: a cancel racing the webhook must produce exactly one refund. The per-booking refund idempotency key already dedupes at Stripe.
+  - The new branches need unit tests, plus a real-DB race case in the integration tier.
+- [ ] **56.3: Unique Stripe Identifiers on Deposit Records** — *unscoped, small.*
+  - `stripePaymentIntentId` and `stripeRefundId` have no unique constraint, so `getBookingRequestByPaymentIntentId` uses `findFirst` and relies on "safe in practice".
+  - Add unique indexes (no real users, so no backfill) and switch to `findUnique`.
+  - This is the Data Gateway prerequisite for 56.4's lookups. If the design constraint above moves these ids into a billing-owned table, this becomes that table's Data Gateway leaf.
+- [ ] **56.4: Stale PaymentIntent After the 24h Idempotency-Key Window** — *unscoped.*
+  - The idempotency key is fixed per booking (`deposit-intent:<bookingRequestId>`), and Stripe only keeps keys for 24h. A visit after 24h creates a second PaymentIntent, and `recordDepositPaymentIntent` overwrites `stripePaymentIntentId`.
+  - If the old PaymentIntent is then paid, `confirmDepositPayment` returns not-found. The webhook route ignores that result and answers 200, so Stripe stops retrying and the payment is never recorded. If both PaymentIntents are paid, the client is charged twice.
+  - Design pass:
+    - Reuse a stored PaymentIntent that is still open instead of creating a new one. Retrieve it, then update the amount, or cancel and recreate it, if the amount changed.
+    - Resolve unknown PaymentIntents through the `metadata.bookingRequestId` already set at creation.
+    - Treat not-found as a logged critical alert (53.7), not a silent 200.
+- [ ] **56.5: Deposit Creation Lockout and Uncaught Stripe Errors** — *unscoped.*
+  - Reusing the fixed key with different parameters makes Stripe reject the call with an idempotency error for up to 24h. The parameters change when the artist edits the tier deposit, when the client is flagged for precharge, or when the artist's Connect `chargesEnabled` flips `on_behalf_of`/`transfer_data`.
+  - `stripe.paymentIntents.create` has no try/catch (architecture.md §6.1, §8.B). Nor do `createDepositPaymentIntentAction` or `useDepositPayment`, so the rejection escapes uncaught and the hook's `isLoading` never resets (a stuck spinner).
+  - Fix:
+    - Make the key vary with the parameters that can change, or reuse the PaymentIntent per 56.4.
+    - Wrap the Stripe call and return a generic retryable error, logging ids only.
+    - Reset the hook's state on rejection.
+- [ ] **56.6: Refund Status Lifecycle (Pending / Failed)** — *unscoped.*
+  - `refundDeposit` sets `depositRefunded = true` as soon as `refunds.create` returns, even when the refund is still `pending`. Nothing handles a refund that later fails, so the booking reads as refunded while the client never got the money.
+  - Record a refund intent as `PENDING` before calling Stripe (architecture.md §6.2). Move it to `SUCCEEDED`/`FAILED` from the events 56.1 identifies. `depositRefunded` becomes a derived view of that status.
+  - Status changes must follow Stripe's event time or a fixed precedence of states, not arrival order. Webhooks are at-least-once and unordered, and this is the first deposit state that can move backwards.
+  - Prerequisite for 56.7.
+- [ ] **56.7: Retry Refunds Whose Stripe Call Failed** — *unscoped.*
+  - If `stripe.refunds.create` itself fails, no refund exists on Stripe, so no webhook will ever arrive.
+  - Both cancel paths only `console.error`. `cancelBookingRequest`'s comment, which says the webhook backstop reconciles this, is wrong for this case.
+  - Add a bounded, idempotent retry for refund intents (from 56.6) that are still `PENDING` with no Stripe refund id. The 27.4 session-cleanup cron route and workflow are the precedent.
+  - Reuse the per-booking refund idempotency key, so a retry after a lost response can't refund twice.
+  - Raise a critical alert after N failed attempts (53.7).
+- [ ] **56.8: Disputes and Failed Payments** — *unscoped.*
+  - The webhook ignores `charge.dispute.*` events entirely. A chargeback on a deposit would go unnoticed: Stripe debits the platform for disputes on destination charges, and evidence has a deadline.
+  - `payment_intent.payment_failed` is only logged.
+  - Minimum for go-live: record dispute events against the booking and raise a critical alert (53.7).
+  - Artist-facing dispute UI and evidence submission are out of scope. Decide whether an open dispute blocks further deposit actions on that booking.
+- [ ] **56.9: Out-of-Order `account.updated` Events** — *unscoped, small.*
+  - `syncArtistConnectAccountStatus` writes whichever event arrives last, but Stripe doesn't guarantee delivery order. A delayed older event can overwrite fresh `chargesEnabled`/`payoutsEnabled` values.
+  - A stale `true` makes `createDepositPaymentIntent` send `on_behalf_of` to an account that can't take charges, so the deposit can't be created. A stale `false` sends the deposit to the platform instead of the artist.
+  - Fix: retrieve the account from Stripe in the handler and write its current values, or skip events older than a stored `event.created`.
     
