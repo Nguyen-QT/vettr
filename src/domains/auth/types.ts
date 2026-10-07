@@ -225,6 +225,23 @@ export interface OtpCodeInputProps {
   resendMessage?: string;
 }
 
+// ClientSignInForm (54.3.4.2) -- one <form>, two steps: the email step
+// submits onRequestCode, the code step onVerifyCode. Extends
+// OtpCodeInputProps so useClientSignIn (54.3.5.2) can pass the code fields
+// straight through; `error` belongs to whichever step is showing.
+export type ClientSignInStep = "email" | "code";
+
+export interface ClientSignInFormProps extends OtpCodeInputProps {
+  step: ClientSignInStep;
+  email: string;
+  onEmailChange: (value: string) => void;
+  onRequestCode: (event: React.FormEvent<HTMLFormElement>) => void;
+  isRequestingCode?: boolean;
+  onChangeEmail: () => void; // back to the email step
+  onVerifyCode: (event: React.FormEvent<HTMLFormElement>) => void;
+  isVerifying?: boolean;
+}
+
 export interface RoleSwitcherProps {
   activeRole: "ARTIST" | "CLIENT";
   isVisible: boolean;
