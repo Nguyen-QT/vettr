@@ -239,7 +239,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.2.6.2** View & Route (e2e) — move booking-access-and-prefill, booking-wizard, client-booking-actions, client-onboarding-fields, client-profile, deposit-payment, landing-and-directory and role-switcher off the password UI login.
 - [ ] **54.3: Passwordless Client Sign-In (Email Code)**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **54.3.1.1** Data Gateway — `EmailOtpPurpose`, `EmailOtpChallenge` (email unique + lowercase CHECK), audit enum values for OTP sign-in. No app code.
+    - [x] **54.3.1.1** Data Gateway — `EmailOtpPurpose`, `EmailOtpChallenge` (email unique + lowercase CHECK; `codeHash` nullable as the only dead-code state; `@@index([sentAt])` so 54.3.2.8 prunes on `sentAt < now − 24h` without a schema change), audit enum values for OTP sign-in (`AuditEventType.EMAIL_OTP_SIGN_IN`, both outcomes; `AuditReasonCode.INVALID_EMAIL_OTP` / `SIGNED_IN_WITH_EMAIL_OTP`; valid-code-but-ineligible reuses `ACCOUNT_NOT_FOUND` / `ROLE_MISMATCH` / `NOT_LINKED_TO_CLIENT`; the `types.ts` audit mirrors are extended by 54.3.2.7, the first writer). No app code.
     - [ ] **54.3.2.1** Domain Service — `src/lib/email.ts` (`normalizeEmail`, `normalizedEmailSchema`) (+ tests).
     - [ ] **54.3.2.2** Domain Service — `src/lib/safeRedirectPath.ts` (allow-listed prefixes; rejects `//`, `\`, schemes) (+ tests).
     - [ ] **54.3.2.3** Domain Service — `verifyPassword(pw, hash: string | null)` returns false on null without running scrypt (+ tests).
