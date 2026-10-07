@@ -70,6 +70,22 @@ export interface IssueEmailOtpInput {
 // outcome the caller answers with the same generic "code sent" copy.
 export type IssueEmailOtpResult = { issued: true; code: string } | { issued: false };
 
+// checkEmailOtpCode (54.3.2.5)
+export interface CheckEmailOtpCodeInput {
+  email: string;
+  purpose: EmailOtpPurposeValue;
+  code: string;
+}
+
+// A match is not a consume: the caller consumes inside its own
+// transaction with an updateMany guarded on `challengeId` + `codeHash`,
+// so a concurrent consume or a re-issue in between makes it a no-op.
+// Every rejection is the same `{ valid: false }` so callers can't branch
+// on (or leak) why a code failed.
+export type CheckEmailOtpCodeResult =
+  | { valid: true; challengeId: string; codeHash: string }
+  | { valid: false };
+
 
 // recordAuditEvent (CLAUDE.md 27.5.2.1) -- literal unions kept structurally
 // in sync by hand with the AuditEvent* enums in schema.prisma.
