@@ -1,8 +1,9 @@
 import { prismaMock } from "@/testUtils/prismaMock";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockDeep } from "vitest-mock-extended";
 
-import type { Session } from "@/generated/prisma/client";
+import type { Prisma, Session } from "@/generated/prisma/client";
 
 import { SESSION_DURATION_MS } from "../constants";
 import { createSession } from "./createSession";
@@ -58,5 +59,21 @@ describe("createSession", () => {
     expect(prismaMock.session.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ activeRole: "CLIENT" }),
     });
+  });
+
+  it("creates the row on a given transaction client instead of the global one", async () => {
+    const txMock = mockDeep<Prisma.TransactionClient>();
+    txMock.session.create.mockResolvedValue(buildSession({ activeRole: "CLIENT" }));
+
+    await createSession("account-1", "CLIENT", txMock);
+
+    expect(txMock.session.create).toHaveBeenCalledWith({
+      data: {
+        accountId: "account-1",
+        activeRole: "CLIENT",
+        expiresAt: new Date(NOW.getTime() + SESSION_DURATION_MS),
+      },
+    });
+    expect(prismaMock.session.create).not.toHaveBeenCalled();
   });
 });
