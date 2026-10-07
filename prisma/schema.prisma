@@ -393,6 +393,7 @@ enum AuditEventType {
   LOGIN_FAILED
   ROLE_SWITCH
   CLIENT_PROFILE_LINK
+  EMAIL_OTP_SIGN_IN
 }
 
 enum AuditEventOutcome {
@@ -411,6 +412,8 @@ enum AuditReasonCode {
   CLIENT_PROFILE_ALREADY_LINKED
   CLIENT_PROFILE_CREATED
   CLIENT_PROFILE_MATCHED_EXISTING
+  INVALID_EMAIL_OTP
+  SIGNED_IN_WITH_EMAIL_OTP
 }
 
 model AuditEvent {
@@ -434,4 +437,39 @@ model AuditEvent {
 
   @@index([accountId, createdAt])
   @@index([eventType, createdAt])
+}
+
+// What a one-time email code was issued for (54.3). A code issued for one
+// purpose can never be redeemed for the other.
+enum EmailOtpPurpose {
+  CLIENT_SIGN_IN
+  BOOKING_SUBMISSION
+}
+
+// One-time email code challenge (54.3), one row per normalised email. No
+// FK to Account: booking-submission codes are sent before any Account
+// exists. The lowercase CHECK on email lives in the migration (Prisma
+// cannot express it).
+model EmailOtpChallenge {
+  id      String          @id @default(cuid())
+  email   String          @unique
+  purpose EmailOtpPurpose
+
+  // Code is stored as a sha256 hash only, nulled once consumed or
+  // invalidated -- a null hash is the only "dead code" state.
+  codeHash   String?
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  sentAt     DateTime
+  consumedAt DateTime?
+
+  // Rolling per-address send window backing the 24h send cap.
+  windowStartedAt DateTime
+  windowSendCount Int
+
+  createdAt DateTime @default(now())
+
+  // Prune scan (54.3.2.8): once sentAt is older than the send window the
+  // code has expired and the window has rolled over, so the row is dead.
+  @@index([sentAt])
 }
