@@ -243,7 +243,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.3.2.1** Domain Service — `src/lib/email.ts` (`normalizeEmail`, `normalizedEmailSchema`) (+ tests).
     - [x] **54.3.2.2** Domain Service — `src/lib/safeRedirectPath.ts` (allow-listed prefixes; rejects `//`, `\`, schemes) (+ tests).
     - [x] **54.3.2.3** Domain Service — `verifyPassword(pw, hash: string | null)` returns false on null without running scrypt (+ tests).
-    - [ ] **54.3.2.4** Domain Service — `auth/services/issueEmailOtp.ts` (tests: first send, cooldown, purpose-switch bypass, cap, window rollover, lost race).
+    - [x] **54.3.2.4** Domain Service — `auth/services/issueEmailOtp.ts` (tests: first send, cooldown, purpose-switch bypass, cap, window rollover, lost race).
     - [ ] **54.3.2.5** Domain Service — `auth/services/checkEmailOtpCode.ts` (tests mirror `verifyEmailCode.test.ts` + purpose mismatch).
     - [ ] **54.3.2.6** Domain Service — `auth/services/requestClientSignInCode.ts` + `types.ts` mirrors (fake-timer tests: eligible sends/ineligible doesn't, floor holds, Resend failure still succeeds, DB failure → generic error, no PII logged).
     - [ ] **54.3.2.7** Domain Service — `auth/services/signInClientWithEmailOtp.ts` + `createSession(…, tx?)` (tests: success, wrong/expired/consumed/capped code, ARTIST-home rejected, concurrent loser, DB failure).
