@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { dateOfBirthSchema, instagramHandleSchema } from "@/lib/clientProfileValidation";
+import { normalizedEmailSchema } from "@/lib/email";
 import { MIN_PASSWORD_LENGTH } from "./constants";
 
 // Structural validity only -- see services/loginArtist.ts for the
@@ -51,6 +52,22 @@ export const verifyEmailCodeInputSchema = z.object({
 // Structural validity only -- see services/resendVerificationCode.ts.
 export const resendVerificationCodeInputSchema = z.object({
   email: z.email(),
+});
+
+// Structural validity only -- see services/requestClientSignInCode.ts for
+// the eligibility check. The email is normalised here and again in the
+// service; a malformed one can't belong to an account, so rejecting it
+// before the service's response floor reveals nothing (54.3.3.1).
+export const requestClientSignInCodeInputSchema = z.object({
+  email: normalizedEmailSchema,
+});
+
+// Structural validity only -- see services/signInClientWithEmailOtp.ts for
+// the actual code check. No password (clients sign in by code alone); the
+// code stays a string so leading zeros survive.
+export const verifyClientSignInCodeInputSchema = z.object({
+  email: normalizedEmailSchema,
+  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
 });
 
 // Structural validity only -- see services/switchActiveRole.ts for the

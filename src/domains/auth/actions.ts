@@ -5,10 +5,12 @@ import { redirect } from "next/navigation";
 
 import {
   loginInputSchema,
+  requestClientSignInCodeInputSchema,
   resendVerificationCodeInputSchema,
   setUpClientProfileInputSchema,
   signupInputSchema,
   switchActiveRoleInputSchema,
+  verifyClientSignInCodeInputSchema,
   verifyEmailCodeInputSchema,
 } from "./auth.schema";
 import {
@@ -21,7 +23,9 @@ import { getSessionWithAccount } from "./services/getSessionWithAccount";
 import { linkOrCreateClientProfileForAccount } from "./services/linkOrCreateClientProfileForAccount";
 import { loginArtist } from "./services/loginArtist";
 import { loginClient } from "./services/loginClient";
+import { requestClientSignInCode } from "./services/requestClientSignInCode";
 import { resendVerificationCode } from "./services/resendVerificationCode";
+import { signInClientWithEmailOtp } from "./services/signInClientWithEmailOtp";
 import { signupClient } from "./services/signupClient";
 import { switchActiveRole } from "./services/switchActiveRole";
 import { verifyEmailCode } from "./services/verifyEmailCode";
@@ -46,6 +50,10 @@ export type ClientEntryActionResult =
 export type SwitchActiveRoleActionResult = { success: false; error: string };
 
 export type ResendVerificationCodeActionResult =
+  | { success: true }
+  | { success: false; error: string };
+
+export type RequestClientSignInCodeActionResult =
   | { success: true }
   | { success: false; error: string };
 
@@ -243,6 +251,48 @@ export async function resendVerificationCodeAction(
   }
 
   return resendVerificationCode(parsed.data);
+}
+
+// Controller/Action boundary (54.3.3.1): validates the email shape only
+// and returns the service's single generic result unchanged, so nothing
+// here can reveal whether a client account exists.
+export async function requestClientSignInCodeAction(
+  input: unknown
+): Promise<RequestClientSignInCodeActionResult> {
+  const parsed = requestClientSignInCodeInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid sign-in request.",
+    };
+  }
+
+  return requestClientSignInCode(parsed.data);
+}
+
+// Controller/Action boundary (54.3.3.1): validates structurally,
+// delegates to signInClientWithEmailOtp, and sets the session cookie only
+// on success. Redirecting is left to the caller's hook (safeRedirectPath).
+export async function verifyClientSignInCodeAction(
+  input: unknown
+): Promise<ClientAuthActionResult> {
+  const parsed = verifyClientSignInCodeInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid sign-in request.",
+    };
+  }
+
+  const result = await signInClientWithEmailOtp(parsed.data);
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  await setSessionCookie(result.sessionId, result.expiresAt);
+  return { success: true, clientProfileId: result.clientProfileId };
 }
 
 // Controller/Action boundary (CLAUDE.md 5.1.3, generalized 5.2.2):
