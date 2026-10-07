@@ -137,3 +137,11 @@ export const SESSION_CLEANUP_BATCH_SIZE = 1000;
 // Max batches per sweep invocation -- caps one run at 20,000 deletions;
 // a larger backlog finishes on the next scheduled run.
 export const SESSION_CLEANUP_MAX_BATCHES = 20;
+
+// Rows deleted per batched DELETE in pruneExpiredEmailOtpChallenges
+// (54.3.2.8). Kept separate from the session sweep so each can be tuned.
+export const EMAIL_OTP_CLEANUP_BATCH_SIZE = 1000;
+
+// Max batches per sweep invocation -- caps one run at 20,000 deletions;
+// a larger backlog finishes on the next scheduled run.
+export const EMAIL_OTP_CLEANUP_MAX_BATCHES = 20;
