@@ -1,12 +1,17 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { pruneExpiredEmailOtpChallenges } from "@/domains/auth/services/pruneExpiredEmailOtpChallenges";
 import { pruneExpiredSessions } from "@/domains/auth/services/pruneExpiredSessions";
 
 import { POST } from "./route";
 
 vi.mock("@/domains/auth/services/pruneExpiredSessions", () => ({
   pruneExpiredSessions: vi.fn(),
+}));
+
+vi.mock("@/domains/auth/services/pruneExpiredEmailOtpChallenges", () => ({
+  pruneExpiredEmailOtpChallenges: vi.fn(),
 }));
 
 const SECRET = "test-cron-secret";
@@ -22,6 +27,7 @@ describe("POST /api/cron/session-cleanup", () => {
   beforeEach(() => {
     vi.stubEnv("CRON_SECRET", SECRET);
     vi.mocked(pruneExpiredSessions).mockReset();
+    vi.mocked(pruneExpiredEmailOtpChallenges).mockReset();
   });
 
   afterEach(() => {
@@ -36,6 +42,7 @@ describe("POST /api/cron/session-cleanup", () => {
 
     expect(response.status).toBe(401);
     expect(pruneExpiredSessions).not.toHaveBeenCalled();
+    expect(pruneExpiredEmailOtpChallenges).not.toHaveBeenCalled();
   });
 
   it("returns 401 when the Authorization header is missing", async () => {
@@ -43,6 +50,7 @@ describe("POST /api/cron/session-cleanup", () => {
 
     expect(response.status).toBe(401);
     expect(pruneExpiredSessions).not.toHaveBeenCalled();
+    expect(pruneExpiredEmailOtpChallenges).not.toHaveBeenCalled();
   });
 
   it("returns 401 for a non-Bearer scheme", async () => {
@@ -50,6 +58,7 @@ describe("POST /api/cron/session-cleanup", () => {
 
     expect(response.status).toBe(401);
     expect(pruneExpiredSessions).not.toHaveBeenCalled();
+    expect(pruneExpiredEmailOtpChallenges).not.toHaveBeenCalled();
   });
 
   it("returns 401 for a wrong token of the same length", async () => {
@@ -60,6 +69,7 @@ describe("POST /api/cron/session-cleanup", () => {
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "Unauthorized." });
     expect(pruneExpiredSessions).not.toHaveBeenCalled();
+    expect(pruneExpiredEmailOtpChallenges).not.toHaveBeenCalled();
   });
 
   it("returns 401 (without throwing) for a wrong token of a different length", async () => {
@@ -67,23 +77,33 @@ describe("POST /api/cron/session-cleanup", () => {
 
     expect(response.status).toBe(401);
     expect(pruneExpiredSessions).not.toHaveBeenCalled();
+    expect(pruneExpiredEmailOtpChallenges).not.toHaveBeenCalled();
   });
 
-  it("returns 200 with deletedCount and durationMs on success", async () => {
+  it("returns 200 with both sweep counts and durationMs on success", async () => {
     vi.mocked(pruneExpiredSessions).mockResolvedValue(42);
+    vi.mocked(pruneExpiredEmailOtpChallenges).mockResolvedValue(7);
 
     const response = await POST(buildRequest(`Bearer ${SECRET}`));
-    const body = (await response.json()) as { deletedCount: number; durationMs: number };
+    const body = (await response.json()) as {
+      deletedCount: number;
+      emailOtpDeletedCount: number;
+      durationMs: number;
+    };
 
     expect(response.status).toBe(200);
     expect(body.deletedCount).toBe(42);
+    expect(body.emailOtpDeletedCount).toBe(7);
     expect(typeof body.durationMs).toBe("number");
     expect(body.durationMs).toBeGreaterThanOrEqual(0);
+    expect(pruneExpiredSessions).toHaveBeenCalledTimes(1);
+    expect(pruneExpiredEmailOtpChallenges).toHaveBeenCalledTimes(1);
   });
 
-  it("returns a generic 500 and logs when the service throws", async () => {
+  it("still runs the OTP sweep and returns a generic 500 when the session sweep throws", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     vi.mocked(pruneExpiredSessions).mockRejectedValue(new Error("P2024 connection pool timeout"));
+    vi.mocked(pruneExpiredEmailOtpChallenges).mockResolvedValue(7);
 
     const response = await POST(buildRequest(`Bearer ${SECRET}`));
     const body = await response.json();
@@ -91,6 +111,42 @@ describe("POST /api/cron/session-cleanup", () => {
     expect(response.status).toBe(500);
     expect(body).toEqual({ error: "Session cleanup failed." });
     expect(JSON.stringify(body)).not.toContain("P2024");
-    expect(consoleError).toHaveBeenCalled();
+    expect(pruneExpiredEmailOtpChallenges).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a generic 500 after the session sweep ran when the OTP sweep throws", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.mocked(pruneExpiredSessions).mockResolvedValue(42);
+    vi.mocked(pruneExpiredEmailOtpChallenges).mockRejectedValue(
+      new Error("P2034 write conflict"),
+    );
+
+    const response = await POST(buildRequest(`Bearer ${SECRET}`));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: "Session cleanup failed." });
+    expect(JSON.stringify(body)).not.toContain("P2034");
+    expect(pruneExpiredSessions).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs both sweeps, logs each failure and returns a generic 500 when both throw", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.mocked(pruneExpiredSessions).mockRejectedValue(new Error("P2024 connection pool timeout"));
+    vi.mocked(pruneExpiredEmailOtpChallenges).mockRejectedValue(
+      new Error("P2024 connection pool timeout"),
+    );
+
+    const response = await POST(buildRequest(`Bearer ${SECRET}`));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: "Session cleanup failed." });
+    expect(JSON.stringify(body)).not.toContain("P2024");
+    expect(pruneExpiredSessions).toHaveBeenCalledTimes(1);
+    expect(pruneExpiredEmailOtpChallenges).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(2);
   });
 });
