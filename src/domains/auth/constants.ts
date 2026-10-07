@@ -42,6 +42,13 @@ export const MAX_EMAIL_VERIFICATION_ATTEMPTS = 5;
 // a failed send, so a degraded provider isn't hammered.
 export const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 1000 * 60;
 
+// Per-address send cap for EmailOtpChallenge codes (54.3), counted over
+// a window anchored at its first send. Paired with the 5-attempt cap it
+// bounds guesses per address per day -- an hourly cap would still allow
+// ~600 guesses/day against the 6-digit keyspace.
+export const EMAIL_OTP_SEND_WINDOW_MS = 1000 * 60 * 60 * 24; // 24 hours
+export const MAX_EMAIL_OTP_SENDS_PER_WINDOW = 10;
+
 export const RESEND_VERIFICATION_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong resending the verification code. Please try again.";
 

@@ -56,6 +56,20 @@ export interface ResendVerificationCodeInput {
 
 export type ResendVerificationCodeResult = { success: true } | { success: false; error: string };
 
+// issueEmailOtp (54.3.2.4) -- literal union kept structurally in sync by
+// hand with the EmailOtpPurpose enum in schema.prisma.
+export type EmailOtpPurposeValue = "CLIENT_SIGN_IN" | "BOOKING_SUBMISSION";
+
+export interface IssueEmailOtpInput {
+  email: string;
+  purpose: EmailOtpPurposeValue;
+}
+
+// The plaintext code is returned only so the caller can email it; no
+// `error` field -- a blocked send (cooldown, cap, lost race) is a normal
+// outcome the caller answers with the same generic "code sent" copy.
+export type IssueEmailOtpResult = { issued: true; code: string } | { issued: false };
+
 
 // recordAuditEvent (CLAUDE.md 27.5.2.1) -- literal unions kept structurally
 // in sync by hand with the AuditEvent* enums in schema.prisma.
