@@ -86,6 +86,16 @@ export type CheckEmailOtpCodeResult =
   | { valid: true; challengeId: string; codeHash: string }
   | { valid: false };
 
+// requestClientSignInCode (54.3.2.6)
+export interface RequestClientSignInCodeInput {
+  email: string;
+}
+
+// One result for every outcome -- eligible, ineligible, cooldown, cap,
+// failed or timed-out send -- so the response can't enumerate client
+// accounts. Only a DB failure differs, with a retryable message.
+export type RequestClientSignInCodeResult = { success: true } | { success: false; error: string };
+
 
 // recordAuditEvent (CLAUDE.md 27.5.2.1) -- literal unions kept structurally
 // in sync by hand with the AuditEvent* enums in schema.prisma.

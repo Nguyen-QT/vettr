@@ -245,7 +245,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.3.2.3** Domain Service — `verifyPassword(pw, hash: string | null)` returns false on null without running scrypt (+ tests).
     - [x] **54.3.2.4** Domain Service — `auth/services/issueEmailOtp.ts` (tests: first send, cooldown, purpose-switch bypass, cap, window rollover, lost race).
     - [x] **54.3.2.5** Domain Service — `auth/services/checkEmailOtpCode.ts` (tests mirror `verifyEmailCode.test.ts` + purpose mismatch).
-    - [ ] **54.3.2.6** Domain Service — `auth/services/requestClientSignInCode.ts` + `types.ts` mirrors (fake-timer tests: eligible sends/ineligible doesn't, floor holds, Resend failure still succeeds, DB failure → generic error, no PII logged).
+    - [x] **54.3.2.6** Domain Service — `auth/services/requestClientSignInCode.ts` + `types.ts` mirrors (fake-timer tests: eligible sends/ineligible doesn't, floor holds, Resend failure still succeeds, DB failure → generic error, no PII logged).
     - [ ] **54.3.2.7** Domain Service — `auth/services/signInClientWithEmailOtp.ts` + `createSession(…, tx?)` (tests: success, wrong/expired/consumed/capped code, ARTIST-home rejected, concurrent loser, DB failure).
     - [ ] **54.3.2.8** Domain Service — `auth/services/pruneExpiredEmailOtpChallenges.ts` (batched raw delete) (+ tests).
     - [ ] **54.3.2.9** Domain Service (integration) — `auth.otp.integration.test.ts`: parallel requests send exactly once; parallel guesses never exceed the cap; parallel correct verifications yield one session.

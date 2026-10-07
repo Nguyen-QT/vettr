@@ -49,6 +49,21 @@ export const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 1000 * 60;
 export const EMAIL_OTP_SEND_WINDOW_MS = 1000 * 60 * 60 * 24; // 24 hours
 export const MAX_EMAIL_OTP_SENDS_PER_WINDOW = 10;
 
+// Minimum response time for a sign-in code request (54.3.2.6). An
+// eligible address does a lookup + issue + send, an ineligible one only
+// the lookup, so every outcome is padded to this floor -- a sleep, not
+// dummy work, since nothing local can imitate Resend's latency (27.7).
+export const CLIENT_SIGN_IN_CODE_RESPONSE_FLOOR_MS = 1500;
+
+// Send budget for an OTP email, kept below the response floor so a slow
+// provider can't push an eligible response past it.
+export const EMAIL_OTP_SEND_TIMEOUT_MS = 1000;
+
+// Retry-oriented message for an unexpected DB failure only -- every other
+// outcome (ineligible, cooldown, cap, failed send) is the same success.
+export const REQUEST_SIGN_IN_CODE_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong sending your sign-in code. Please try again.";
+
 export const RESEND_VERIFICATION_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong resending the verification code. Please try again.";
 
