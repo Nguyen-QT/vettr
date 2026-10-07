@@ -44,15 +44,27 @@ export async function loginAsClient(page: Page, sessionId: string) {
 // playwright.config.ts. Absolute so server and specs agree on cwd.
 export const EMAIL_CAPTURE_SINK_PATH = path.join(__dirname, ".email-sink.jsonl");
 
+interface CapturedEmailRecord {
+  to: string;
+  code: string;
+}
+
+// Reads every record in the capture sink once, without polling (empty if
+// nothing has been sent yet) -- for asserting an address was never sent a
+// code (54.3.6.1).
+export async function readCapturedEmails(): Promise<CapturedEmailRecord[]> {
+  const raw = await readFile(EMAIL_CAPTURE_SINK_PATH, "utf-8").catch(() => "");
+  return raw
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as CapturedEmailRecord);
+}
+
 // Polls the capture sink for the newest verification code sent to `email`
 // (JSONL, last matching line wins -- see captureEmail).
 export async function readCapturedCode(email: string): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
-    const raw = await readFile(EMAIL_CAPTURE_SINK_PATH, "utf-8").catch(() => "");
-    const records = raw
-      .split("\n")
-      .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as { to: string; code: string });
+    const records = await readCapturedEmails();
     const match = records.filter((record) => record.to === email).pop();
     if (match) return match.code;
     await new Promise((resolve) => setTimeout(resolve, 200));

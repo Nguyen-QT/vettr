@@ -123,6 +123,11 @@ export interface E2eFixture {
   clientLoginSessionId: string;
   onboardedClientSessionId: string;
   imageClientSessionId: string;
+  // A dedicated CLIENT Account eligible for passwordless sign-in (54.3.6.1)
+  // -- the only fixture client-auth.spec.ts drives the real OTP screen
+  // with, so its EmailOtpChallenge row and the Sessions sign-in creates are
+  // never shared with another spec.
+  otpClientEmail: string;
   // A dynamically-dated (always "today"), already-started APPROVED
   // booking for the artist dashboard spec (Phase 22).
   dashboardTodayClientHandle: string;
@@ -181,6 +186,11 @@ async function cleanupStaleE2eFixtures(client: Client) {
     [E2E_FIXTURE_EMAIL_PATTERN]
   );
   await client.query(`DELETE FROM "ClientProfile" WHERE email LIKE $1`, [
+    E2E_FIXTURE_EMAIL_PATTERN,
+  ]);
+  // No FK to Account/ClientProfile (54.3.1.1), so the deletes above never
+  // reach it -- a leftover row would hold the 60s cooldown/24h cap.
+  await client.query(`DELETE FROM "EmailOtpChallenge" WHERE email LIKE $1`, [
     E2E_FIXTURE_EMAIL_PATTERN,
   ]);
   await client.query(`DELETE FROM "Artist" WHERE email LIKE $1`, [
@@ -1010,6 +1020,29 @@ export default async function globalSetup() {
     [imageClientSessionId, sessionExpiresAt, imageClientAccountId]
   );
 
+  // A CLIENT Account with a linked ClientProfile -- exactly what
+  // requestClientSignInCode requires before it issues a code (54.3.6.1).
+  // No booking: the sign-in spec only asserts the dashboard renders. Still
+  // gets a password hash since passwordHash stays NOT NULL until 54.8.1.1.
+  const otpClientId = randomUUID();
+  const otpClientEmail = "e2e-client-otp@example.com";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [otpClientId, "e2e_client_otp", otpClientEmail]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
+    [
+      randomUUID(),
+      otpClientEmail,
+      hashPasswordForFixture("e2e-test-password-123"),
+      otpClientId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -1030,6 +1063,7 @@ export default async function globalSetup() {
       flaggedClientId,
       imageClientId,
       dashboardTodayClientId,
+      otpClientId,
     ],
     bookingRequestIds: [
       approveRequestId,
@@ -1081,6 +1115,7 @@ export default async function globalSetup() {
     clientLoginSessionId,
     onboardedClientSessionId,
     imageClientSessionId,
+    otpClientEmail,
     maxEndTimeClientHandle,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
