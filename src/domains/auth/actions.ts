@@ -29,10 +29,12 @@ import { signInClientWithEmailOtp } from "./services/signInClientWithEmailOtp";
 import { signupClient } from "./services/signupClient";
 import { switchActiveRole } from "./services/switchActiveRole";
 import { verifyEmailCode } from "./services/verifyEmailCode";
+import { setSessionCookie } from "./sessionCookie";
 import type { SessionWithAccount } from "./types";
 
 // Never includes the raw sessionId -- that only ever lives in the
-// httpOnly cookie set below, not in anything sent back to client code.
+// httpOnly cookie set by setSessionCookie, not in anything sent back to
+// client code.
 export type LoginActionResult =
   | { success: true; artistId: string }
   | { success: false; error: string };
@@ -56,17 +58,6 @@ export type ResendVerificationCodeActionResult =
 export type RequestClientSignInCodeActionResult =
   | { success: true }
   | { success: false; error: string };
-
-async function setSessionCookie(sessionId: string, expiresAt: Date) {
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, sessionId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    expires: expiresAt,
-  });
-}
 
 // Controller/Action boundary (CLAUDE.md 5.1.3): validates structurally,
 // delegates to loginArtist for the actual credential check, then sets
