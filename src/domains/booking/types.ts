@@ -112,6 +112,28 @@ export type RequestBookingVerificationCodeResult =
   | { success: true }
   | { success: false; error: string };
 
+// The CLIENT session a redeemed code issued -- only what the controller
+// needs to set the cookie. auth's clientProfileId stays inside booking.
+export interface VerifiedClientSession {
+  sessionId: string;
+  expiresAt: Date;
+}
+
+// submitBookingRequestWithEmailOtp (54.5.2.5): the controller's parsed
+// draft, the artist it already looked up, and the emailed code.
+export type SubmitBookingRequestWithEmailOtpInput = ClientBookingInput & {
+  artistId: string;
+  code: string;
+};
+
+// session is set whenever the code was redeemed -- on success, and when the
+// booking write failed after verification -- so the controller sets the
+// cookie whenever it's present and the client retries via the signed-in
+// path with no second code. null means no session was issued.
+export type SubmitBookingRequestWithEmailOtpResult =
+  | { success: true; bookingRequestId: string; session: VerifiedClientSession }
+  | { success: false; error: string; session: VerifiedClientSession | null };
+
 // Requests the artist dashboard shows because they need action:
 // PENDING (never reviewed) or AWAITING_SLOT_CONFIRMATION (a proposed
 // double-slot booking waiting on the artist's off-platform confirmation,

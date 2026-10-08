@@ -73,6 +73,12 @@ export const REQUEST_NOT_FOUND_ERROR_MESSAGE = "This request could not be found.
 export const CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong submitting your request. Please try again.";
 
+// submitBookingRequestWithEmailOtp (54.5.2.5): the code was redeemed and the
+// session issued, but the booking write failed -- distinct copy so the
+// client knows the code step is done and a resubmit needs no new code.
+export const BOOKING_FAILED_AFTER_VERIFICATION_ERROR_MESSAGE =
+  "Your email is verified, but your request didn't go through. Please submit it again. You won't need a new code.";
+
 export const REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE =
   "This request has already been cancelled, declined, or completed.";
 
