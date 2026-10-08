@@ -96,6 +96,17 @@ export interface RequestClientSignInCodeInput {
 // accounts. Only a DB failure differs, with a retryable message.
 export type RequestClientSignInCodeResult = { success: true } | { success: false; error: string };
 
+// requestBookingSubmissionCode (54.5.2.1)
+export interface RequestBookingSubmissionCodeInput {
+  email: string;
+}
+
+// Sent, cooldown, cap and failed send are all the same success -- only a
+// DB failure differs, with a retryable message.
+export type RequestBookingSubmissionCodeResult =
+  | { success: true }
+  | { success: false; error: string };
+
 // signInClientWithEmailOtp (54.3.2.7) -- resolves to ClientAuthResult, the
 // same shape verifyEmailCode returns, so the action sets the cookie the
 // same way.

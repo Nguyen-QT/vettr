@@ -64,6 +64,11 @@ export const EMAIL_OTP_SEND_TIMEOUT_MS = 1000;
 export const REQUEST_SIGN_IN_CODE_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong sending your sign-in code. Please try again.";
 
+// Retry-oriented message for an unexpected DB failure only -- a cooldown,
+// cap or failed send is the same success (54.5.2.1).
+export const REQUEST_BOOKING_SUBMISSION_CODE_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong sending your verification code. Please try again.";
+
 // Deliberately generic -- a wrong, expired, consumed, capped or
 // other-purpose code and a valid code for an ineligible account all return
 // this, so redeeming an EmailOtpChallenge code can't enumerate accounts or
