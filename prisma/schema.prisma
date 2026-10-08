@@ -65,10 +65,14 @@ enum PaymentMethod {
 // Exactly one of artistId/clientProfileId is set, matching role; that
 // pairing is an application-level rule (see the auth domain service),
 // not something this schema itself enforces.
+//
+// passwordHash is null for a passwordless (email-code) CLIENT account
+// (54.5); artists keep passwords. 54.8.1.1 nulls the remaining client
+// hashes and adds the role CHECK (ARTIST => NOT NULL, CLIENT => NULL).
 model Account {
   id           String      @id @default(cuid())
   email        String      @unique
-  passwordHash String
+  passwordHash String?
   role         AccountRole
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -394,6 +398,7 @@ enum AuditEventType {
   ROLE_SWITCH
   CLIENT_PROFILE_LINK
   EMAIL_OTP_SIGN_IN
+  EMAIL_OTP_BOOKING_VERIFICATION
 }
 
 enum AuditEventOutcome {
@@ -414,6 +419,9 @@ enum AuditReasonCode {
   CLIENT_PROFILE_MATCHED_EXISTING
   INVALID_EMAIL_OTP
   SIGNED_IN_WITH_EMAIL_OTP
+  CLIENT_ACCOUNT_AND_PROFILE_CREATED
+  CLIENT_ACCOUNT_LINKED_TO_EXISTING_PROFILE
+  INSTAGRAM_HANDLE_TAKEN
 }
 
 model AuditEvent {
