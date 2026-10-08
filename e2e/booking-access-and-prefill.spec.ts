@@ -19,11 +19,20 @@ test.describe("logged-in client booking & search access", () => {
     await loginAsClient(page, fixture.clientLoginSessionId);
     await page.goto("/client");
     await expect(page).toHaveURL("http://localhost:3000/client");
+    // Hydrated before submitting -- a pre-hydration click would natively
+    // submit the noValidate form instead of running useFindArtist.
+    await page.waitForLoadState("networkidle");
 
-    await page.getByRole("link", { name: "Find an artist" }).click();
+    // Inline finder (54.4.6.2), not a link to the public directory.
+    await expect(page.locator('a[href="/artists"]')).toHaveCount(0);
+    const finder = page.getByRole("region", { name: "Find an artist" });
+    await finder.getByLabel("Artist handle").fill(`@${fixture.artistHandle}`);
+    await finder.getByRole("button", { name: "Find artist" }).click();
 
-    await expect(page).toHaveURL(/\/artists$/);
-    await expect(page.getByRole("link", { name: /E2E Fixture Artist/ })).toBeVisible();
+    await expect(page).toHaveURL(`http://localhost:3000/@${fixture.artistHandle}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "E2E Fixture Artist" })
+    ).toBeVisible();
   });
 
   test("prefills and locks the booking form's known contact fields for a signed-in client", async ({
