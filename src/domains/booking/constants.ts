@@ -68,6 +68,11 @@ export const CANCELLATION_WINDOW_HOURS = 48;
 
 export const REQUEST_NOT_FOUND_ERROR_MESSAGE = "This request could not be found.";
 
+// createBookingRequest (54.5.2.3): every failure is retryable and gets the
+// same copy -- the cause is in the ops log, never the response.
+export const CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong submitting your request. Please try again.";
+
 export const REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE =
   "This request has already been cancelled, declined, or completed.";
 
