@@ -260,7 +260,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.4.1.1–54.4.3.1** Data/Domain/Controller — N/A.
     - [x] **54.4.4.1** UI Primitive — `directory/components/FindArtistForm.tsx`.
-    - [ ] **54.4.4.2** UI Primitive — `src/components/ui/portal-gate-section.tsx`.
+    - [x] **54.4.4.2** UI Primitive — `src/components/ui/portal-gate-section.tsx`.
     - [ ] **54.4.5.1** Domain Hook — `directory/hooks/useFindArtist` (normalise, `router.push('/@'+handle)`) (+ tests).
     - [ ] **54.4.6.1** View & Route — gate in `src/app/page.tsx` (`activeRole` redirect, finder, inline `ClientSignInForm`, artist sign-in link); `e2e/portal-gate.spec.ts` replaces `landing-and-directory.spec.ts` (incl. a seeded dual-role CLIENT-active session redirect) + `toHaveScreenshot()`.
     - [ ] **54.4.6.2** View & Route — client portal "Find an artist" link becomes the inline finder; update its spec.
