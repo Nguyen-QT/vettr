@@ -161,3 +161,19 @@ test.describe("private portal gate at /", () => {
     });
   });
 });
+
+// The public directory is gone (54.4.6.3) with no redirect -- the old URL
+// is an honest 404, whose "Go home" link leads back to the gate.
+test.describe("removed public directory (54.4.6.3)", () => {
+  test("/artists returns the themed 404 instead of redirecting", async ({ page }) => {
+    // goto reports the final response after any redirects, so a 404 here
+    // also proves /artists isn't redirected anywhere.
+    const response = await page.goto("/artists");
+
+    expect(response?.status()).toBe(404);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Page not found" })
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Go home" })).toHaveAttribute("href", "/");
+  });
+});
