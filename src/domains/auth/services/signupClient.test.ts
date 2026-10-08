@@ -111,7 +111,7 @@ describe("signupClient", () => {
       clientProfileId: CLIENT_PROFILE_ID,
     });
     expect(data).not.toHaveProperty("emailVerifiedAt");
-    expect(await verifyPassword(PASSWORD, data.passwordHash)).toBe(true);
+    expect(await verifyPassword(PASSWORD, data.passwordHash ?? null)).toBe(true);
   });
 
   it("does not create a session", async () => {
