@@ -115,6 +115,15 @@ export interface SignInClientWithEmailOtpInput {
   code: string;
 }
 
+// verifyEmailOtpAndProvisionClient (54.5.2.2) -- resolves to
+// ClientAuthResult too. instagramHandle is the draft's, already parsed by
+// instagramHandleSchema; it's only used when a brand-new ClientProfile is
+// created.
+export interface VerifyEmailOtpAndProvisionClientInput {
+  email: string;
+  code: string;
+  instagramHandle: string;
+}
 
 // recordAuditEvent (CLAUDE.md 27.5.2.1) -- literal unions kept structurally
 // in sync by hand with the AuditEvent* enums in schema.prisma.
@@ -122,7 +131,8 @@ export type AuditEventTypeValue =
   | "LOGIN_FAILED"
   | "ROLE_SWITCH"
   | "CLIENT_PROFILE_LINK"
-  | "EMAIL_OTP_SIGN_IN";
+  | "EMAIL_OTP_SIGN_IN"
+  | "EMAIL_OTP_BOOKING_VERIFICATION";
 
 export type AuditEventOutcomeValue = "SUCCESS" | "REJECTED";
 
@@ -138,7 +148,10 @@ export type AuditReasonCodeValue =
   | "CLIENT_PROFILE_CREATED"
   | "CLIENT_PROFILE_MATCHED_EXISTING"
   | "INVALID_EMAIL_OTP"
-  | "SIGNED_IN_WITH_EMAIL_OTP";
+  | "SIGNED_IN_WITH_EMAIL_OTP"
+  | "CLIENT_ACCOUNT_AND_PROFILE_CREATED"
+  | "CLIENT_ACCOUNT_LINKED_TO_EXISTING_PROFILE"
+  | "INSTAGRAM_HANDLE_TAKEN";
 
 export interface RecordAuditEventInput {
   eventType: AuditEventTypeValue;
