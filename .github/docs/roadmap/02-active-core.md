@@ -262,7 +262,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.4.4.1** UI Primitive — `directory/components/FindArtistForm.tsx`.
     - [x] **54.4.4.2** UI Primitive — `src/components/ui/portal-gate-section.tsx`.
     - [x] **54.4.5.1** Domain Hook — `directory/hooks/useFindArtist` (normalise, `router.push('/@'+handle)`) (+ tests).
-    - [ ] **54.4.6.1** View & Route — gate in `src/app/page.tsx` (`activeRole` redirect, finder, inline `ClientSignInForm`, artist sign-in link); `e2e/portal-gate.spec.ts` replaces `landing-and-directory.spec.ts` (incl. a seeded dual-role CLIENT-active session redirect) + `toHaveScreenshot()`.
+    - [x] **54.4.6.1** View & Route — gate in `src/app/page.tsx` (`activeRole` redirect, finder, inline `ClientSignInForm`, artist sign-in link); `e2e/portal-gate.spec.ts` replaces `landing-and-directory.spec.ts` (incl. a seeded dual-role CLIENT-active session redirect) + `toHaveScreenshot()`. Confirmed additions: `directory/components/FindArtistContainer.tsx`; a session-lookup failure fails open to the signed-out gate (non-PII log, `unstable_rethrow` first so `cookies()`'s dynamic-usage signal survives `next build`) (+ `src/app/page.test.ts`); a dedicated `gateOtpClientEmail` fixture so the gate's full inline sign-in never shares `otpClientEmail`'s challenge row.
     - [ ] **54.4.6.2** View & Route — client portal "Find an artist" link becomes the inline finder; update its spec.
     - [ ] **54.4.6.3** View & Route — delete `src/app/artists/page.tsx`, add a `redirects()` entry `/artists` → `/`, assert it in e2e.
 - [ ] **54.5: Email-Code-Gated Booking Submission & Wizard Reorder**
