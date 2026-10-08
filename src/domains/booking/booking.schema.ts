@@ -10,6 +10,7 @@ import {
   dateOfBirthSchema,
   instagramHandleSchema,
 } from "@/lib/clientProfileValidation";
+import { normalizedEmailSchema } from "@/lib/email";
 
 import {
   AESTHETIC_TAG_OPTIONS,
@@ -251,6 +252,37 @@ export const clientBookingInputSchema = z
           'Please describe your idea in the notes field when selecting "Other".',
       });
     }
+  });
+
+// An untouched optional <input> reports "" via react-hook-form, not
+// undefined, and clientBookingInputSchema's min(1) rejects that -- here a
+// blank or whitespace-only phone just means "not provided" (54.5.3.1).
+const optionalPhoneSchema = z
+  .string()
+  .trim()
+  .transform((phone) => phone || undefined)
+  .optional();
+
+// The email-code booking draft (54.5.3.1): clientBookingInputSchema's
+// fields and refinements, with the email normalised (one inbox, one
+// EmailOtpChallenge row -- see src/lib/email.ts) and the empty-phone fix.
+// safeExtend, not extend: Zod refuses to extend a refined object, and this
+// keeps the superRefine above as the one copy of the draft rules. Parsed by
+// requestBookingVerificationCodeAction (54.5.3.4). No artistId or
+// clientProfileId -- unknown keys are stripped, and identity comes from the
+// route and the session or code (validation.md Sec2). The old wizard keeps
+// clientBookingInputSchema until 54.5.6.1 switches over.
+export const bookingRequestDraftInputSchema = clientBookingInputSchema.safeExtend({
+  email: normalizedEmailSchema,
+  phone: optionalPhoneSchema,
+});
+
+// The draft plus the emailed code, for submitBookingRequestWithCodeAction
+// (54.5.3.4). The code stays a string so leading zeros survive -- same rule
+// as auth's verifyClientSignInCodeInputSchema.
+export const submitBookingRequestWithCodeInputSchema =
+  bookingRequestDraftInputSchema.safeExtend({
+    code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
   });
 
 // Structural validity only -- see services/updateClientProfile.ts for

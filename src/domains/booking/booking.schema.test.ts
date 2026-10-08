@@ -1,9 +1,41 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bookingRequestDraftInputSchema,
   clientBookingInputSchema,
   designReferenceImagesSchema,
+  submitBookingRequestWithCodeInputSchema,
 } from "./booking.schema";
+
+const validPayload = {
+  instagramHandle: "nailartist",
+  designReferenceImageUrls: ["https://files.example.com/ref-1.png"],
+  tier: "TIER_2" as const,
+  clientBudgetRange: { minPrice: 50, maxPrice: 100 },
+  designTags: ["fine-line-detail" as const],
+  email: "client@example.com",
+  firstName: "Jamie",
+  lastName: "Rivera",
+  dateOfBirth: "2000-01-01",
+  requestedDate: "2027-01-01",
+  requestedTime: "11:00" as const,
+  paymentMethod: "CARD" as const,
+};
+
+const freestylePayload = {
+  instagramHandle: "nailartist",
+  designReferenceImageUrls: ["https://files.example.com/ref-1.png"],
+  tier: "FREESTYLE" as const,
+  clientBudgetRange: { minPrice: 50, maxPrice: 500 },
+  aestheticTags: ["watercolor-blend" as const],
+  email: "client@example.com",
+  firstName: "Jamie",
+  lastName: "Rivera",
+  dateOfBirth: "2000-01-01",
+  requestedDate: "2027-01-01",
+  requestedTime: "11:00" as const,
+  paymentMethod: "CARD" as const,
+};
 
 describe("designReferenceImagesSchema", () => {
   it("rejects an empty array", () => {
@@ -49,36 +81,6 @@ describe("designReferenceImagesSchema", () => {
 });
 
 describe("clientBookingInputSchema", () => {
-  const validPayload = {
-    instagramHandle: "nailartist",
-    designReferenceImageUrls: ["https://files.example.com/ref-1.png"],
-    tier: "TIER_2" as const,
-    clientBudgetRange: { minPrice: 50, maxPrice: 100 },
-    designTags: ["fine-line-detail" as const],
-    email: "client@example.com",
-    firstName: "Jamie",
-    lastName: "Rivera",
-    dateOfBirth: "2000-01-01",
-    requestedDate: "2027-01-01",
-    requestedTime: "11:00" as const,
-    paymentMethod: "CARD" as const,
-  };
-
-  const freestylePayload = {
-    instagramHandle: "nailartist",
-    designReferenceImageUrls: ["https://files.example.com/ref-1.png"],
-    tier: "FREESTYLE" as const,
-    clientBudgetRange: { minPrice: 50, maxPrice: 500 },
-    aestheticTags: ["watercolor-blend" as const],
-    email: "client@example.com",
-    firstName: "Jamie",
-    lastName: "Rivera",
-    dateOfBirth: "2000-01-01",
-    requestedDate: "2027-01-01",
-    requestedTime: "11:00" as const,
-    paymentMethod: "CARD" as const,
-  };
-
   it("accepts the minimum required fields for a non-FREESTYLE tier", () => {
     expect(clientBookingInputSchema.safeParse(validPayload).success).toBe(true);
   });
@@ -356,5 +358,148 @@ describe("clientBookingInputSchema", () => {
       clientMaxEndTime: "not-a-time",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// The draft extends clientBookingInputSchema, so the field-by-field matrix
+// above still applies -- these prove the two overrides (54.5.3.1) and that
+// the base refinements and key stripping survive the extension.
+describe("bookingRequestDraftInputSchema", () => {
+  it("accepts the minimum required fields for a non-FREESTYLE tier", () => {
+    expect(bookingRequestDraftInputSchema.safeParse(validPayload).success).toBe(true);
+  });
+
+  it("accepts the minimum required fields for FREESTYLE", () => {
+    expect(bookingRequestDraftInputSchema.safeParse(freestylePayload).success).toBe(true);
+  });
+
+  it("normalises the email", () => {
+    const result = bookingRequestDraftInputSchema.safeParse({
+      ...validPayload,
+      email: "  Client@Example.COM ",
+    });
+    expect(result.success && result.data.email).toBe("client@example.com");
+  });
+
+  it("rejects an invalid email with the generic message", () => {
+    const result = bookingRequestDraftInputSchema.safeParse({
+      ...validPayload,
+      email: "not-an-email",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe("Enter a valid email address.");
+  });
+
+  it.each(["", "   "])("treats phone %j as not provided", (phone) => {
+    const result = bookingRequestDraftInputSchema.safeParse({ ...validPayload, phone });
+    expect(result.success).toBe(true);
+    expect(result.data?.phone).toBeUndefined();
+  });
+
+  it("trims a real phone number", () => {
+    const result = bookingRequestDraftInputSchema.safeParse({
+      ...validPayload,
+      phone: " +1 555 0100 ",
+    });
+    expect(result.success && result.data.phone).toBe("+1 555 0100");
+  });
+
+  it("accepts an omitted phone", () => {
+    const result = bookingRequestDraftInputSchema.safeParse(validPayload);
+    expect(result.success).toBe(true);
+    expect(result.data?.phone).toBeUndefined();
+  });
+
+  it.each([
+    ["a past requested date", { requestedDate: "2020-01-01" }, "requestedDate"],
+    [
+      "a must-finish-by time under the minimum gap",
+      { requestedTime: "11:00" as const, clientMaxEndTime: "12:00" },
+      "clientMaxEndTime",
+    ],
+    ["no design tags", { designTags: undefined }, "designTags"],
+    ["OTHER with no notes", { designTags: ["OTHER" as const] }, "clientNotes"],
+  ])("keeps the base refinement: rejects %s", (_, override, path) => {
+    const result = bookingRequestDraftInputSchema.safeParse({ ...validPayload, ...override });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual([path]);
+  });
+
+  it("strips client-supplied identity keys", () => {
+    const result = bookingRequestDraftInputSchema.safeParse({
+      ...validPayload,
+      artistId: "artist-hostile",
+      clientProfileId: "profile-hostile",
+      accountId: "account-hostile",
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).not.toHaveProperty("artistId");
+    expect(result.data).not.toHaveProperty("clientProfileId");
+    expect(result.data).not.toHaveProperty("accountId");
+  });
+});
+
+describe("submitBookingRequestWithCodeInputSchema", () => {
+  const validSubmitPayload = { ...validPayload, code: "123456" };
+
+  it("accepts the draft plus a code, with the email normalised", () => {
+    const result = submitBookingRequestWithCodeInputSchema.safeParse({
+      ...validSubmitPayload,
+      email: "  Client@Example.COM ",
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.email).toBe("client@example.com");
+    expect(result.data?.code).toBe("123456");
+  });
+
+  it("keeps a leading-zero code as a string", () => {
+    const result = submitBookingRequestWithCodeInputSchema.safeParse({
+      ...validSubmitPayload,
+      code: "001234",
+    });
+    expect(result.success && result.data.code).toBe("001234");
+  });
+
+  it.each(["12345", "1234567", "12a456", "", "123 56", " 123456"])(
+    "rejects code %j",
+    (code) => {
+      expect(
+        submitBookingRequestWithCodeInputSchema.safeParse({ ...validSubmitPayload, code })
+          .success
+      ).toBe(false);
+    }
+  );
+
+  it("rejects a missing code", () => {
+    expect(submitBookingRequestWithCodeInputSchema.safeParse(validPayload).success).toBe(false);
+  });
+
+  it("treats a blank phone as not provided", () => {
+    const result = submitBookingRequestWithCodeInputSchema.safeParse({
+      ...validSubmitPayload,
+      phone: "",
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.phone).toBeUndefined();
+  });
+
+  it("keeps the base refinements: rejects a past requested date", () => {
+    const result = submitBookingRequestWithCodeInputSchema.safeParse({
+      ...validSubmitPayload,
+      requestedDate: "2020-01-01",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(["requestedDate"]);
+  });
+
+  it("strips client-supplied identity keys", () => {
+    const result = submitBookingRequestWithCodeInputSchema.safeParse({
+      ...validSubmitPayload,
+      artistId: "artist-hostile",
+      clientProfileId: "profile-hostile",
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).not.toHaveProperty("artistId");
+    expect(result.data).not.toHaveProperty("clientProfileId");
   });
 });
