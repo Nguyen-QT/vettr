@@ -19,6 +19,7 @@ import {
   confirmProposedBooking,
   type ConfirmProposedBookingResult,
 } from "./services/confirmProposedBooking";
+import { createBookingRequest } from "./services/createBookingRequest";
 import { generateResponseMessage } from "./services/generateResponseMessage";
 import { markAppointmentCompleted } from "./services/markAppointmentCompleted";
 import { markAppointmentNoShow } from "./services/markAppointmentNoShow";
@@ -123,13 +124,36 @@ export async function submitBookingRequest(
 
   // A signed-in client's booking always attaches to their own
   // ClientProfile (CLAUDE.md 6.1) -- the booking form disables the
-  // contact/onboarding fields in that case, but a disabled <input> can
-  // still be re-enabled client-side, so this ignores whatever
-  // instagramHandle/email/phone/firstName/lastName/dateOfBirth came in
-  // the request body entirely rather than trusting it to match/upsert
-  // a profile. A signed-out/guest submission (no session) keeps the
-  // original by-handle upsert.
+  // contact fields in that case, but a disabled <input> can still be
+  // re-enabled client-side, so the instagramHandle/email in the request
+  // body never reach the write. createBookingRequest (54.5.2.3) fills
+  // only the onboarding fields still blank on the profile (CLAUDE.md
+  // 6.2), in one transaction with the request itself. Built field by
+  // field, never spread, same as submitBookingRequestWithEmailOtp.
   const sessionClientProfileId = await requireClientProfileId();
+  if (sessionClientProfileId) {
+    return createBookingRequest({
+      clientProfileId: sessionClientProfileId,
+      artistId: artist.id,
+      designReferenceImageUrls: data.designReferenceImageUrls,
+      tier: data.tier,
+      clientBudgetRange: data.clientBudgetRange,
+      designTags: data.designTags,
+      aestheticTags: data.aestheticTags,
+      phone: data.phone,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      dateOfBirth: data.dateOfBirth,
+      clientNotes: data.clientNotes,
+      requestedDate: data.requestedDate,
+      requestedTime: data.requestedTime,
+      clientMaxEndTime: data.clientMaxEndTime,
+      paymentMethod: data.paymentMethod,
+    });
+  }
+
+  // Unverified guest path (no CLIENT session) -- removed by 54.6.3.1.
+  //
   // Unlike requestedStartTime elsewhere in this file (a real time-of-day
   // the "no timezone handling yet" placeholder scope applies to),
   // dateOfBirth is a pure calendar date with no time-of-day meaning at
@@ -140,47 +164,18 @@ export async function submitBookingRequest(
   // check.
   const dateOfBirth = new Date(`${data.dateOfBirth}T00:00:00.000Z`);
 
-  let client;
-  if (sessionClientProfileId) {
-    client = await prisma.clientProfile.findUnique({
-      where: { id: sessionClientProfileId },
-    });
-    if (!client) {
-      return { success: false, error: "Your account could not be found." };
-    }
-
-    // Fills in onboarding fields the client hasn't provided yet
-    // (CLAUDE.md 6.2) -- only ever fills a blank on the existing
-    // profile, never overwrites an already-set value.
-    const fillableFields: {
-      firstName?: string;
-      lastName?: string;
-      dateOfBirth?: Date;
-    } = {};
-    if (!client.firstName) fillableFields.firstName = data.firstName;
-    if (!client.lastName) fillableFields.lastName = data.lastName;
-    if (!client.dateOfBirth) fillableFields.dateOfBirth = dateOfBirth;
-
-    if (Object.keys(fillableFields).length > 0) {
-      client = await prisma.clientProfile.update({
-        where: { id: client.id },
-        data: fillableFields,
-      });
-    }
-  } else {
-    // Redesigned matching for Phase 16 (ClientProfile.email uniqueness):
-    // by-handle first, falling back to a by-email match/merge so the
-    // same person booking under a second Instagram handle doesn't hit
-    // the new unique constraint. See resolveGuestClientProfile.
-    client = await resolveGuestClientProfile({
-      instagramHandle: data.instagramHandle,
-      email: data.email,
-      phone: data.phone,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      dateOfBirth,
-    });
-  }
+  // Redesigned matching for Phase 16 (ClientProfile.email uniqueness):
+  // by-handle first, falling back to a by-email match/merge so the
+  // same person booking under a second Instagram handle doesn't hit
+  // the new unique constraint. See resolveGuestClientProfile.
+  const client = await resolveGuestClientProfile({
+    instagramHandle: data.instagramHandle,
+    email: data.email,
+    phone: data.phone,
+    firstName: data.firstName,
+    lastName: data.lastName,
+    dateOfBirth,
+  });
 
   const bookingRequest = await prisma.bookingRequest.create({
     data: {
