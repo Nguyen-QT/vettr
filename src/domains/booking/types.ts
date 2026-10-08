@@ -81,6 +81,22 @@ export interface ClientBookingInput {
   paymentMethod: PaymentMethod;
 }
 
+// The booking write shared by the signed-in and email-code submit paths
+// (54.5.2.3). clientProfileId is the caller's trusted session or freshly
+// provisioned profile; the form's identity fields (handle, email) are
+// excluded so createBookingRequest can never write them.
+export type CreateBookingRequestInput = Omit<
+  ClientBookingInput,
+  "instagramHandle" | "email"
+> & {
+  clientProfileId: string;
+  artistId: string;
+};
+
+export type CreateBookingRequestResult =
+  | { success: true; bookingRequestId: string }
+  | { success: false; error: string };
+
 // Requests the artist dashboard shows because they need action:
 // PENDING (never reviewed) or AWAITING_SLOT_CONFIRMATION (a proposed
 // double-slot booking waiting on the artist's off-platform confirmation,
