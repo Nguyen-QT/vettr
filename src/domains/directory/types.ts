@@ -33,3 +33,13 @@ export interface PublicArtistProfile {
 export interface ArtistProfileHeaderProps {
   artist: Omit<PublicArtistProfile, "id">;
 }
+
+// Pure view props (54.4.4.1). State, validation and navigation are wired
+// in by useFindArtist (54.4.5.1).
+export interface FindArtistFormProps {
+  handle: string;
+  onHandleChange: (value: string) => void;
+  onSubmit: (event: React.SubmitEvent<HTMLFormElement>) => void;
+  isNavigating?: boolean;
+  error?: string;
+}
