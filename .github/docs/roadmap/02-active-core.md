@@ -273,8 +273,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.5.2.3** Domain Service (booking) — `services/createBookingRequest.ts` (fill blanks + PENDING create + design refs in one transaction; generic error) (+ payload-assertion tests).
     - [x] **54.5.2.4** Domain Service (booking) — `services/requestBookingVerificationCode.ts` (`validateComplexity`, then the auth send; auth mocked in tests).
     - [x] **54.5.2.5** Domain Service (booking) — `services/submitBookingRequestWithEmailOtp.ts` (+ tests for each failure split).
-    - [ ] **54.5.2.6** Domain Service (integration) — concurrent first-time provisioning (same email; same handle with different emails); double verify → one booking; handle conflict leaves the code unconsumed.
-    - [ ] **54.5.3.1** Controller/Action — schemas (normalised email, empty-phone fix, draft + `code`) (+ schema tests).
+    - [x] **54.5.2.6** Domain Service (integration) — concurrent first-time provisioning (same email; same handle with different emails); double verify → one booking; handle conflict leaves the code unconsumed.
+    - [x] **54.5.3.1** Controller/Action — schemas (normalised email, empty-phone fix, draft + `code`) (+ schema tests).
     - [ ] **54.5.3.2** Controller/Action — move `setSessionCookie` to `auth/sessionCookie.ts` (no behaviour change).
     - [ ] **54.5.3.3** Controller/Action — signed-in branch of `submitBookingRequest` delegates to `createBookingRequest` (+ controller tests).
     - [ ] **54.5.3.4** Controller/Action — `requestBookingVerificationCodeAction`/`submitBookingRequestWithCodeAction` set the cookie on success and on partial failure, ignore hostile ids (+ tests).
