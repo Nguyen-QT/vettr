@@ -268,7 +268,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 - [ ] **54.5: Email-Code-Gated Booking Submission & Wizard Reorder**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.5.1.1** Data Gateway — `Account.passwordHash` nullable; audit enum values for provisioning outcomes (`AuditEventType.EMAIL_OTP_BOOKING_VERIFICATION`; `AuditReasonCode.CLIENT_ACCOUNT_AND_PROFILE_CREATED` / `CLIENT_ACCOUNT_LINKED_TO_EXISTING_PROFILE` / `INSTAGRAM_HANDLE_TAKEN`; the other outcomes reuse `SIGNED_IN_WITH_EMAIL_OTP` / `ROLE_MISMATCH` / `NOT_LINKED_TO_CLIENT` / `CLIENT_PROFILE_ALREADY_LINKED` / `INVALID_EMAIL_OTP`; the `types.ts` audit mirrors are extended by 54.5.2.2, the first writer). No app code.
-    - [ ] **54.5.2.1** Domain Service (auth) — `requestBookingSubmissionCode` (+ tests).
+    - [x] **54.5.2.1** Domain Service (auth) — `requestBookingSubmissionCode` (+ tests).
     - [ ] **54.5.2.2** Domain Service (auth) — `verifyEmailOtpAndProvisionClient` (one transaction; P2002 → generic retry; rollback keeps the code valid) (+ tests for every outcome above).
     - [ ] **54.5.2.3** Domain Service (booking) — `services/createBookingRequest.ts` (fill blanks + PENDING create + design refs in one transaction; generic error) (+ payload-assertion tests).
     - [ ] **54.5.2.4** Domain Service (booking) — `services/requestBookingVerificationCode.ts` (`validateComplexity`, then the auth send; auth mocked in tests).
