@@ -256,7 +256,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.3.5.1** Domain Hook — `useResendCooldown` (+ tests).
     - [x] **54.3.5.2** Domain Hook — `useClientSignIn` (`redirectTo` through `safeRedirectPath`, default `/client`) (+ tests incl. open-redirect cases).
     - [x] **54.3.6.1** View & Route — `/client/login` renders the OTP container; rewrite `client-auth.spec` (code from the capture sink, wrong code, ineligible email gets the same message and leaves no sink record, logout); `dbHelpers.resetEmailOtpChallenge`; `otpClientEmail` fixture; `toHaveScreenshot()`.
-- [ ] **54.4: Private Portal Gate at `/`**
+- [x] **54.4: Private Portal Gate at `/`**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.4.1.1–54.4.3.1** Data/Domain/Controller — N/A.
     - [x] **54.4.4.1** UI Primitive — `directory/components/FindArtistForm.tsx`.
