@@ -54,9 +54,9 @@ export default async function globalTeardown() {
     fixture.clientProfileIds,
   ]);
   // EmailOtpChallenge has no FK (54.3.1.1), so nothing above cascades to
-  // the sign-in spec's challenge row (54.3.6.1).
-  await client.query(`DELETE FROM "EmailOtpChallenge" WHERE email = $1`, [
-    fixture.otpClientEmail,
+  // the sign-in specs' challenge rows (54.3.6.1, 54.4.6.1).
+  await client.query(`DELETE FROM "EmailOtpChallenge" WHERE email = ANY($1)`, [
+    [fixture.otpClientEmail, fixture.gateOtpClientEmail],
   ]);
   // ArtistWeeklyHours/ArtistScheduleOverride (CLAUDE.md 4.3) reference
   // Artist with ON DELETE RESTRICT -- must clear these before the

@@ -128,6 +128,11 @@ export interface E2eFixture {
   // with, so its EmailOtpChallenge row and the Sessions sign-in creates are
   // never shared with another spec.
   otpClientEmail: string;
+  // A second OTP-eligible CLIENT Account (54.4.6.1), driven only by
+  // portal-gate.spec.ts's inline sign-in -- specs run fullyParallel, so
+  // sharing otpClientEmail's single EmailOtpChallenge row would let
+  // client-auth.spec.ts's resets/cooldowns invalidate the gate's code.
+  gateOtpClientEmail: string;
   // A dynamically-dated (always "today"), already-started APPROVED
   // booking for the artist dashboard spec (Phase 22).
   dashboardTodayClientHandle: string;
@@ -1043,6 +1048,27 @@ export default async function globalSetup() {
     ]
   );
 
+  // Same shape as otpClientEmail above, for portal-gate.spec.ts only
+  // (see gateOtpClientEmail's comment on E2eFixture).
+  const gateOtpClientId = randomUUID();
+  const gateOtpClientEmail = "e2e-client-gate-otp@example.com";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [gateOtpClientId, "e2e_client_gate_otp", gateOtpClientEmail]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
+    [
+      randomUUID(),
+      gateOtpClientEmail,
+      hashPasswordForFixture("e2e-test-password-123"),
+      gateOtpClientId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -1064,6 +1090,7 @@ export default async function globalSetup() {
       imageClientId,
       dashboardTodayClientId,
       otpClientId,
+      gateOtpClientId,
     ],
     bookingRequestIds: [
       approveRequestId,
@@ -1116,6 +1143,7 @@ export default async function globalSetup() {
     onboardedClientSessionId,
     imageClientSessionId,
     otpClientEmail,
+    gateOtpClientEmail,
     maxEndTimeClientHandle,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
