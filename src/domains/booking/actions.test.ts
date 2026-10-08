@@ -16,6 +16,9 @@ const {
   markAppointmentNoShowMock,
   markAppointmentCompletedMock,
   updateBookingPaymentMethodMock,
+  createBookingRequestMock,
+  validateComplexityMock,
+  resolveGuestClientProfileMock,
 } = vi.hoisted(() => ({
   getCurrentSessionMock: vi.fn(),
   reviewBookingRequestMock: vi.fn(),
@@ -28,6 +31,9 @@ const {
   markAppointmentNoShowMock: vi.fn(),
   markAppointmentCompletedMock: vi.fn(),
   updateBookingPaymentMethodMock: vi.fn(),
+  createBookingRequestMock: vi.fn(),
+  validateComplexityMock: vi.fn(),
+  resolveGuestClientProfileMock: vi.fn(),
 }));
 
 vi.mock("@/domains/auth/actions", () => ({
@@ -64,6 +70,15 @@ vi.mock("./services/markAppointmentCompleted", () => ({
 vi.mock("./services/updateBookingPaymentMethod", () => ({
   updateBookingPaymentMethod: updateBookingPaymentMethodMock,
 }));
+vi.mock("./services/createBookingRequest", () => ({
+  createBookingRequest: createBookingRequestMock,
+}));
+vi.mock("./services/validateComplexity", () => ({
+  validateComplexity: validateComplexityMock,
+}));
+vi.mock("./services/resolveGuestClientProfile", () => ({
+  resolveGuestClientProfile: resolveGuestClientProfileMock,
+}));
 
 import {
   approveBookingRequest,
@@ -75,10 +90,12 @@ import {
   markAppointmentNoShowAction,
   rescheduleApprovedBookingAction,
   reviewBookingRequestAction,
+  submitBookingRequest,
   updateBookingPaymentMethodAction,
   updateClientProfileAction,
   updatePendingBookingRequestAction,
 } from "./actions";
+import { CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE } from "./constants";
 import { generateResponseMessage } from "./services/generateResponseMessage";
 
 const NOT_SIGNED_IN_AS_ARTIST = {
@@ -153,6 +170,10 @@ function expectNoMutation(): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks keeps implementations, so a rejection one test sets
+  // would otherwise leak into the next. validateComplexity is synchronous
+  // -- mockReturnValue, not mockResolvedValue.
+  validateComplexityMock.mockReturnValue({ success: true });
 });
 
 describe.each(GUARDED_ACTIONS)("%s guard", (_name, invoke) => {
@@ -784,4 +805,186 @@ describe("confirmProposedBookingAction", () => {
 
     expect(await confirmProposedBookingAction("request-1")).toEqual(failure);
   });
+});
+
+describe("submitBookingRequest", () => {
+  // Has to pass clientBookingInputSchema, which still requires the guest
+  // identity fields -- the signed-in path then drops them. Padded strings
+  // prove the parsed (trimmed) values are what get passed on; every
+  // optional field is set so toStrictEqual has no undefined keys.
+  const VALID_BOOKING_DRAFT = {
+    instagramHandle: "  @Valid.Handle ",
+    email: "client@example.com",
+    designReferenceImageUrls: ["https://example.com/ref.png"],
+    tier: "TIER_3",
+    clientBudgetRange: { minPrice: 100, maxPrice: 200 },
+    designTags: ["fine-line-detail"],
+    aestheticTags: ["watercolor-blend"],
+    phone: " 07123456789 ",
+    firstName: "  Ada ",
+    lastName: " Lovelace  ",
+    dateOfBirth: "1990-01-01",
+    clientNotes: "  floral sleeve  ",
+    requestedDate: "2099-06-01",
+    requestedTime: "14:00",
+    clientMaxEndTime: "18:00",
+    paymentMethod: "CARD",
+  };
+
+  const ARTIST_NOT_FOUND = {
+    success: false,
+    error: "This booking page could not be found.",
+  };
+
+  beforeEach(() => {
+    prismaMock.artist.findUnique.mockResolvedValue({ id: "artist-1" } as never);
+  });
+
+  function expectNoBookingWrite(): void {
+    expect(createBookingRequestMock).not.toHaveBeenCalled();
+    expect(resolveGuestClientProfileMock).not.toHaveBeenCalled();
+    expect(prismaMock.bookingRequest.create).not.toHaveBeenCalled();
+  }
+
+  it("returns the first schema issue before any lookup or write", async () => {
+    getCurrentSessionMock.mockResolvedValue(CLIENT_SESSION);
+
+    const result = await submitBookingRequest("artist-1", {
+      ...VALID_BOOKING_DRAFT,
+      designReferenceImageUrls: [],
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "At least one design reference image is required.",
+    });
+    expect(prismaMock.artist.findUnique).not.toHaveBeenCalled();
+    expect(validateComplexityMock).not.toHaveBeenCalled();
+    expectNoBookingWrite();
+  });
+
+  it("rejects an unknown artist before screening or writing", async () => {
+    getCurrentSessionMock.mockResolvedValue(CLIENT_SESSION);
+    prismaMock.artist.findUnique.mockResolvedValue(null);
+
+    expect(await submitBookingRequest("missing-artist", VALID_BOOKING_DRAFT)).toEqual(
+      ARTIST_NOT_FOUND
+    );
+    expect(prismaMock.artist.findUnique).toHaveBeenCalledWith({
+      where: { id: "missing-artist" },
+    });
+    expect(validateComplexityMock).not.toHaveBeenCalled();
+    expectNoBookingWrite();
+  });
+
+  it("passes a complexity rejection through without writing", async () => {
+    getCurrentSessionMock.mockResolvedValue(CLIENT_SESSION);
+    validateComplexityMock.mockReturnValue({ success: false, error: "Rejected." });
+
+    expect(await submitBookingRequest("artist-1", VALID_BOOKING_DRAFT)).toEqual({
+      success: false,
+      error: "Rejected.",
+    });
+    expect(validateComplexityMock.mock.calls).toStrictEqual([
+      [
+        {
+          tier: "TIER_3",
+          clientNotes: "floral sleeve",
+          designTags: ["fine-line-detail"],
+          aestheticTags: ["watercolor-blend"],
+        },
+      ],
+    ]);
+    expectNoBookingWrite();
+  });
+
+  describe("signed in as a CLIENT", () => {
+    beforeEach(() => {
+      getCurrentSessionMock.mockResolvedValue(CLIENT_SESSION);
+    });
+
+    it("delegates the parsed draft with session identity only, ignoring hostile keys", async () => {
+      createBookingRequestMock.mockResolvedValue({
+        success: true,
+        bookingRequestId: "request-1",
+      });
+
+      await submitBookingRequest("artist-1", {
+        ...VALID_BOOKING_DRAFT,
+        clientProfileId: "attacker-profile",
+        artistId: "attacker-artist",
+        accountId: "attacker-account",
+      });
+
+      // Literal values, not derived from the fixture: the names, notes and
+      // phone are the trimmed ones, and there is no instagramHandle, email
+      // or hostile key -- toStrictEqual fails on any extra key.
+      expect(createBookingRequestMock.mock.calls).toStrictEqual([
+        [
+          {
+            clientProfileId: "profile-1",
+            artistId: "artist-1",
+            designReferenceImageUrls: ["https://example.com/ref.png"],
+            tier: "TIER_3",
+            clientBudgetRange: { minPrice: 100, maxPrice: 200 },
+            designTags: ["fine-line-detail"],
+            aestheticTags: ["watercolor-blend"],
+            phone: "07123456789",
+            firstName: "Ada",
+            lastName: "Lovelace",
+            dateOfBirth: "1990-01-01",
+            clientNotes: "floral sleeve",
+            requestedDate: "2099-06-01",
+            requestedTime: "14:00",
+            clientMaxEndTime: "18:00",
+            paymentMethod: "CARD",
+          },
+        ],
+      ]);
+    });
+
+    it("writes nothing itself -- the profile fill and the create are the service's", async () => {
+      createBookingRequestMock.mockResolvedValue({
+        success: true,
+        bookingRequestId: "request-1",
+      });
+
+      await submitBookingRequest("artist-1", VALID_BOOKING_DRAFT);
+
+      expect(prismaMock.clientProfile.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.clientProfile.update).not.toHaveBeenCalled();
+      expect(prismaMock.bookingRequest.create).not.toHaveBeenCalled();
+      expect(resolveGuestClientProfileMock).not.toHaveBeenCalled();
+    });
+
+    it("passes success and the service's generic error through unchanged", async () => {
+      const created = { success: true, bookingRequestId: "request-1" };
+      createBookingRequestMock.mockResolvedValueOnce(created);
+      expect(await submitBookingRequest("artist-1", VALID_BOOKING_DRAFT)).toEqual(created);
+
+      const failure = {
+        success: false,
+        error: CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+      };
+      createBookingRequestMock.mockResolvedValueOnce(failure);
+      expect(await submitBookingRequest("artist-1", VALID_BOOKING_DRAFT)).toEqual(failure);
+    });
+  });
+
+  // Pins the existing guest path for every non-CLIENT session --
+  // 54.6.3.1 replaces it with a generic "verify your email" refusal.
+  it.each(REJECTED_CLIENT_SESSIONS)(
+    "never takes the signed-in path when %s",
+    async (_label, current) => {
+      getCurrentSessionMock.mockResolvedValue(current);
+      resolveGuestClientProfileMock.mockResolvedValue({ id: "guest-profile" });
+      prismaMock.bookingRequest.create.mockResolvedValue({ id: "guest-request" } as never);
+
+      const result = await submitBookingRequest("artist-1", VALID_BOOKING_DRAFT);
+
+      expect(createBookingRequestMock).not.toHaveBeenCalled();
+      expect(resolveGuestClientProfileMock).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ success: true, bookingRequestId: "guest-request" });
+    }
+  );
 });
