@@ -277,7 +277,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.5.3.1** Controller/Action — schemas (normalised email, empty-phone fix, draft + `code`) (+ schema tests).
     - [x] **54.5.3.2** Controller/Action — move `setSessionCookie` to `auth/sessionCookie.ts` (no behaviour change).
     - [x] **54.5.3.3** Controller/Action — signed-in branch of `submitBookingRequest` delegates to `createBookingRequest` (+ controller tests).
-    - [ ] **54.5.3.4** Controller/Action — `requestBookingVerificationCodeAction`/`submitBookingRequestWithCodeAction` set the cookie on success and on partial failure, ignore hostile ids (+ tests).
+    - [x] **54.5.3.4** Controller/Action — `requestBookingVerificationCodeAction`/`submitBookingRequestWithCodeAction` set the cookie on success and on partial failure, ignore hostile ids (+ tests).
     - [ ] **54.5.4.1** UI Primitive — extract `TierSelectFields`/`IntakeFields`/`DateSlotFields` from `VisualBookingForm` (behaviour and e2e unchanged).
     - [ ] **54.5.4.2** UI Primitive — `BookingDetailsFields`.
     - [ ] **54.5.4.3** UI Primitive — `InlineBookingVerification`.

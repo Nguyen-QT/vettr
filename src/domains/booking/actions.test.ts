@@ -1,8 +1,9 @@
 import { prismaMock } from "@/testUtils/prismaMock";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import type { SessionWithAccount } from "@/domains/auth/types";
+import { Prisma } from "@/generated/prisma/client";
 
 const {
   getCurrentSessionMock,
@@ -19,6 +20,9 @@ const {
   createBookingRequestMock,
   validateComplexityMock,
   resolveGuestClientProfileMock,
+  requestBookingVerificationCodeMock,
+  submitBookingRequestWithEmailOtpMock,
+  setSessionCookieMock,
 } = vi.hoisted(() => ({
   getCurrentSessionMock: vi.fn(),
   reviewBookingRequestMock: vi.fn(),
@@ -34,10 +38,16 @@ const {
   createBookingRequestMock: vi.fn(),
   validateComplexityMock: vi.fn(),
   resolveGuestClientProfileMock: vi.fn(),
+  requestBookingVerificationCodeMock: vi.fn(),
+  submitBookingRequestWithEmailOtpMock: vi.fn(),
+  setSessionCookieMock: vi.fn(),
 }));
 
 vi.mock("@/domains/auth/actions", () => ({
   getCurrentSession: getCurrentSessionMock,
+}));
+vi.mock("@/domains/auth/sessionCookie", () => ({
+  setSessionCookie: setSessionCookieMock,
 }));
 vi.mock("./services/reviewBookingRequest", () => ({
   reviewBookingRequest: reviewBookingRequestMock,
@@ -79,6 +89,12 @@ vi.mock("./services/validateComplexity", () => ({
 vi.mock("./services/resolveGuestClientProfile", () => ({
   resolveGuestClientProfile: resolveGuestClientProfileMock,
 }));
+vi.mock("./services/requestBookingVerificationCode", () => ({
+  requestBookingVerificationCode: requestBookingVerificationCodeMock,
+}));
+vi.mock("./services/submitBookingRequestWithEmailOtp", () => ({
+  submitBookingRequestWithEmailOtp: submitBookingRequestWithEmailOtpMock,
+}));
 
 import {
   approveBookingRequest,
@@ -88,14 +104,19 @@ import {
   declineBookingRequest,
   markAppointmentCompletedAction,
   markAppointmentNoShowAction,
+  requestBookingVerificationCodeAction,
   rescheduleApprovedBookingAction,
   reviewBookingRequestAction,
   submitBookingRequest,
+  submitBookingRequestWithCodeAction,
   updateBookingPaymentMethodAction,
   updateClientProfileAction,
   updatePendingBookingRequestAction,
 } from "./actions";
-import { CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE } from "./constants";
+import {
+  BOOKING_FAILED_AFTER_VERIFICATION_ERROR_MESSAGE,
+  CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+} from "./constants";
 import { generateResponseMessage } from "./services/generateResponseMessage";
 
 const NOT_SIGNED_IN_AS_ARTIST = {
@@ -987,4 +1008,257 @@ describe("submitBookingRequest", () => {
       expect(result).toEqual({ success: true, bookingRequestId: "guest-request" });
     }
   );
+});
+
+// The email-code draft (54.5.3.4). Padded strings prove the parsed values
+// -- trimmed names and notes, the normalised email, the stripped "@" -- are
+// what get passed on. Every optional field is set so toStrictEqual has no
+// undefined keys.
+const VALID_CODE_DRAFT = {
+  instagramHandle: "  @Valid.Handle ",
+  email: "  Client@Example.COM ",
+  designReferenceImageUrls: ["https://example.com/ref.png"],
+  tier: "TIER_3",
+  clientBudgetRange: { minPrice: 100, maxPrice: 200 },
+  designTags: ["fine-line-detail"],
+  aestheticTags: ["watercolor-blend"],
+  phone: " 07123456789 ",
+  firstName: "  Ada ",
+  lastName: " Lovelace  ",
+  dateOfBirth: "1990-01-01",
+  clientNotes: "  floral sleeve  ",
+  requestedDate: "2099-06-01",
+  requestedTime: "14:00",
+  clientMaxEndTime: "18:00",
+  paymentMethod: "CARD",
+};
+
+const HOSTILE_IDS = {
+  clientProfileId: "attacker-profile",
+  artistId: "attacker-artist",
+  accountId: "attacker-account",
+  sessionId: "attacker-session",
+};
+
+describe("requestBookingVerificationCodeAction", () => {
+  it("returns the first schema issue without sending a code", async () => {
+    const result = await requestBookingVerificationCodeAction({
+      ...VALID_CODE_DRAFT,
+      email: "not-an-email",
+    });
+
+    expect(result).toEqual({ success: false, error: "Enter a valid email address." });
+    expect(requestBookingVerificationCodeMock).not.toHaveBeenCalled();
+    expect(setSessionCookieMock).not.toHaveBeenCalled();
+  });
+
+  it("sends only the screening fields, ignoring hostile ids, with no lookup, session or cookie", async () => {
+    requestBookingVerificationCodeMock.mockResolvedValue({ success: true });
+
+    await requestBookingVerificationCodeAction({ ...VALID_CODE_DRAFT, ...HOSTILE_IDS });
+
+    expect(requestBookingVerificationCodeMock.mock.calls).toStrictEqual([
+      [
+        {
+          email: "client@example.com",
+          tier: "TIER_3",
+          clientNotes: "floral sleeve",
+          designTags: ["fine-line-detail"],
+          aestheticTags: ["watercolor-blend"],
+        },
+      ],
+    ]);
+    expect(prismaMock.artist.findUnique).not.toHaveBeenCalled();
+    expect(getCurrentSessionMock).not.toHaveBeenCalled();
+    expect(setSessionCookieMock).not.toHaveBeenCalled();
+  });
+
+  it("passes success and service errors through unchanged", async () => {
+    requestBookingVerificationCodeMock.mockResolvedValueOnce({ success: true });
+    expect(await requestBookingVerificationCodeAction(VALID_CODE_DRAFT)).toEqual({
+      success: true,
+    });
+
+    const rejected = { success: false, error: "Rejected." };
+    requestBookingVerificationCodeMock.mockResolvedValueOnce(rejected);
+    expect(await requestBookingVerificationCodeAction(VALID_CODE_DRAFT)).toEqual(rejected);
+  });
+});
+
+describe("submitBookingRequestWithCodeAction", () => {
+  // Leading zero proves the code stays a string end to end.
+  const SUBMIT_INPUT = { ...VALID_CODE_DRAFT, code: "012345" };
+  const VERIFIED_SESSION = {
+    sessionId: "verified-session",
+    expiresAt: new Date("2099-02-01T00:00:00.000Z"),
+  };
+
+  let consoleErrorSpy: MockInstance<typeof console.error>;
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    prismaMock.artist.findUnique.mockResolvedValue({ id: "artist-1" } as never);
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  function expectNothingRedeemed(): void {
+    expect(submitBookingRequestWithEmailOtpMock).not.toHaveBeenCalled();
+    expect(setSessionCookieMock).not.toHaveBeenCalled();
+  }
+
+  it("returns the first schema issue before any lookup", async () => {
+    const result = await submitBookingRequestWithCodeAction("artist-1", {
+      ...SUBMIT_INPUT,
+      code: "12345",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Enter the 6-digit code.",
+      signedIn: false,
+    });
+    expect(prismaMock.artist.findUnique).not.toHaveBeenCalled();
+    expectNothingRedeemed();
+  });
+
+  it("rejects an unknown artist before redeeming the code", async () => {
+    prismaMock.artist.findUnique.mockResolvedValue(null);
+
+    expect(await submitBookingRequestWithCodeAction("missing-artist", SUBMIT_INPUT)).toEqual({
+      success: false,
+      error: "This booking page could not be found.",
+      signedIn: false,
+    });
+    expect(prismaMock.artist.findUnique).toHaveBeenCalledWith({
+      where: { id: "missing-artist" },
+      select: { id: true },
+    });
+    expectNothingRedeemed();
+  });
+
+  it("returns the generic error and logs the Prisma code only when the artist lookup fails", async () => {
+    prismaMock.artist.findUnique.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Timed out for client@example.com", {
+        code: "P1008",
+        clientVersion: "test",
+      })
+    );
+
+    expect(await submitBookingRequestWithCodeAction("artist-1", SUBMIT_INPUT)).toEqual({
+      success: false,
+      error: CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+      signedIn: false,
+    });
+    expect(consoleErrorSpy.mock.calls).toStrictEqual([
+      [
+        {
+          operation: "submitBookingRequestWithCodeAction",
+          reason: "artist_lookup_failed",
+          errorCode: "P1008",
+        },
+      ],
+    ]);
+    expectNothingRedeemed();
+  });
+
+  it("delegates the parsed draft, route artistId and code, ignoring hostile ids", async () => {
+    submitBookingRequestWithEmailOtpMock.mockResolvedValue({
+      success: true,
+      bookingRequestId: "request-1",
+      session: VERIFIED_SESSION,
+    });
+
+    await submitBookingRequestWithCodeAction("artist-1", { ...SUBMIT_INPUT, ...HOSTILE_IDS });
+
+    // Literal values, not derived from the fixture -- toStrictEqual fails
+    // on any extra key, so no hostile id reaches the service.
+    expect(submitBookingRequestWithEmailOtpMock.mock.calls).toStrictEqual([
+      [
+        {
+          instagramHandle: "Valid.Handle",
+          email: "client@example.com",
+          designReferenceImageUrls: ["https://example.com/ref.png"],
+          tier: "TIER_3",
+          clientBudgetRange: { minPrice: 100, maxPrice: 200 },
+          designTags: ["fine-line-detail"],
+          aestheticTags: ["watercolor-blend"],
+          phone: "07123456789",
+          firstName: "Ada",
+          lastName: "Lovelace",
+          dateOfBirth: "1990-01-01",
+          clientNotes: "floral sleeve",
+          requestedDate: "2099-06-01",
+          requestedTime: "14:00",
+          clientMaxEndTime: "18:00",
+          paymentMethod: "CARD",
+          code: "012345",
+          artistId: "artist-1",
+        },
+      ],
+    ]);
+    expect(getCurrentSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("sends a blank phone as not provided", async () => {
+    submitBookingRequestWithEmailOtpMock.mockResolvedValue({
+      success: true,
+      bookingRequestId: "request-1",
+      session: VERIFIED_SESSION,
+    });
+
+    await submitBookingRequestWithCodeAction("artist-1", { ...SUBMIT_INPUT, phone: "   " });
+
+    expect(submitBookingRequestWithEmailOtpMock.mock.calls[0]?.[0].phone).toBeUndefined();
+  });
+
+  it("sets the cookie on success and returns no session fields", async () => {
+    submitBookingRequestWithEmailOtpMock.mockResolvedValue({
+      success: true,
+      bookingRequestId: "request-1",
+      session: VERIFIED_SESSION,
+    });
+
+    const result = await submitBookingRequestWithCodeAction("artist-1", SUBMIT_INPUT);
+
+    expect(result).toStrictEqual({ success: true, bookingRequestId: "request-1" });
+    expect(setSessionCookieMock.mock.calls).toStrictEqual([
+      ["verified-session", new Date("2099-02-01T00:00:00.000Z")],
+    ]);
+  });
+
+  it("still sets the cookie when the booking fails after verification, and says so", async () => {
+    submitBookingRequestWithEmailOtpMock.mockResolvedValue({
+      success: false,
+      error: BOOKING_FAILED_AFTER_VERIFICATION_ERROR_MESSAGE,
+      session: VERIFIED_SESSION,
+    });
+
+    const result = await submitBookingRequestWithCodeAction("artist-1", SUBMIT_INPUT);
+
+    expect(result).toStrictEqual({
+      success: false,
+      error: BOOKING_FAILED_AFTER_VERIFICATION_ERROR_MESSAGE,
+      signedIn: true,
+    });
+    expect(setSessionCookieMock.mock.calls).toStrictEqual([
+      ["verified-session", new Date("2099-02-01T00:00:00.000Z")],
+    ]);
+  });
+
+  it("sets no cookie when verification fails, passing the error through", async () => {
+    const invalidCode = "That code is invalid or has expired.";
+    submitBookingRequestWithEmailOtpMock.mockResolvedValue({
+      success: false,
+      error: invalidCode,
+      session: null,
+    });
+
+    const result = await submitBookingRequestWithCodeAction("artist-1", SUBMIT_INPUT);
+
+    expect(result).toStrictEqual({ success: false, error: invalidCode, signedIn: false });
+    expect(setSessionCookieMock).not.toHaveBeenCalled();
+  });
 });

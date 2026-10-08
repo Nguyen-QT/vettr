@@ -1,15 +1,22 @@
 "use server";
 
 import { getCurrentSession } from "@/domains/auth/actions";
+import { setSessionCookie } from "@/domains/auth/sessionCookie";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
-import { REQUEST_NOT_FOUND_ERROR_MESSAGE } from "./constants";
 import {
+  CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+  REQUEST_NOT_FOUND_ERROR_MESSAGE,
+} from "./constants";
+import {
+  bookingRequestDraftInputSchema,
   clientBookingInputSchema,
   combineRequestedDateAndTime,
   paymentMethodSchema,
   rescheduleApprovedBookingInputSchema,
   reviewBookingRequestInputSchema,
+  submitBookingRequestWithCodeInputSchema,
   updateClientProfileInputSchema,
   updatePendingBookingRequestInputSchema,
 } from "./booking.schema";
@@ -23,12 +30,14 @@ import { createBookingRequest } from "./services/createBookingRequest";
 import { generateResponseMessage } from "./services/generateResponseMessage";
 import { markAppointmentCompleted } from "./services/markAppointmentCompleted";
 import { markAppointmentNoShow } from "./services/markAppointmentNoShow";
+import { requestBookingVerificationCode } from "./services/requestBookingVerificationCode";
 import { rescheduleApprovedBooking } from "./services/rescheduleApprovedBooking";
 import { resolveGuestClientProfile } from "./services/resolveGuestClientProfile";
 import {
   reviewBookingRequest,
   type ReviewBookingRequestResult,
 } from "./services/reviewBookingRequest";
+import { submitBookingRequestWithEmailOtp } from "./services/submitBookingRequestWithEmailOtp";
 import { updateBookingPaymentMethod } from "./services/updateBookingPaymentMethod";
 import { updateClientProfile } from "./services/updateClientProfile";
 import { updatePendingBookingRequest } from "./services/updatePendingBookingRequest";
@@ -38,6 +47,7 @@ import type {
   CancelBookingRequestResult,
   MarkAppointmentCompletedResult,
   MarkAppointmentNoShowResult,
+  RequestBookingVerificationCodeResult,
   RescheduleApprovedBookingResult,
   UpdateBookingPaymentMethodResult,
   UpdateClientProfileResult,
@@ -47,6 +57,7 @@ import type {
 const NOT_SIGNED_IN_ERROR_MESSAGE = "You must be signed in as a client to do that.";
 const NOT_SIGNED_IN_AS_ARTIST_ERROR_MESSAGE =
   "You must be signed in as an artist to do that.";
+const BOOKING_PAGE_NOT_FOUND_ERROR_MESSAGE = "This booking page could not be found.";
 
 async function requireClientProfileId(): Promise<string | null> {
   const session = await getCurrentSession();
@@ -80,9 +91,41 @@ async function requireOwnedRequest(
   return existing !== null && existing.artistId === artistId;
 }
 
+// submitBookingRequestWithCodeAction's artist check, run before the code is
+// redeemed so a dead page never spends it. artistId is the route's, but a
+// browser can post any value -- a non-string one fails Prisma's validation
+// and lands in the catch. Logged with the typed Prisma code only and
+// reported generically, never thrown at the UI (architecture.md Sec8.B).
+async function findBookingArtist(
+  artistId: string
+): Promise<"found" | "not_found" | "failed"> {
+  try {
+    const artist = await prisma.artist.findUnique({
+      where: { id: artistId },
+      select: { id: true },
+    });
+    return artist ? "found" : "not_found";
+  } catch (error) {
+    console.error({
+      operation: "submitBookingRequestWithCodeAction",
+      reason: "artist_lookup_failed",
+      errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+    });
+    return "failed";
+  }
+}
+
 export type SubmitBookingRequestResult =
   | { success: true; bookingRequestId: string }
   | { success: false; error: string };
+
+// Never includes the session -- its id only ever lives in the httpOnly
+// cookie, same as the auth actions. signedIn on a failure means a redeemed
+// code already set that cookie, so the caller resubmits through
+// submitBookingRequest's signed-in path with no second code.
+export type SubmitBookingRequestWithCodeResult =
+  | { success: true; bookingRequestId: string }
+  | { success: false; error: string; signedIn: boolean };
 
 export type RequestActionResult =
   | { success: true; responseMessage: string }
@@ -108,7 +151,7 @@ export async function submitBookingRequest(
 
   const artist = await prisma.artist.findUnique({ where: { id: artistId } });
   if (!artist) {
-    return { success: false, error: "This booking page could not be found." };
+    return { success: false, error: BOOKING_PAGE_NOT_FOUND_ERROR_MESSAGE };
   }
 
   const complexityCheck = validateComplexity({
@@ -207,6 +250,82 @@ export async function submitBookingRequest(
   });
 
   return { success: true, bookingRequestId: bookingRequest.id };
+}
+
+// Controller/Action boundary (54.5.3.4): validates the draft structurally,
+// then delegates to requestBookingVerificationCode (validateComplexity, then
+// auth's send) with only the fields it screens -- unknown keys are already
+// stripped, so no id in the payload goes anywhere. No artist check: the
+// caller picks the id, so it would stop nothing, and a dead page is caught
+// at submit before the code is redeemed. The result passes through
+// unchanged, so auth's identical "code sent" copy can't reveal anything.
+// Never reads the session or sets a cookie.
+export async function requestBookingVerificationCodeAction(
+  input: unknown
+): Promise<RequestBookingVerificationCodeResult> {
+  const parsed = bookingRequestDraftInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid booking request.",
+    };
+  }
+
+  const data = parsed.data;
+  return requestBookingVerificationCode({
+    email: data.email,
+    tier: data.tier,
+    clientNotes: data.clientNotes,
+    designTags: data.designTags,
+    aestheticTags: data.aestheticTags,
+  });
+}
+
+// Controller/Action boundary (54.5.3.4): validates the draft and code
+// structurally, confirms the route's artist, then delegates to
+// submitBookingRequestWithEmailOtp. Identity comes from the redeemed code
+// and artistId from the route -- the payload's ids are stripped by the
+// schema, and the route's is set last. The cookie is set whenever the
+// service returns a session: on success, and when the booking write failed
+// after the code was redeemed (architecture.md Sec6.2) -- the caller then
+// resubmits signed in, never retried here.
+export async function submitBookingRequestWithCodeAction(
+  artistId: string,
+  input: unknown
+): Promise<SubmitBookingRequestWithCodeResult> {
+  const parsed = submitBookingRequestWithCodeInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid booking request.",
+      signedIn: false,
+    };
+  }
+
+  const artist = await findBookingArtist(artistId);
+  if (artist === "not_found") {
+    return { success: false, error: BOOKING_PAGE_NOT_FOUND_ERROR_MESSAGE, signedIn: false };
+  }
+  if (artist === "failed") {
+    return {
+      success: false,
+      error: CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+      signedIn: false,
+    };
+  }
+
+  const result = await submitBookingRequestWithEmailOtp({ ...parsed.data, artistId });
+
+  if (result.session) {
+    await setSessionCookie(result.session.sessionId, result.session.expiresAt);
+  }
+
+  if (result.success) {
+    return { success: true, bookingRequestId: result.bookingRequestId };
+  }
+  return { success: false, error: result.error, signedIn: result.session !== null };
 }
 
 // Toggles an BookingRequest's status (CLAUDE.md 3.3: "Action Mutators").
