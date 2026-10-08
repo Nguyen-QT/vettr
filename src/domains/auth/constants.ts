@@ -80,6 +80,32 @@ export const INVALID_EMAIL_OTP_ERROR_MESSAGE =
 export const SIGN_IN_WITH_EMAIL_OTP_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong signing you in. Please try again.";
 
+// Post-proof outcomes of verifyEmailOtpAndProvisionClient (54.5.2.2). Each
+// is returned only after a valid BOOKING_SUBMISSION code, so only the inbox
+// owner ever sees them. An ARTIST-home account is never issued an OTP
+// session -- email access must not bypass the artist password.
+export const ARTIST_ACCOUNT_SWITCH_TO_CLIENT_VIEW_MESSAGE =
+  "This email belongs to an artist account. Sign in as an artist and switch to client view to request this booking.";
+
+export const ARTIST_ACCOUNT_SET_UP_CLIENT_PROFILE_MESSAGE =
+  "This email belongs to an artist account. Sign in as an artist and set up your client profile to request this booking.";
+
+// A CLIENT account with no ClientProfile, or a ClientProfile with this
+// email that's already linked to another account.
+export const BOOKING_EMAIL_UNAVAILABLE_ERROR_MESSAGE =
+  "This email can't be used for a booking request. Use a different email or contact the artist.";
+
+// Only a brand-new client is matched on handle -- a returning client is
+// matched by email, so this points them back at it.
+export const INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE =
+  "That Instagram handle is already linked to another client. Check the handle, or use the email you booked with before.";
+
+// Retry-oriented message for a unique conflict (P2002) or any unexpected
+// DB failure. The rollback keeps the code valid, and a retry resolves
+// through the current state (54.5.2.2).
+export const VERIFY_BOOKING_EMAIL_OTP_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong verifying your email. Please try again.";
+
 // Digits in an EmailOtpChallenge code -- matches generateEmailVerificationCode
 // and the sign-in schema's /^\d{6}$/. Caps the sanitised code input.
 export const EMAIL_OTP_CODE_LENGTH = 6;
