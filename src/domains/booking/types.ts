@@ -97,6 +97,21 @@ export type CreateBookingRequestResult =
   | { success: true; bookingRequestId: string }
   | { success: false; error: string };
 
+// requestBookingVerificationCode (54.5.2.4): the parsed draft's screening
+// fields plus the address the code goes to. Narrower than ClientBookingInput,
+// so the controller's parsed draft can be passed straight in.
+export type RequestBookingVerificationCodeInput = Pick<
+  ClientBookingInput,
+  "email" | "tier" | "clientNotes" | "designTags" | "aestheticTags"
+>;
+
+// A complexity rejection carries validateComplexity's copy; an auth failure
+// carries auth's generic retryable copy. A cooldown, the send cap or a failed
+// send are all the same success (54.5.2.1).
+export type RequestBookingVerificationCodeResult =
+  | { success: true }
+  | { success: false; error: string };
+
 // Requests the artist dashboard shows because they need action:
 // PENDING (never reviewed) or AWAITING_SLOT_CONFIRMATION (a proposed
 // double-slot booking waiting on the artist's off-platform confirmation,
