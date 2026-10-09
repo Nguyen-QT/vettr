@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, scryptSync } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { config } from "dotenv";
 import { Client } from "pg";
@@ -7,9 +7,6 @@ import { Client } from "pg";
 // generated Prisma client -- this script runs outside Next's runtime
 // via tsx, same reasoning as e2e/global-setup.ts's identical choice
 // (no "@/" path alias resolution, no Next-specific bootstrapping).
-// Mirrors e2e/global-setup.ts's hashPasswordForFixture rather than
-// importing src/domains/auth/services/hashPassword for the same
-// reason.
 //
 // Safe to re-run: cleans up accumulated test-suite pollution (vitest's
 // unit tests and Playwright's e2e tests both hit this same DATABASE_URL,
@@ -20,12 +17,6 @@ import { Client } from "pg";
 // settings use "create only if missing", onboarding fields on an
 // existing ClientProfile only fill in nulls, and BookingRequests use
 // fixed ids so re-running upserts the same rows instead of duplicating.
-
-function hashPasswordForSeed(password: string): string {
-  const salt = randomBytes(16);
-  const derivedKey = scryptSync(password, salt, 64);
-  return `${salt.toString("hex")}:${derivedKey.toString("hex")}`;
-}
 
 const DAILY_TIMES = ["11:00", "14:00", "17:30"];
 const TIERS = ["TIER_2", "TIER_3", "TIER_4", "FREESTYLE"] as const;
@@ -235,12 +226,11 @@ async function main() {
      ON CONFLICT (id) DO NOTHING`,
     [JORDAN_CLIENT_ID, "jordan_dev_client", "jordan@vettr.com"]
   );
-  const jordanPassword = "vettr-dev-password";
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now())
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now())
      ON CONFLICT (email) DO NOTHING`,
-    [randomUUID(), "jordan@vettr.com", hashPasswordForSeed(jordanPassword), JORDAN_CLIENT_ID]
+    [randomUUID(), "jordan@vettr.com", JORDAN_CLIENT_ID]
   );
 
   // Third client, pre-flagged (CLAUDE.md 5.6/7.4's enforcePrecharge) --
@@ -262,17 +252,11 @@ async function main() {
       true,
     ]
   );
-  const flaggedPassword = "vettr-dev-password";
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now())
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now())
      ON CONFLICT (email) DO NOTHING`,
-    [
-      randomUUID(),
-      "flagged@vettr.com",
-      hashPasswordForSeed(flaggedPassword),
-      FLAGGED_CLIENT_ID,
-    ]
+    [randomUUID(), "flagged@vettr.com", FLAGGED_CLIENT_ID]
   );
   console.log("Seeded jordan@vettr.com and flagged@vettr.com client accounts.");
 
@@ -787,9 +771,9 @@ async function main() {
   await client.end();
   console.log("\nSeed complete. Login credentials:");
   console.log("  Artist:  artist@vettr.com (existing password)");
-  console.log("  Client:  client@vettr.com (existing password)");
-  console.log(`  Client:  jordan@vettr.com / ${jordanPassword}`);
-  console.log(`  Client:  flagged@vettr.com / ${flaggedPassword}`);
+  console.log("  Client:  client@vettr.com (email code)");
+  console.log("  Client:  jordan@vettr.com (email code)");
+  console.log("  Client:  flagged@vettr.com (email code)");
 }
 
 main().catch((error) => {

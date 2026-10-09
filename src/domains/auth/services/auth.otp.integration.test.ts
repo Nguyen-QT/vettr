@@ -36,7 +36,7 @@ const PARALLEL_GUESSES = MAX_EMAIL_VERIFICATION_ATTEMPTS * 2;
 async function createEligibleClient(): Promise<{ accountId: string; email: string }> {
   const client = await tracker.createClientProfile();
   const account = await prisma.account.create({
-    data: { email: client.email, passwordHash: "x", role: "CLIENT", clientProfileId: client.id },
+    data: { email: client.email, role: "CLIENT", clientProfileId: client.id },
   });
   tracker.trackEmail(client.email);
   return { accountId: account.id, email: client.email };
