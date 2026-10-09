@@ -32,9 +32,9 @@ import { safeRedirectPath } from "@/lib/safeRedirectPath";
 // can't say whether the address has an account -- so each one starts the
 // cosmetic resend countdown; issueEmailOtp's cooldown is the real gate.
 //
-// Unlike useClientLogin, redirectTo goes through safeRedirectPath and falls
-// back to the dashboard, so a crafted link can't send a fresh session
-// off-site or out of the client area.
+// redirectTo goes through safeRedirectPath and falls back to the
+// dashboard, so a crafted link can't send a fresh session off-site or out
+// of the client area.
 export function useClientSignIn(): ClientSignInFormProps {
   const router = useRouter();
   const searchParams = useSearchParams();
