@@ -286,11 +286,11 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.5.5.2** Domain Hook — `useBookingVerification` (send/resend/verify; resets on email change; copes with session props changing mid-flow) (+ tests).
     - [x] **54.5.6.1** View & Route — `BookingRequestWizard` container on `/at/[handle]/book`; `e2e/wizardHelpers.ts` new step helpers + `verifyAndSubmit` (capture-sink code); update the 5 booking specs and their baselines.
     - [x] **54.5.6.2** View & Route — new e2e cases (new guest ends signed in with the booking at `/client`; existing client email via code; wrong code; artist email gets the post-proof message) + setup/teardown cleanup for OTP accounts and challenges.
-- [ ] **54.6: Remove the Unverified Guest Booking Path** (execute 54.6.3.1 → 54.6.2.1, immediately after 54.5.6.1)
+- [x] **54.6: Remove the Unverified Guest Booking Path** (execute 54.6.3.1 → 54.6.2.1, immediately after 54.5.6.1)
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.6.1.1 / 54.6.4.1–54.6.6.1** Data/UI/Hook/View — N/A.
     - [x] **54.6.3.1** Controller/Action — with no CLIENT session, `submitBookingRequest` returns a generic "verify your email to submit" and writes nothing (+ tests).
-    - [ ] **54.6.2.1** Domain Service — delete `resolveGuestClientProfile`, its unit + integration cases and its input type.
+    - [x] **54.6.2.1** Domain Service — delete `resolveGuestClientProfile`, its unit + integration cases and its input type.
 - [ ] **54.7: Verified Email Is the Fixed Client Identity**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [ ] **54.7.1.1** Data Gateway — N/A.

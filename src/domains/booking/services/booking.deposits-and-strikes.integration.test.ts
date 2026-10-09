@@ -14,7 +14,6 @@ import { cancelBookingRequest } from "./cancelBookingRequest";
 import { getPendingBookingRequests } from "./getPendingBookingRequests";
 import { markAppointmentNoShow } from "./markAppointmentNoShow";
 import { rescheduleApprovedBooking } from "./rescheduleApprovedBooking";
-import { resolveGuestClientProfile } from "./resolveGuestClientProfile";
 import { updateClientProfile } from "./updateClientProfile";
 import { updatePendingBookingRequest } from "./updatePendingBookingRequest";
 
@@ -354,65 +353,6 @@ describe("booking deposits-and-strikes integration", () => {
       const after = await getClient(clientId);
       expect(after.instagramHandle).toBe(`it_client_new_${suffix}`);
       expect(after.dateOfBirth?.toISOString()).toBe("1990-05-17T00:00:00.000Z");
-    });
-  });
-
-  // Sequential merge behaviour only; the concurrent-guest race is 28.6.
-  describe("resolveGuestClientProfile", () => {
-    const dateOfBirth = new Date("1991-02-03T00:00:00.000Z");
-
-    it("creates a new profile for an unknown handle and email", async () => {
-      const suffix = uniqueSuffix();
-      const created = await resolveGuestClientProfile({
-        instagramHandle: `it_guest_${suffix}`,
-        email: `it_guest_${suffix}@example.com`,
-        firstName: "Guest",
-        lastName: "One",
-        dateOfBirth,
-      });
-      tracker.trackClientProfile(created.id);
-
-      const row = await getClient(created.id);
-      expect(row.instagramHandle).toBe(`it_guest_${suffix}`);
-      expect(row.cancellationCount).toBe(0);
-    });
-
-    it("a repeat handle overwrites the profile's fields on the same row", async () => {
-      const existing = await tracker.createClientProfile();
-
-      const resolved = await resolveGuestClientProfile({
-        instagramHandle: existing.instagramHandle,
-        email: existing.email,
-        firstName: "Updated",
-        lastName: "Name",
-        dateOfBirth,
-      });
-
-      expect(resolved.id).toBe(existing.id);
-      expect((await getClient(existing.id)).firstName).toBe("Updated");
-    });
-
-    it("a new handle with a known email reuses the profile, filling only blank fields", async () => {
-      const existing = await tracker.createClientProfile();
-      await prisma.clientProfile.update({
-        where: { id: existing.id },
-        data: { firstName: "Original" },
-      });
-
-      const resolved = await resolveGuestClientProfile({
-        instagramHandle: `it_other_handle_${uniqueSuffix()}`,
-        email: existing.email,
-        firstName: "Ignored",
-        lastName: "Filled",
-        dateOfBirth,
-      });
-
-      expect(resolved.id).toBe(existing.id);
-      const row = await getClient(existing.id);
-      expect(row.instagramHandle).toBe(existing.instagramHandle);
-      expect(row.firstName).toBe("Original");
-      expect(row.lastName).toBe("Filled");
-      expect(row.dateOfBirth).toEqual(dateOfBirth);
     });
   });
 
