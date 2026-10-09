@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 
 import {
   CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+  EMAIL_VERIFICATION_REQUIRED_ERROR_MESSAGE,
   REQUEST_NOT_FOUND_ERROR_MESSAGE,
 } from "./constants";
 import {
@@ -32,7 +33,6 @@ import { markAppointmentCompleted } from "./services/markAppointmentCompleted";
 import { markAppointmentNoShow } from "./services/markAppointmentNoShow";
 import { requestBookingVerificationCode } from "./services/requestBookingVerificationCode";
 import { rescheduleApprovedBooking } from "./services/rescheduleApprovedBooking";
-import { resolveGuestClientProfile } from "./services/resolveGuestClientProfile";
 import {
   reviewBookingRequest,
   type ReviewBookingRequestResult,
@@ -134,10 +134,20 @@ export type RequestActionResult =
 // No Auto-Booking (CLAUDE.md): this only ever creates PENDING rows with
 // no allocated TimeSlots. Slot requesting/approval is scheduling-domain
 // territory, out of scope here.
+//
+// CLIENT sessions only (54.6.3.1): a guest's booking goes through
+// submitBookingRequestWithCodeAction, which proves the email first. With
+// no CLIENT session this refuses with the same generic copy whatever the
+// session state, before parsing or any lookup, and writes nothing.
 export async function submitBookingRequest(
   artistId: string,
   input: unknown
 ): Promise<SubmitBookingRequestResult> {
+  const clientProfileId = await requireClientProfileId();
+  if (!clientProfileId) {
+    return { success: false, error: EMAIL_VERIFICATION_REQUIRED_ERROR_MESSAGE };
+  }
+
   const parsed = clientBookingInputSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -173,83 +183,24 @@ export async function submitBookingRequest(
   // only the onboarding fields still blank on the profile (CLAUDE.md
   // 6.2), in one transaction with the request itself. Built field by
   // field, never spread, same as submitBookingRequestWithEmailOtp.
-  const sessionClientProfileId = await requireClientProfileId();
-  if (sessionClientProfileId) {
-    return createBookingRequest({
-      clientProfileId: sessionClientProfileId,
-      artistId: artist.id,
-      designReferenceImageUrls: data.designReferenceImageUrls,
-      tier: data.tier,
-      clientBudgetRange: data.clientBudgetRange,
-      designTags: data.designTags,
-      aestheticTags: data.aestheticTags,
-      phone: data.phone,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      dateOfBirth: data.dateOfBirth,
-      clientNotes: data.clientNotes,
-      requestedDate: data.requestedDate,
-      requestedTime: data.requestedTime,
-      clientMaxEndTime: data.clientMaxEndTime,
-      paymentMethod: data.paymentMethod,
-    });
-  }
-
-  // Unverified guest path (no CLIENT session) -- removed by 54.6.3.1.
-  //
-  // Unlike requestedStartTime elsewhere in this file (a real time-of-day
-  // the "no timezone handling yet" placeholder scope applies to),
-  // dateOfBirth is a pure calendar date with no time-of-day meaning at
-  // all -- constructed at UTC midnight specifically so it round-trips
-  // through the @db.Date column correctly regardless of server
-  // timezone, since a local-time construction could shift it by a day
-  // depending on where this runs, and this field feeds a legal age
-  // check.
-  const dateOfBirth = new Date(`${data.dateOfBirth}T00:00:00.000Z`);
-
-  // Redesigned matching for Phase 16 (ClientProfile.email uniqueness):
-  // by-handle first, falling back to a by-email match/merge so the
-  // same person booking under a second Instagram handle doesn't hit
-  // the new unique constraint. See resolveGuestClientProfile.
-  const client = await resolveGuestClientProfile({
-    instagramHandle: data.instagramHandle,
-    email: data.email,
+  return createBookingRequest({
+    clientProfileId,
+    artistId: artist.id,
+    designReferenceImageUrls: data.designReferenceImageUrls,
+    tier: data.tier,
+    clientBudgetRange: data.clientBudgetRange,
+    designTags: data.designTags,
+    aestheticTags: data.aestheticTags,
     phone: data.phone,
     firstName: data.firstName,
     lastName: data.lastName,
-    dateOfBirth,
+    dateOfBirth: data.dateOfBirth,
+    clientNotes: data.clientNotes,
+    requestedDate: data.requestedDate,
+    requestedTime: data.requestedTime,
+    clientMaxEndTime: data.clientMaxEndTime,
+    paymentMethod: data.paymentMethod,
   });
-
-  const bookingRequest = await prisma.bookingRequest.create({
-    data: {
-      clientId: client.id,
-      artistId: artist.id,
-      tier: data.tier,
-      minPrice: data.clientBudgetRange.minPrice,
-      maxPrice: data.clientBudgetRange.maxPrice,
-      designTags: data.designTags ?? [],
-      aestheticTags: data.aestheticTags ?? [],
-      clientNotes: data.clientNotes,
-      requestedStartTime: combineRequestedDateAndTime(
-        data.requestedDate,
-        data.requestedTime
-      ),
-      // Purely advisory (CLAUDE.md 6.3) -- combined the same way as
-      // requestedStartTime above, just with the client's own
-      // "must be finished by" time instead of a fixed slot option.
-      clientMaxEndTime: data.clientMaxEndTime
-        ? new Date(`${data.requestedDate}T${data.clientMaxEndTime}:00`)
-        : null,
-      paymentMethod: data.paymentMethod,
-      designReferences: {
-        create: data.designReferenceImageUrls.map((imageUrl) => ({
-          imageUrl,
-        })),
-      },
-    },
-  });
-
-  return { success: true, bookingRequestId: bookingRequest.id };
 }
 
 // Controller/Action boundary (54.5.3.4): validates the draft structurally,

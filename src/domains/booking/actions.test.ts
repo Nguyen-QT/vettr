@@ -19,7 +19,6 @@ const {
   updateBookingPaymentMethodMock,
   createBookingRequestMock,
   validateComplexityMock,
-  resolveGuestClientProfileMock,
   requestBookingVerificationCodeMock,
   submitBookingRequestWithEmailOtpMock,
   setSessionCookieMock,
@@ -37,7 +36,6 @@ const {
   updateBookingPaymentMethodMock: vi.fn(),
   createBookingRequestMock: vi.fn(),
   validateComplexityMock: vi.fn(),
-  resolveGuestClientProfileMock: vi.fn(),
   requestBookingVerificationCodeMock: vi.fn(),
   submitBookingRequestWithEmailOtpMock: vi.fn(),
   setSessionCookieMock: vi.fn(),
@@ -86,9 +84,6 @@ vi.mock("./services/createBookingRequest", () => ({
 vi.mock("./services/validateComplexity", () => ({
   validateComplexity: validateComplexityMock,
 }));
-vi.mock("./services/resolveGuestClientProfile", () => ({
-  resolveGuestClientProfile: resolveGuestClientProfileMock,
-}));
 vi.mock("./services/requestBookingVerificationCode", () => ({
   requestBookingVerificationCode: requestBookingVerificationCodeMock,
 }));
@@ -116,6 +111,7 @@ import {
 import {
   BOOKING_FAILED_AFTER_VERIFICATION_ERROR_MESSAGE,
   CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+  EMAIL_VERIFICATION_REQUIRED_ERROR_MESSAGE,
 } from "./constants";
 import { generateResponseMessage } from "./services/generateResponseMessage";
 
@@ -863,8 +859,9 @@ describe("submitBookingRequest", () => {
 
   function expectNoBookingWrite(): void {
     expect(createBookingRequestMock).not.toHaveBeenCalled();
-    expect(resolveGuestClientProfileMock).not.toHaveBeenCalled();
     expect(prismaMock.bookingRequest.create).not.toHaveBeenCalled();
+    expect(prismaMock.clientProfile.create).not.toHaveBeenCalled();
+    expect(prismaMock.clientProfile.update).not.toHaveBeenCalled();
   }
 
   it("returns the first schema issue before any lookup or write", async () => {
@@ -975,7 +972,6 @@ describe("submitBookingRequest", () => {
       expect(prismaMock.clientProfile.findUnique).not.toHaveBeenCalled();
       expect(prismaMock.clientProfile.update).not.toHaveBeenCalled();
       expect(prismaMock.bookingRequest.create).not.toHaveBeenCalled();
-      expect(resolveGuestClientProfileMock).not.toHaveBeenCalled();
     });
 
     it("passes success and the service's generic error through unchanged", async () => {
@@ -992,22 +988,54 @@ describe("submitBookingRequest", () => {
     });
   });
 
-  // Pins the existing guest path for every non-CLIENT session --
-  // 54.6.3.1 replaces it with a generic "verify your email" refusal.
-  it.each(REJECTED_CLIENT_SESSIONS)(
-    "never takes the signed-in path when %s",
-    async (_label, current) => {
-      getCurrentSessionMock.mockResolvedValue(current);
-      resolveGuestClientProfileMock.mockResolvedValue({ id: "guest-profile" });
-      prismaMock.bookingRequest.create.mockResolvedValue({ id: "guest-request" } as never);
+  // 54.6.3.1: no unverified guest path -- every non-CLIENT session gets
+  // the same generic copy before any lookup, screening or write.
+  describe("without a CLIENT session", () => {
+    const VERIFY_EMAIL_REQUIRED = {
+      success: false,
+      error: EMAIL_VERIFICATION_REQUIRED_ERROR_MESSAGE,
+    };
 
-      const result = await submitBookingRequest("artist-1", VALID_BOOKING_DRAFT);
+    it.each(REJECTED_CLIENT_SESSIONS)(
+      "refuses with the verify-email message and writes nothing when %s",
+      async (_label, current) => {
+        getCurrentSessionMock.mockResolvedValue(current);
 
-      expect(createBookingRequestMock).not.toHaveBeenCalled();
-      expect(resolveGuestClientProfileMock).toHaveBeenCalledTimes(1);
-      expect(result).toEqual({ success: true, bookingRequestId: "guest-request" });
-    }
-  );
+        expect(await submitBookingRequest("artist-1", VALID_BOOKING_DRAFT)).toEqual(
+          VERIFY_EMAIL_REQUIRED
+        );
+        expect(prismaMock.artist.findUnique).not.toHaveBeenCalled();
+        expect(validateComplexityMock).not.toHaveBeenCalled();
+        expectNoBookingWrite();
+      }
+    );
+
+    it("refuses before parsing, so an invalid draft gets no schema issue", async () => {
+      getCurrentSessionMock.mockResolvedValue(null);
+
+      expect(
+        await submitBookingRequest("artist-1", {
+          ...VALID_BOOKING_DRAFT,
+          designReferenceImageUrls: [],
+        })
+      ).toEqual(VERIFY_EMAIL_REQUIRED);
+      expect(prismaMock.artist.findUnique).not.toHaveBeenCalled();
+      expectNoBookingWrite();
+    });
+
+    it("never trusts a payload clientProfileId in place of the session", async () => {
+      getCurrentSessionMock.mockResolvedValue(null);
+
+      expect(
+        await submitBookingRequest("artist-1", {
+          ...VALID_BOOKING_DRAFT,
+          clientProfileId: "attacker-profile",
+          accountId: "attacker-account",
+        })
+      ).toEqual(VERIFY_EMAIL_REQUIRED);
+      expectNoBookingWrite();
+    });
+  });
 });
 
 // The email-code draft (54.5.3.4). Padded strings prove the parsed values
