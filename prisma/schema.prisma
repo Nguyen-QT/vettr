@@ -66,9 +66,10 @@ enum PaymentMethod {
 // pairing is an application-level rule (see the auth domain service),
 // not something this schema itself enforces.
 //
-// passwordHash is null for a passwordless (email-code) CLIENT account
-// (54.5); artists keep passwords. 54.8.1.1 nulls the remaining client
-// hashes and adds the role CHECK (ARTIST => NOT NULL, CLIENT => NULL).
+// passwordHash is NULL for every CLIENT account (clients sign in by email
+// code) and NOT NULL for every ARTIST account -- keyed on role, so a
+// dual-role ARTIST keeps its password. Prisma cannot express this; the
+// migration's Account_passwordHash_role_check enforces it (54.8.1.1).
 model Account {
   id           String      @id @default(cuid())
   email        String      @unique
@@ -82,13 +83,9 @@ model Account {
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
 
-  // Email verification before session issuance (27.3). Code is stored as a
-  // sha256 hash only; attempts counter invalidates the code at the cap.
-  emailVerifiedAt                DateTime?
-  emailVerificationCodeHash      String?
-  emailVerificationCodeExpiresAt DateTime?
-  emailVerificationCodeSentAt    DateTime?
-  emailVerificationAttempts      Int       @default(0)
+  // Set when a booking email code provisions a new account (54.5). The
+  // codes themselves live in EmailOtpChallenge.
+  emailVerifiedAt DateTime?
 
   artist   Artist? @relation(fields: [artistId], references: [id])
   artistId String? @unique

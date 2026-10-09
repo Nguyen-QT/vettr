@@ -13,7 +13,7 @@ async function createClientAccount(
   email: string = `it_account_${uniqueSuffix()}@example.com`
 ): Promise<{ id: string; email: string }> {
   const account = await prisma.account.create({
-    data: { email, passwordHash: "x", role: "CLIENT" },
+    data: { email, role: "CLIENT" },
   });
   tracker.trackAccount(account.id);
   return { id: account.id, email: account.email };
@@ -105,7 +105,6 @@ describe("auth integration", () => {
       const account = await prisma.account.create({
         data: {
           email: `it_account_${uniqueSuffix()}@example.com`,
-          passwordHash: "x",
           role: "CLIENT",
           clientProfileId: client.id,
         },
