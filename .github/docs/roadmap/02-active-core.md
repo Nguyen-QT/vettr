@@ -14,8 +14,9 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 3. **28.4.3.6, 28.4.3.7** — booking controller tests for the already-guarded actions.
 4. **54.2 → 54.1 → 54.3 → 54.4 → 54.5 → 54.6 → 54.7 → 54.8** — Phase 54 in numeric order (54.2 is e2e-only infra and unblocks 54.3.6.1 and 54.8).
 5. **28.8** — `updateClientProfile` unexpected-error isolation (unscoped; needs its own layered breakdown pass *after 54.7*, which rewrites the same service/hook and drops the email-conflict path — fixing it earlier would be rewritten). Must land before go-live and before 28.5, whose `useClientProfile` hook test would otherwise pin the current uncaught throw.
-6. **53.1** (after 54.1: its runbook needs `NEXT_PUBLIC_APP_URL` + the handle requirement), then **53.2** staging on `staging.vettr.studio` (proposed: before 54.3, so the email-code flows are built against real Resend delivery), then **50** (after 54.4; same client layout), then **53.4–53.8** pre-launch hardening (unscoped) and **Phase 56** deposit payment integrity (unscoped; 56.1 first), then **53.3** go-live on `vettr.studio` (waits for 28.7, 28.8, 53.4–53.8, Phase 56 and the end of Phase 54).
-7. **28.5** — hook tests (smaller once Phase 54's hooks ship with their own tests).
+6. **53.1** (after 54.1: its runbook needs `NEXT_PUBLIC_APP_URL` + the handle requirement), then **53.2** staging on `staging.vettr.studio` (proposed: before 54.3, so the email-code flows are built against real Resend delivery), then **50** (after 54.4; same client layout), then **53.4–53.8** pre-launch hardening (unscoped), **Phase 56** deposit payment integrity (unscoped; 56.1 first) and **Phase 58** identity hardening (unscoped; 58.1 first), then **53.3** go-live on `vettr.studio` (waits for 28.7, 28.8, 53.4–53.8, Phase 56, Phase 58 and the end of Phase 54).
+7. **Phase 59** — client passkeys on top of the email code (in `04-future-epics.md`). First feature after go-live, not a 53.3 gate. Needs 54.8, 58.6, 53.4 and 53.6 landed first; 59.1–59.4 in numeric order, each with its own layered breakdown pass.
+8. **28.5** — hook tests (smaller once Phase 54's hooks ship with their own tests).
 - *Superseded by Phase 54:* 27.7 (→ 54.3.2.6), 28.6 (→ 54.5.2.2 / 54.5.2.6), 28.4.3.5 (→ 54.5.3.3 / 54.5.3.4 / 54.6.3.1), 38.1 (→ 54.1.6.2).
 
 ---
@@ -293,7 +294,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.6.2.1** Domain Service — delete `resolveGuestClientProfile`, its unit + integration cases and its input type.
 - [ ] **54.7: Verified Email Is the Fixed Client Identity**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **54.7.1.1** Data Gateway — N/A.
+    - [x] **54.7.1.1** Data Gateway — N/A.
     - [ ] **54.7.2.1** Domain Service — `updateClientProfile` stops writing `email` (+ tests).
     - [ ] **54.7.3.1** Controller/Action — schema drops `email` (+ tests).
     - [ ] **54.7.4.1** UI Primitive — `ClientProfileForm` shows the email read-only.
@@ -406,5 +407,5 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 - [ ] **58.6: Identity Hardening** — *unscoped, small.* Three latent issues that can't be exploited today:
   - Action inputs are built as `{ artistId, ...parsed.data }` (`billing/actions.ts:86,130`, `scheduling/actions.ts:103,127,151`, `booking/actions.ts:344,367`), so a future schema field with the same name would override the session id. It is safe today only because Zod strips unknown keys. Put the session ids last.
   - `getCurrentSession` is exported from a `"use server"` file (`auth/actions.ts:329`), which makes it a server action that returns the raw session id. No client file imports it today. Move it to a server-only auth module, the same move 54.5.3.2 makes for `setSessionCookie`.
-  - `switchActiveRole` checks `artistId` but not `Account.role` (`switchActiveRole.ts:25`). Artist access needing a password therefore depends on no CLIENT-home account ever getting an `artistId`. Check the role there, or add a DB CHECK tying `role` to `artistId`.
+  - `switchActiveRole` checks `artistId` but not `Account.role` (`switchActiveRole.ts:25`). Artist access needing a password therefore depends on no CLIENT-home account ever getting an `artistId`. Check the role there, or add a DB CHECK tying `role` to `artistId`. Phase 59's client passkeys rely on the same invariant (a passkey session must never reach artist access through the role switcher), so 58.6 must land before 59.
     
