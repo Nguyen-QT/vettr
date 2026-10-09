@@ -233,7 +233,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.1.5.1** Domain Hook — `useVisualBookingForm({ initialTier })` sets the default tier + baseline budget (+ new `useVisualBookingForm.test.ts`).
     - [x] **54.1.6.1** View & Route — rewrites, `src/app/at/[handle]/page.tsx`, `src/app/not-found.tsx`, root `metadataBase`; `e2e/artist-profile.spec.ts` (sections render, 404, uppercase → 308, no-cookie request 200, `toHaveScreenshot()`).
     - [x] **54.1.6.2** View & Route — `src/app/at/[handle]/book/page.tsx` (existing wizard, `?service` support, prefill keyed on `activeRole`); `/book/[artistId]` becomes a 308 redirect; move the 5 booking specs + the landing spec to `/@${artistHandle}/book`; new cases: legacy 308, `?service` preselect, screenshot. Also: `/@handle/book` `error.tsx`; two never-switched dual-role Sessions in `global-setup.ts` (`dualRoleClientViewSessionId`/`dualRoleArtistViewSessionId`) proving prefill keys on `activeRole`; edge cases (legacy unknown id 404, unknown handle 404, uppercase → 308 keeping `?service`, unknown `?service` → default tier).
-- [ ] **54.2: E2E Seeded Client Sessions** (test infra; unblocks 54.3.6.1 and 54.8)
+- [x] **54.2: E2E Seeded Client Sessions** (test infra; unblocks 54.3.6.1 and 54.8)
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.2.1.1–54.2.5.1** Data/Domain/Controller/UI/Hook — N/A.
     - [x] **54.2.6.1** View & Route (e2e) — `global-setup.ts` seeds CLIENT `Session` rows for the client fixtures; `authHelpers.loginAsClient(page, sessionId)` logs in by cookie injection (mirrors `loginAsArtist`).
@@ -292,14 +292,14 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.6.1.1 / 54.6.4.1–54.6.6.1** Data/UI/Hook/View — N/A.
     - [x] **54.6.3.1** Controller/Action — with no CLIENT session, `submitBookingRequest` returns a generic "verify your email to submit" and writes nothing (+ tests).
     - [x] **54.6.2.1** Domain Service — delete `resolveGuestClientProfile`, its unit + integration cases and its input type.
-- [ ] **54.7: Verified Email Is the Fixed Client Identity**
+- [x] **54.7: Verified Email Is the Fixed Client Identity**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.7.1.1** Data Gateway — N/A.
     - [x] **54.7.2.1** Domain Service — `updateClientProfile` stops writing `email` (+ tests).
     - [x] **54.7.3.1** Controller/Action — schema drops `email` (+ tests).
     - [x] **54.7.4.1** UI Primitive — `ClientProfileForm` shows the email read-only.
     - [x] **54.7.5.1** Domain Hook — `useClientProfile` stops sending the email (+ tests).
-    - [ ] **54.7.6.1** View & Route — `client-profile.spec` asserts the field is read-only.
+    - [x] **54.7.6.1** View & Route — `client-profile.spec` asserts the field is read-only.
 - [ ] **54.8: Retire Client Passwords & Dead Code** (execute 6.1 → 4.1 → 5.1 → 3.1 → 2.1 → 1.1)
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [ ] **54.8.6.1** View & Route — delete `/client/signup` and `/client/verify-email` (+ `VerifyEmailCodeContainer`); `PUBLIC_CLIENT_PATHS` keeps only the login path; delete `verify-email.spec` + baselines, the signup cases and `resetClientSignup`; `global-setup` creates client accounts with null passwords.
