@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { dateOfBirthSchema, instagramHandleSchema } from "@/lib/clientProfileValidation";
 import { normalizedEmailSchema } from "@/lib/email";
-import { MIN_PASSWORD_LENGTH } from "./constants";
 
 // Structural validity only -- see services/loginArtist.ts for the
 // actual credential check against the database. Password has no
@@ -11,19 +10,6 @@ import { MIN_PASSWORD_LENGTH } from "./constants";
 export const loginInputSchema = z.object({
   email: z.email(),
   password: z.string().min(1, "Password is required."),
-});
-
-// Structural validity only -- see services/signupClient.ts for the
-// existing-ClientProfile lookup. Unlike login, signup enforces the
-// password policy floor since this is where a new credential is set.
-export const signupInputSchema = z.object({
-  email: z.email(),
-  password: z
-    .string()
-    .min(
-      MIN_PASSWORD_LENGTH,
-      `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
-    ),
 });
 
 // Structural validity only -- see services/linkOrCreateClientProfileForAccount.ts for the
@@ -37,21 +23,6 @@ export const setUpClientProfileInputSchema = z.object({
   firstName: z.string().trim().min(1).optional(),
   lastName: z.string().trim().min(1).optional(),
   dateOfBirth: dateOfBirthSchema.optional(),
-});
-
-// Structural validity only -- see services/verifyEmailCode.ts for the
-// actual code/password check. The code stays a string so leading zeros
-// survive; the password has no length floor (it's checked against the
-// stored hash, as in login), and identity is the email, never an id.
-export const verifyEmailCodeInputSchema = z.object({
-  email: z.email(),
-  code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
-  password: z.string().min(1, "Password is required."),
-});
-
-// Structural validity only -- see services/resendVerificationCode.ts.
-export const resendVerificationCodeInputSchema = z.object({
-  email: z.email(),
 });
 
 // Structural validity only -- see services/requestClientSignInCode.ts for
