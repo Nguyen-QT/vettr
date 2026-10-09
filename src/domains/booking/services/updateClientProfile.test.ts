@@ -14,14 +14,13 @@ describe("updateClientProfile", () => {
   const input = {
     clientProfileId: "client-1",
     instagramHandle: "updated_handle",
-    email: "updated@example.com",
     phone: "555-0100",
     firstName: "Jordan",
     lastName: "Rivera",
     dateOfBirth: "1995-06-15",
   };
 
-  it("updates every field, building dateOfBirth as UTC midnight", async () => {
+  it("updates every editable field, building dateOfBirth as UTC midnight", async () => {
     prismaMock.clientProfile.update.mockResolvedValue({} as never);
 
     const result = await updateClientProfile(input);
@@ -31,12 +30,25 @@ describe("updateClientProfile", () => {
       where: { id: "client-1" },
       data: {
         instagramHandle: "updated_handle",
-        email: "updated@example.com",
         phone: "555-0100",
         firstName: "Jordan",
         lastName: "Rivera",
         dateOfBirth: new Date("1995-06-15T00:00:00.000Z"),
       },
+    });
+  });
+
+  it("never writes an email a caller still passes at runtime", async () => {
+    prismaMock.clientProfile.update.mockResolvedValue({} as never);
+    // A spread of a wider object, as the action's `...parsed.data` does,
+    // isn't excess-property checked -- the key can still arrive.
+    const withEmail = { ...input, email: "someone-else@example.com" };
+
+    await updateClientProfile(withEmail);
+
+    expect(prismaMock.clientProfile.update).toHaveBeenCalledWith({
+      where: { id: "client-1" },
+      data: expect.not.objectContaining({ email: expect.anything() }),
     });
   });
 

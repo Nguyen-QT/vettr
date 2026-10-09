@@ -328,7 +328,6 @@ describe("booking deposits-and-strikes integration", () => {
       const result = await updateClientProfile({
         clientProfileId: clientId,
         instagramHandle: other.instagramHandle,
-        email: before.email,
         ...profile,
       });
 
@@ -345,7 +344,6 @@ describe("booking deposits-and-strikes integration", () => {
       const result = await updateClientProfile({
         clientProfileId: clientId,
         instagramHandle: `it_client_new_${suffix}`,
-        email: `it_client_new_${suffix}@example.com`,
         ...profile,
       });
 

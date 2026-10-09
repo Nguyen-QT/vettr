@@ -506,11 +506,11 @@ export interface ClientProfileContactDetails {
 // ClientProfileContactDetails' nullable onboarding fields above) --
 // this is the one place a client can ever fill in a still-blank
 // firstName/lastName/dateOfBirth after 6.2, or fix a typo in any
-// field, so the form always collects the complete set on save.
+// field, so the form always collects the complete set on save. No
+// email: the verified email is the fixed client identity (54.7).
 export interface UpdateClientProfileInput {
   clientProfileId: string;
   instagramHandle: string;
-  email: string;
   phone?: string;
   firstName: string;
   lastName: string;

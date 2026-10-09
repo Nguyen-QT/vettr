@@ -16,6 +16,11 @@ function isInstagramHandleConflict(error: unknown): boolean {
 // derives it, same posture as booking's cancelBookingRequest) rather
 // than checked here -- there's no separate owner to compare against,
 // unlike a BookingRequest.
+//
+// email is never written (54.7): the verified email is the fixed client
+// identity, so a client can't move their profile onto someone else's
+// address. With it out of the write, a P2002 here can only come from
+// the instagramHandle unique index.
 export async function updateClientProfile(
   input: UpdateClientProfileInput
 ): Promise<UpdateClientProfileResult> {
@@ -24,7 +29,6 @@ export async function updateClientProfile(
       where: { id: input.clientProfileId },
       data: {
         instagramHandle: input.instagramHandle,
-        email: input.email,
         phone: input.phone,
         firstName: input.firstName,
         lastName: input.lastName,
