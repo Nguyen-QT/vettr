@@ -224,16 +224,18 @@ describe("booking email-code provisioning integration", () => {
         expect(audits.filter((a) => a.outcome === "SUCCESS")).toEqual([
           { outcome: "SUCCESS", reasonCode, accountId: account.id, attemptedEmail: null },
         ]);
-        // No account existed when the losers resolved, so each rejection is
-        // keyed by the attempted email.
-        expect(audits.filter((a) => a.outcome === "REJECTED")).toEqual(
-          Array(PARALLEL_VERIFIES - 1).fill({
-            outcome: "REJECTED",
-            reasonCode: "INVALID_EMAIL_OTP",
-            accountId: null,
-            attemptedEmail: email,
-          })
-        );
+        // Each loser's snapshot fell before the winner's commit (no account
+        // yet: keyed by the attempted email) or after it (EXISTING: keyed by
+        // the new account) -- the interleaving decides which (54.9.2.1).
+        // Either way its consume found the code gone.
+        const rejections = audits.filter((a) => a.outcome === "REJECTED");
+        expect(rejections).toHaveLength(PARALLEL_VERIFIES - 1);
+        for (const rejection of rejections) {
+          expect([
+            { outcome: "REJECTED", reasonCode: "INVALID_EMAIL_OTP", accountId: null, attemptedEmail: email },
+            { outcome: "REJECTED", reasonCode: "INVALID_EMAIL_OTP", accountId: account.id, attemptedEmail: null },
+          ]).toContainEqual(rejection);
+        }
       }
     );
   });

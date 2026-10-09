@@ -21,12 +21,15 @@ import { verifyEmailOtpAndProvisionClient } from "./verifyEmailOtpAndProvisionCl
 
 // Mocked-Prisma unit test (architecture.md Sec7). checkEmailOtpCode and
 // createSession run for real against the mocks, so each rejected-code case
-// genuinely differs. $transaction hands the callback a separate tx mock, so
-// the reads and the attempt reservation (global client) are distinguishable
-// from the consume and the provisioning writes (transaction client). The
-// real-DB race and rollback proofs are 54.5.2.6.
+// genuinely differs. $transaction hands the callback a separate mock per
+// transaction kind, so three clients stay distinguishable: the challenge
+// read and attempt reservation (global client), the account/profile
+// resolve reads (REPEATABLE READ snapshot, 54.9.2.1), and the consume plus
+// provisioning writes (default-isolation transaction). The real-DB race
+// and rollback proofs are 54.5.2.6.
 vi.mock("./recordAuditEvent", () => ({ recordAuditEvent: vi.fn() }));
 
+const readTxMock = mockDeep<Prisma.TransactionClient>();
 const txMock = mockDeep<Prisma.TransactionClient>();
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
@@ -66,13 +69,13 @@ function givenValidCode(): void {
 }
 
 function givenExistingClient(): void {
-  prismaMock.account.findUnique.mockResolvedValue(accountRow("CLIENT", "client_profile_1"));
+  readTxMock.account.findUnique.mockResolvedValue(accountRow("CLIENT", "client_profile_1"));
 }
 
 // No account; an unlinked ClientProfile already has this email.
 function givenUnlinkedProfile(): void {
-  prismaMock.account.findUnique.mockResolvedValue(null);
-  prismaMock.clientProfile.findUnique.mockResolvedValueOnce({
+  readTxMock.account.findUnique.mockResolvedValue(null);
+  readTxMock.clientProfile.findUnique.mockResolvedValueOnce({
     id: "client_profile_1",
     account: null,
   } as never);
@@ -80,8 +83,8 @@ function givenUnlinkedProfile(): void {
 
 // No account, no profile with this email, handle free.
 function givenNewClient(): void {
-  prismaMock.account.findUnique.mockResolvedValue(null);
-  prismaMock.clientProfile.findUnique.mockResolvedValue(null);
+  readTxMock.account.findUnique.mockResolvedValue(null);
+  readTxMock.clientProfile.findUnique.mockResolvedValue(null);
 }
 
 function uniqueConflict(): Prisma.PrismaClientKnownRequestError {
@@ -119,10 +122,18 @@ describe("verifyEmailOtpAndProvisionClient", () => {
     vi.setSystemTime(NOW);
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(recordAuditEvent).mockReset();
+    mockReset(readTxMock);
     mockReset(txMock);
     prismaMock.$transaction.mockImplementation(
-      ((callback: (tx: Prisma.TransactionClient) => unknown) =>
-        callback(txMock)) as PrismaClient["$transaction"]
+      ((
+        callback: (tx: Prisma.TransactionClient) => unknown,
+        options?: { isolationLevel?: Prisma.TransactionIsolationLevel }
+      ) =>
+        callback(
+          options?.isolationLevel === Prisma.TransactionIsolationLevel.RepeatableRead
+            ? readTxMock
+            : txMock
+        )) as PrismaClient["$transaction"]
     );
     txMock.emailOtpChallenge.updateMany.mockResolvedValue({ count: 1 });
     txMock.clientProfile.create.mockResolvedValue({ id: "client_profile_new" } as never);
@@ -169,12 +180,12 @@ describe("verifyEmailOtpAndProvisionClient", () => {
         data: { attempts: { increment: 1 } },
       })
     );
-    expect(prismaMock.account.findUnique).toHaveBeenCalledWith({
+    expect(readTxMock.account.findUnique).toHaveBeenCalledWith({
       where: { email: EMAIL },
       select: { id: true, role: true, clientProfileId: true },
     });
     // The draft's handle is never consulted for an existing account.
-    expect(prismaMock.clientProfile.findUnique).not.toHaveBeenCalled();
+    expect(readTxMock.clientProfile.findUnique).not.toHaveBeenCalled();
     expect(txMock.emailOtpChallenge.updateMany).toHaveBeenCalledWith({
       where: { id: "challenge_1", codeHash: CODE_HASH },
       data: { codeHash: null, consumedAt: NOW },
@@ -205,8 +216,8 @@ describe("verifyEmailOtpAndProvisionClient", () => {
       expiresAt: SESSION_EXPIRES_AT,
       clientProfileId: "client_profile_1",
     });
-    expect(prismaMock.clientProfile.findUnique).toHaveBeenCalledTimes(1);
-    expect(prismaMock.clientProfile.findUnique).toHaveBeenCalledWith({
+    expect(readTxMock.clientProfile.findUnique).toHaveBeenCalledTimes(1);
+    expect(readTxMock.clientProfile.findUnique).toHaveBeenCalledWith({
       where: { email: EMAIL },
       select: { id: true, account: { select: { id: true } } },
     });
@@ -240,11 +251,11 @@ describe("verifyEmailOtpAndProvisionClient", () => {
       expiresAt: SESSION_EXPIRES_AT,
       clientProfileId: "client_profile_new",
     });
-    expect(prismaMock.clientProfile.findUnique).toHaveBeenNthCalledWith(1, {
+    expect(readTxMock.clientProfile.findUnique).toHaveBeenNthCalledWith(1, {
       where: { email: EMAIL },
       select: { id: true, account: { select: { id: true } } },
     });
-    expect(prismaMock.clientProfile.findUnique).toHaveBeenNthCalledWith(2, {
+    expect(readTxMock.clientProfile.findUnique).toHaveBeenNthCalledWith(2, {
       where: { instagramHandle: HANDLE },
       select: { id: true },
     });
@@ -270,6 +281,43 @@ describe("verifyEmailOtpAndProvisionClient", () => {
     });
   });
 
+  // 54.9.2.1: split reads let a double-verify loser see the winner's
+  // commit halfway through and report a false "email unavailable".
+  it.each([
+    ["an existing CLIENT account", givenExistingClient],
+    ["an unlinked profile", givenUnlinkedProfile],
+    ["a new client", givenNewClient],
+  ])(
+    "resolves %s from one read-only REPEATABLE READ snapshot, before a default-isolation consume",
+    async (_label, arrange) => {
+      givenValidCode();
+      arrange();
+
+      const result = await verifyEmailOtpAndProvisionClient({ email: EMAIL, code: CODE, instagramHandle: HANDLE });
+
+      expect(result).toMatchObject({ success: true });
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
+      const [readCall, consumeCall] = prismaMock.$transaction.mock.calls;
+      expect(readCall[1]).toEqual({ isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+      expect(consumeCall[1]).toBeUndefined();
+      // Every resolve read goes through the snapshot -- none through the
+      // global client or the consume transaction.
+      expect(readTxMock.account.findUnique).toHaveBeenCalledTimes(1);
+      expect(prismaMock.account.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.clientProfile.findUnique).not.toHaveBeenCalled();
+      expect(txMock.account.findUnique).not.toHaveBeenCalled();
+      expect(txMock.clientProfile.findUnique).not.toHaveBeenCalled();
+      // The snapshot never writes.
+      expect(readTxMock.emailOtpChallenge.updateMany).not.toHaveBeenCalled();
+      expect(readTxMock.account.create).not.toHaveBeenCalled();
+      expect(readTxMock.clientProfile.create).not.toHaveBeenCalled();
+      expect(readTxMock.session.create).not.toHaveBeenCalled();
+      expect(readTxMock.account.findUnique.mock.invocationCallOrder[0]).toBeLessThan(
+        txMock.emailOtpChallenge.updateMany.mock.invocationCallOrder[0]
+      );
+    }
+  );
+
   it.each([
     ["a wrong code", challengeRow(), "999999"],
     ["an expired code", challengeRow({ expiresAt: NOW }), CODE],
@@ -284,9 +332,12 @@ describe("verifyEmailOtpAndProvisionClient", () => {
     const result = await verifyEmailOtpAndProvisionClient({ email: EMAIL, code, instagramHandle: HANDLE });
 
     expect(result).toEqual(INVALID);
+    // Not even the read snapshot opens.
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(readTxMock.account.findUnique).not.toHaveBeenCalled();
+    expect(readTxMock.clientProfile.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.account.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.clientProfile.findUnique).not.toHaveBeenCalled();
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
     expectNoProvisioningWrites();
     expectAudit({ outcome: "REJECTED", reasonCode: "INVALID_EMAIL_OTP", attemptedEmail: EMAIL });
   });
@@ -294,27 +345,27 @@ describe("verifyEmailOtpAndProvisionClient", () => {
   it.each([
     [
       "a dual-role ARTIST-home account",
-      () => prismaMock.account.findUnique.mockResolvedValue(accountRow("ARTIST", "client_profile_1")),
+      () => readTxMock.account.findUnique.mockResolvedValue(accountRow("ARTIST", "client_profile_1")),
       ARTIST_ACCOUNT_SWITCH_TO_CLIENT_VIEW_MESSAGE,
       { reasonCode: "ROLE_MISMATCH", accountId: "account_1" },
     ],
     [
       "an artist-only account",
-      () => prismaMock.account.findUnique.mockResolvedValue(accountRow("ARTIST", null)),
+      () => readTxMock.account.findUnique.mockResolvedValue(accountRow("ARTIST", null)),
       ARTIST_ACCOUNT_SET_UP_CLIENT_PROFILE_MESSAGE,
       { reasonCode: "ROLE_MISMATCH", accountId: "account_1" },
     ],
     [
       "a CLIENT account with no linked profile",
-      () => prismaMock.account.findUnique.mockResolvedValue(accountRow("CLIENT", null)),
+      () => readTxMock.account.findUnique.mockResolvedValue(accountRow("CLIENT", null)),
       BOOKING_EMAIL_UNAVAILABLE_ERROR_MESSAGE,
       { reasonCode: "NOT_LINKED_TO_CLIENT", accountId: "account_1" },
     ],
     [
       "a profile with this email linked to another account",
       () => {
-        prismaMock.account.findUnique.mockResolvedValue(null);
-        prismaMock.clientProfile.findUnique.mockResolvedValueOnce({
+        readTxMock.account.findUnique.mockResolvedValue(null);
+        readTxMock.clientProfile.findUnique.mockResolvedValueOnce({
           id: "client_profile_1",
           account: { id: "account_other" },
         } as never);
@@ -325,8 +376,8 @@ describe("verifyEmailOtpAndProvisionClient", () => {
     [
       "a new client whose handle belongs to another profile",
       () => {
-        prismaMock.account.findUnique.mockResolvedValue(null);
-        prismaMock.clientProfile.findUnique
+        readTxMock.account.findUnique.mockResolvedValue(null);
+        readTxMock.clientProfile.findUnique
           .mockResolvedValueOnce(null)
           .mockResolvedValueOnce({ id: "client_profile_other" } as never);
       },
@@ -342,9 +393,14 @@ describe("verifyEmailOtpAndProvisionClient", () => {
       const result = await verifyEmailOtpAndProvisionClient({ email: EMAIL, code: CODE, instagramHandle: HANDLE });
 
       expect(result).toEqual({ success: false, error });
-      // Only the attempt reservation -- no consume, on either client.
+      // Only the attempt reservation -- no consume, on any client. The read
+      // snapshot is the only transaction that opens.
       expect(prismaMock.emailOtpChallenge.updateMany).toHaveBeenCalledTimes(1);
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+        isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+      });
+      expect(readTxMock.emailOtpChallenge.updateMany).not.toHaveBeenCalled();
       expect(txMock.emailOtpChallenge.updateMany).not.toHaveBeenCalled();
       expectNoProvisioningWrites();
       expectAudit({ outcome: "REJECTED", ...audit });
@@ -409,13 +465,18 @@ describe("verifyEmailOtpAndProvisionClient", () => {
       undefined,
     ],
     [
+      "opening the read snapshot",
+      () => prismaMock.$transaction.mockRejectedValueOnce(new Error(`P1001 for ${EMAIL}`)),
+      undefined,
+    ],
+    [
       "the account lookup",
-      () => prismaMock.account.findUnique.mockRejectedValue(new Error(`P1001 for ${EMAIL}`)),
+      () => readTxMock.account.findUnique.mockRejectedValue(new Error(`P1001 for ${EMAIL}`)),
       undefined,
     ],
     [
       "the profile lookup",
-      () => prismaMock.clientProfile.findUnique.mockRejectedValue(new Error(`P1001 for ${HANDLE}`)),
+      () => readTxMock.clientProfile.findUnique.mockRejectedValue(new Error(`P1001 for ${HANDLE}`)),
       undefined,
     ],
     [
