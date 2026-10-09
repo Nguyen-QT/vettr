@@ -18,9 +18,10 @@ import { POST } from "./route";
 // genuine HMAC signing/verification, no network call -- and drives the
 // exported `POST` handler directly with a constructed `NextRequest`,
 // the same way Stripe's own servers would call this endpoint.
-// Dispatch logic for event types beyond payment_intent.succeeded
-// (refund.updated, payment_intent.payment_failed, etc.) is a separate
-// concern from signature verification and isn't re-covered here.
+// Refund dispatch branches are unit-tested in route.test.ts; the one
+// dispatch case here is the refund backstop's delivery proof
+// (56.1.3.1), which replays an event Stripe really emitted rather than
+// a hand-built payload.
 describe("Stripe webhook route -- signature verification (real Stripe test mode)", () => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -136,6 +137,72 @@ describe("Stripe webhook route -- signature verification (real Stripe test mode)
     const untouched = await prisma.bookingRequest.findUnique({ where: { id: request.id } });
     expect(untouched?.depositPaid).toBe(false);
   });
+
+  // Stripe makes an event readable through the Events API shortly after
+  // the object change behind it, so poll briefly rather than assume it's
+  // already there. Bounded by Stripe's own `created` clock (the refund's),
+  // never the local one, so clock skew can't hide the event.
+  async function waitForRefundCreatedEvent(refundId: string, refundCreated: number) {
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {
+      const events = await stripe.events.list({
+        type: "refund.created",
+        created: { gte: refundCreated },
+        limit: 100,
+      });
+      const match = events.data.find(
+        (event) => event.type === "refund.created" && event.data.object.id === refundId
+      );
+      if (match) return match;
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+    throw new Error(`refund.created for ${refundId} never appeared`);
+  }
+
+  it(
+    "reconciles a real refund.created event for a refund whose local write never happened",
+    async () => {
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: 2000,
+        currency: "gbp",
+        payment_method: "pm_card_visa",
+        confirm: true,
+        automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+      });
+      const request = await prisma.bookingRequest.create({
+        data: {
+          clientId,
+          artistId,
+          tier: "TIER_2",
+          minPrice: 100,
+          maxPrice: 200,
+          status: "CANCELLED_BY_CLIENT",
+          stripePaymentIntentId: paymentIntent.id,
+          depositPaid: true,
+        },
+      });
+
+      // Issued straight through Stripe rather than refundDeposit, so no
+      // local write ever records it -- the exact state the backstop
+      // exists for: Stripe refunded, depositRefunded still false.
+      const refund = await stripe.refunds.create({ payment_intent: paymentIntent.id });
+      const event = await waitForRefundCreatedEvent(refund.id, refund.created);
+
+      const payload = JSON.stringify(event);
+      const signature = stripe.webhooks.generateTestHeaderString({
+        payload,
+        secret: webhookSecret,
+      });
+
+      const response = await POST(buildRequest(payload, signature));
+
+      expect(response.status).toBe(200);
+      const updated = await prisma.bookingRequest.findUnique({ where: { id: request.id } });
+      expect(updated?.depositRefunded).toBe(true);
+      expect(updated?.stripeRefundId).toBe(refund.id);
+    },
+    30_000
+  );
 
   it("rejects a request with no signature header at all", async () => {
     const payload = JSON.stringify({

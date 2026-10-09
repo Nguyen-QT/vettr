@@ -319,12 +319,25 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 > Found on 2026-10-07 by checking the deposit flow against the idempotency key → record-the-intent-first → webhook-timeline design. No real money moves until 53.3 (staging stays in Stripe test mode), so nothing here interrupts Phase 54, but every item gates 53.3. Every item is *unscoped* and needs its own 6-layer breakdown pass before any code. Phase 57 (`04-future-epics.md`) is the long-term version: an append-only payment event ledger and a fix for the booking ↔ billing dependency.
 - **Design constraint (proposed):** new payment state (refund status, dispute records) goes into billing-owned tables keyed by `bookingRequestId`. It must not become new `BookingRequest` columns written through booking's narrow functions, so that Phase 57 builds on this work instead of migrating it.
 - **Order:** numeric. 56.1 is a cheap spike that decides which refund events 56.6/56.7 listen for. 56.3 is the Data Gateway prerequisite for 56.4. 56.4 and 56.5 share a root cause (the fixed idempotency key): design them together, ship them as separate items.
-- [ ] **56.1: Prove Which Stripe Events a Deposit Refund Emits** — *unscoped, spike.*
+- [ ] **56.1: Prove Which Stripe Events a Deposit Refund Emits** (execute 3.1 → 2.1)
   - The webhook only handles `refund.updated` with status `succeeded`, but the comments in `refundDeposit.ts` and `confirmDepositRefund.ts` name `charge.refunded`.
   - A card refund that is created already `succeeded` may never emit `refund.updated`. If so, the refund backstop is dead code.
   - Nothing proves delivery today: `depositRefundLifecycle.stripe-integration.test.ts` calls `confirmDepositRefund` directly.
   - Use the Stripe CLI (`stripe listen`) in test mode to record which events fire for an immediate card refund, a pending refund and a failed refund. Subscribe the route to the right events and fix the stale comments.
   - This is the first proof of the refund backstop, so 53.3.1.2's live-money refund is no longer that first proof.
+  - **Spike findings (2026-10-09, `stripe listen`, test mode, API `2026-08-26.dahlia`):** every refund emitted `refund.created` with its starting status, plus `charge.refunded`. Then:
+    - Immediate (`pm_card_visa`, created `succeeded`): `refund.updated`, still `succeeded`, about 1s later. Its only change was the card's acquirer reference number (ARN) becoming available.
+    - Pending (`pm_card_pendingRefund`, created `pending`): `refund.updated` from `pending` to `succeeded` about 2 min later.
+    - Failed (`pm_card_refundFail`, created `succeeded`): `refund.updated`, still `succeeded` (ARN now unavailable), about 2 min later, then `refund.failed` from `succeeded` to `failed` 5s after that. No `refund.updated` carried the failure.
+    - Every `refund.updated` and `refund.failed` came with a duplicate `charge.refund.updated`. `charge.refunded` fires on creation even for a refund that stays pending or later fails, so it never confirms that money moved.
+    - Connect destination charges are untested: the test account has no connected accounts.
+  - **Conclusion:** the backstop is not dead code. For an immediate card refund, though, it waits on the ARN update, and how long that takes in live mode is unproven. `refund.created` is the only event that reports an immediate success at once. For 56.6: `pending` → `succeeded` arrives as `refund.updated`; `succeeded` → `failed` arrives only as `refund.failed`, and a stale `refund.updated` (`succeeded`) can arrive after it.
+  - **Subscribed events** (for the endpoints 53.2.1.2 and 53.3.1.1 register): `payment_intent.succeeded`, `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `account.updated`. 56.6 adds `refund.failed`.
+  - **Flagged, not fixed:** `confirmDepositRefund` treats any `succeeded` refund on the PaymentIntent as a full deposit refund, so a partial refund issued from the Stripe Dashboard reads as fully refunded. The app itself only issues full refunds. Owner: 56.6.
+  - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **56.1.1.1 / 56.1.4.1–56.1.6.1** Data/UI/Hook/View — N/A.
+    - [ ] **56.1.3.1** Controller/Action — the webhook route also handles `refund.created` (the same `succeeded`-only body as `refund.updated`), and its header comment lists the subscribed events (+ route unit tests, and a Stripe-tier case that replays a real `refund.created` event through the route for a refund whose local write never happened).
+    - [ ] **56.1.2.1** Domain Service — comment-only: replace the stale `charge.refunded` in `refundDeposit.ts` and `confirmDepositRefund.ts`, and the `refund.updated` redelivery comment in `depositRefundLifecycle.stripe-integration.test.ts`, with the proven events.
 - [ ] **56.2: Deposit Paid on a Cancelled or Declined Booking** — *unscoped.*
   - `confirmDepositPayment` sets `depositPaid` without checking the booking's status.
   - Both cancel paths (`cancelBookingRequest`, `cancelApprovedBookingAsArtist`) only refund when `depositPaid` is already true.
