@@ -81,6 +81,18 @@ export interface ClientBookingInput {
   paymentMethod: PaymentMethod;
 }
 
+// Per-field lock for the wizard's details step (CLAUDE.md 6.2, 54.5.4.2) --
+// true when a signed-in client's profile already has that value on file.
+// Per-field, not one boolean: a client missing e.g. a date of birth must
+// still be able to fill it in.
+export type BookingDetailsLockedFields = Record<
+  keyof Pick<
+    ClientBookingInput,
+    "instagramHandle" | "firstName" | "lastName" | "dateOfBirth" | "email" | "phone"
+  >,
+  boolean
+>;
+
 // The booking write shared by the signed-in and email-code submit paths
 // (54.5.2.3). clientProfileId is the caller's trusted session or freshly
 // provisioned profile; the form's identity fields (handle, email) are
