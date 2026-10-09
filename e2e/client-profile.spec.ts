@@ -40,6 +40,23 @@ test.describe("client profile page", () => {
     );
   });
 
+  test("shows the sign-in email read-only", async ({ page }) => {
+    const fixture = await readFixture();
+    await openClientDashboard(page, fixture.onboardedClientSessionId);
+
+    await page.goto("/client/profile");
+    await page.waitForLoadState("networkidle");
+
+    const email = page.getByLabel("Email");
+    await expect(email).toHaveValue(fixture.onboardedClientEmail);
+    await expect(email).not.toBeEditable();
+    await expect(
+      page.getByText(
+        "This is the email you sign in with, so it can't be changed here."
+      )
+    ).toBeVisible();
+  });
+
   test("saves an edited field", async ({ page }) => {
     const fixture = await readFixture();
     await openClientDashboard(page, fixture.onboardedClientSessionId);
