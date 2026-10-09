@@ -79,6 +79,12 @@ export const CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE =
 export const BOOKING_FAILED_AFTER_VERIFICATION_ERROR_MESSAGE =
   "Your email is verified, but your request didn't go through. Please submit it again. You won't need a new code.";
 
+// useBookingVerification (54.5.5.2): the same copy after every resend -- a
+// cooldown, the daily cap or a failed send all come back as the same
+// success (54.5.2.1), so it claims no more than the code step already does.
+export const BOOKING_VERIFICATION_CODE_RESENT_MESSAGE =
+  "We've sent a new code to your email. It can take a minute to arrive.";
+
 export const REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE =
   "This request has already been cancelled, declined, or completed.";
 
