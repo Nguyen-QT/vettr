@@ -73,6 +73,11 @@ export const REQUEST_NOT_FOUND_ERROR_MESSAGE = "This request could not be found.
 export const CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong submitting your request. Please try again.";
 
+// submitBookingRequest (54.6.3.1): with no CLIENT session the booking can
+// only go through the email-code path -- generic copy, nothing written.
+export const EMAIL_VERIFICATION_REQUIRED_ERROR_MESSAGE =
+  "Please verify your email to submit your request.";
+
 // submitBookingRequestWithEmailOtp (54.5.2.5): the code was redeemed and the
 // session issued, but the booking write failed -- distinct copy so the
 // client knows the code step is done and a resubmit needs no new code.
