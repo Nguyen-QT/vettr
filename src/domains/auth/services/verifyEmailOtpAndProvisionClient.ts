@@ -68,16 +68,20 @@ function auditIdentity(
   return accountId !== undefined ? { accountId } : { attemptedEmail: email };
 }
 
-// Reads only, on the global client. A unique index backs every gap
-// between these reads and the writes, so a stale read ends in a P2002, not
-// a duplicate. The draft's handle is consulted only when nothing matches
+// Reads only, through one REPEATABLE READ snapshot (54.9.2.1): a
+// concurrent verify's commit is seen entirely or not at all, never split
+// across the reads -- a split read once turned a lost double-verify into a
+// false "email unavailable". A unique index backs the gap between this
+// snapshot and the writes, so a stale snapshot ends in a P2002, not a
+// duplicate. The draft's handle is consulted only when nothing matches
 // the email: a verified email never claims another client's profile by
 // handle, which is why linkOrCreateClientProfileForAccount isn't reused.
 async function resolveClient(
+  reader: Prisma.TransactionClient,
   email: string,
   instagramHandle: string
 ): Promise<Provision | Rejection> {
-  const account = await prisma.account.findUnique({
+  const account = await reader.account.findUnique({
     where: { email },
     select: { id: true, role: true, clientProfileId: true },
   });
@@ -105,7 +109,7 @@ async function resolveClient(
     return { kind: "EXISTING", accountId: account.id, clientProfileId: account.clientProfileId };
   }
 
-  const profileByEmail = await prisma.clientProfile.findUnique({
+  const profileByEmail = await reader.clientProfile.findUnique({
     where: { email },
     select: { id: true, account: { select: { id: true } } },
   });
@@ -121,7 +125,7 @@ async function resolveClient(
     return { kind: "LINK", clientProfileId: profileByEmail.id };
   }
 
-  const profileByHandle = await prisma.clientProfile.findUnique({
+  const profileByHandle = await reader.clientProfile.findUnique({
     where: { instagramHandle },
     select: { id: true },
   });
@@ -187,7 +191,10 @@ async function provisionClient(
 // the session then commit together: a P2002 (same new handle or email
 // racing) rolls back and leaves the code redeemable, and the consume's
 // guard (challengeId + codeHash) makes a concurrent double-verify yield
-// exactly one session.
+// exactly one session. The resolve reads share one snapshot, so each
+// loser resolves to the state before the winner or after it, and its
+// consume then finds the code gone: every loser gets the generic invalid
+// result.
 //
 // emailVerifiedAt is set only on a new, passwordless Account. An existing
 // one is untouched: until 54.8 nulls client passwords, setting it would
@@ -213,7 +220,12 @@ export async function verifyEmailOtpAndProvisionClient(
       return INVALID_RESULT;
     }
 
-    const resolution = await resolveClient(email, input.instagramHandle);
+    // Read-only, so REPEATABLE READ can't raise a serialization failure;
+    // it releases its connection before the consume transaction opens.
+    const resolution = await prisma.$transaction(
+      (reader) => resolveClient(reader, email, input.instagramHandle),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead }
+    );
     if (resolution.kind === "REJECTED") {
       await recordAuditEvent({
         eventType: "EMAIL_OTP_BOOKING_VERIFICATION",
