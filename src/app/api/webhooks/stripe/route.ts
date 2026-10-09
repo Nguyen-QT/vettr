@@ -11,7 +11,10 @@ import { stripe } from "@/lib/stripe";
 // confirmDepositPayment/confirmDepositRefund for the actual business
 // logic. Reads the raw request body rather than request.json() since
 // Stripe's signature is computed over the exact bytes it sent; a
-// re-serialized JSON body would fail verification.
+// re-serialized JSON body would fail verification. The Stripe webhook
+// endpoint must subscribe to every event handled below (56.1):
+// payment_intent.succeeded, payment_intent.payment_failed,
+// refund.created, refund.updated and account.updated.
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -49,12 +52,17 @@ export async function POST(request: NextRequest) {
         // that surface gets built.
         console.error("Deposit PaymentIntent failed:", event.data.object.id);
         break;
+      case "refund.created":
       case "refund.updated": {
         const refund = event.data.object;
-        // Only a completed refund actually moved money -- a refund
-        // can be created in "pending" status (e.g. some bank-transfer
-        // methods) before later settling, so only "succeeded" is the
-        // authoritative confirmation confirmDepositRefund needs.
+        // Only a completed refund actually moved money, so only
+        // "succeeded" is the authoritative confirmation
+        // confirmDepositRefund needs. refund.created carries the status
+        // a refund starts in -- a card refund usually starts
+        // "succeeded", and no other event reports that at once (56.1
+        // spike: refund.updated only follows when the card network's
+        // reference number arrives). A refund that starts "pending" is
+        // confirmed later by the refund.updated for its transition.
         if (refund.status === "succeeded" && typeof refund.payment_intent === "string") {
           await confirmDepositRefund(refund.payment_intent, refund.id);
         }
