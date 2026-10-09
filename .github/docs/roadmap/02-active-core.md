@@ -281,7 +281,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.5.4.1** UI Primitive — extract `TierSelectFields`/`IntakeFields`/`DateSlotFields` from `VisualBookingForm` (behaviour and e2e unchanged).
     - [x] **54.5.4.2** UI Primitive — `BookingDetailsFields`.
     - [x] **54.5.4.3** UI Primitive — `InlineBookingVerification`.
-    - [ ] **54.5.4.4** UI Primitive — `BookingSubmittedConfirmation` (links to `/client`).
+    - [x] **54.5.4.4** UI Primitive — `BookingSubmittedConfirmation` (links to `/client`).
     - [ ] **54.5.5.1** Domain Hook — `useBookingRequestWizard` (new step order, `?service=` start) (+ tests).
     - [ ] **54.5.5.2** Domain Hook — `useBookingVerification` (send/resend/verify; resets on email change; copes with session props changing mid-flow) (+ tests).
     - [ ] **54.5.6.1** View & Route — `BookingRequestWizard` container on `/at/[handle]/book`; `e2e/wizardHelpers.ts` new step helpers + `verifyAndSubmit` (capture-sink code); update the 5 booking specs and their baselines.
