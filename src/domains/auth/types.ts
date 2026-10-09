@@ -221,20 +221,6 @@ export interface SetUpClientProfileFormProps {
   isPending?: boolean;
 }
 
-export interface VerifyEmailCodeFormProps {
-  code: string;
-  onCodeChange: (value: string) => void;
-  password: string;
-  onPasswordChange: (value: string) => void;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-  onResend: () => void;
-  resendCooldownSeconds: number; // 0 = resend available
-  isPending?: boolean;
-  isResending?: boolean;
-  error?: string;
-  resendMessage?: string;
-}
-
 // OtpCodeInput (54.3.4.1) -- a field fragment, not a form: ClientSignInForm
 // (54.3.4.2) and the booking wizard's verify step (54.5.4.3) own the <form>
 // and its submit. `code` arrives already sanitized; onCodeChange gets the raw
