@@ -77,9 +77,10 @@ export async function refundDeposit(
     // of whether this write succeeds -- reporting failure here would
     // be factually wrong and risks a caller retrying and attempting a
     // second refund against an already-refunded PaymentIntent. Log for
-    // visibility; the charge.refunded webhook (confirmDepositRefund)
-    // reconciles depositRefunded/stripeRefundId shortly after as a
-    // backstop, the same role payment_intent.succeeded plays for
+    // visibility; the webhook's refund.created/refund.updated handling
+    // (confirmDepositRefund) reconciles depositRefunded/stripeRefundId
+    // as a backstop once Stripe reports the refund succeeded (56.1),
+    // the same role payment_intent.succeeded plays for
     // confirmDepositPayment.
     console.error(
       `Failed to record deposit refund for booking request ${bookingRequestId} after Stripe refund ${refund.id} succeeded:`,
