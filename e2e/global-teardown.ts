@@ -51,8 +51,8 @@ export default async function globalTeardown() {
   }
   // Account.clientProfileId is ON DELETE SET NULL (CLAUDE.md 5.1.1),
   // same reasoning as the artist Account cleanup below -- must clear
-  // any client Account (e.g. one created by the signup spec, 5.2.4)
-  // before the ClientProfile delete, or it'd be left orphaned.
+  // the seeded client Accounts before the ClientProfile delete, or
+  // they'd be left orphaned.
   await client.query(`DELETE FROM "Account" WHERE "clientProfileId" = ANY($1)`, [
     fixture.clientProfileIds,
   ]);

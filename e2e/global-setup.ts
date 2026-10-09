@@ -71,12 +71,10 @@ export interface E2eFixture {
   // A dedicated upcoming APPROVED booking for the cancel-from-the-
   // upcoming-list spec (5.6.5).
   cancelUpcomingClientHandle: string;
-  // Real credentials for a pre-provisioned client Account (CLAUDE.md
-  // 5.2.4), mirroring artistLoginEmail/Password above -- this
-  // ClientProfile has its own booking so the login spec can assert the
-  // dashboard shows it.
+  // A pre-provisioned, passwordless client Account (CLAUDE.md 5.2.4,
+  // 54.8.6.1) -- this ClientProfile has its own bookings so client specs
+  // can assert the dashboard shows them.
   clientLoginEmail: string;
-  clientLoginPassword: string;
   // A dedicated Artist/ClientProfile/Account/Session, entirely separate
   // from artistId/artistAccountId above, whose Account is linked to both
   // (CLAUDE.md 26.1.6.2's RoleSwitcher spec) -- deliberately its own
@@ -94,32 +92,21 @@ export interface E2eFixture {
   // prefill keys on activeRole rather than role.
   dualRoleClientViewSessionId: string;
   dualRoleArtistViewSessionId: string;
-  // An existing ClientProfile's email with no Account linked yet, for
-  // the signup spec to exercise the real signupClient check against --
-  // reuses freestylePendingClientId, which nothing else ever links an
-  // Account to.
-  clientSignupEmail: string;
-  // A second unverified-signup candidate (CLAUDE.md 27.3.6.1) so
-  // verify-email.spec.ts never races client-auth.spec.ts for the
-  // single-use clientSignupEmail.
-  clientVerifyEmail: string;
-  // A second login-capable client (CLAUDE.md 6.2) whose onboarding
-  // fields are already set, for the "locked fields" spec.
+  // A second client Account (CLAUDE.md 6.2) whose onboarding fields are
+  // already set, for the "locked fields" spec.
   onboardedClientEmail: string;
-  onboardedClientPassword: string;
   // A dedicated PENDING request carrying a clientMaxEndTime (CLAUDE.md
   // 6.3), never touched by any mutating spec.
   maxEndTimeClientHandle: string;
-  // A dedicated login-capable client hosting two PENDING bookings with
+  // A dedicated client Account hosting two PENDING bookings with
   // seeded images (CLAUDE.md 13.2.5), for the image add/remove/preview
   // e2e specs -- kept off clientLoginProfileId, see the fixture-setup
   // comment near its creation for why.
   imageClientEmail: string;
-  imageClientPassword: string;
   // Pre-created, already-valid CLIENT Session ids (CLAUDE.md 54.2.6.1),
-  // one per login-capable client Account above -- the client-side
-  // counterpart of authenticatedSessionId, so client specs can skip the
-  // login UI (which Phase 54 turns passwordless) via loginAsClient.
+  // one per client Account above -- the client-side counterpart of
+  // authenticatedSessionId, so client specs can skip the sign-in UI via
+  // loginAsClient.
   clientLoginSessionId: string;
   onboardedClientSessionId: string;
   imageClientSessionId: string;
@@ -250,10 +237,8 @@ export default async function globalSetup() {
   const rescheduleTestClientHandle = "e2e_client_reschedule";
   const clientLoginProfileId = randomUUID();
   const clientLoginRequestId = randomUUID();
-  const clientVerifyProfileId = randomUUID();
-  const clientVerifyRequestId = randomUUID();
   const clientEditableRequestId = randomUUID();
-  // A third booking for the same login-capable client (CLAUDE.md 7.1.9)
+  // A third booking for the same signed-in client (CLAUDE.md 7.1.9)
   // -- APPROVED, unpaid, TIER_4 so it never overlaps the TIER_2/TIER_3
   // bookings the cancel/edit specs already touch on this same profile.
   const depositRequestId = randomUUID();
@@ -808,26 +793,10 @@ export default async function globalSetup() {
     ]
   );
 
-  // A dedicated ClientProfile + Account for the client login spec
-  // (5.2.4), with its own booking so the dashboard has something to
-  // show once logged in.
+  // A dedicated ClientProfile + passwordless Account (5.2.4, 54.8.6.1),
+  // with its own booking so the dashboard has something to show once
+  // signed in.
   const clientLoginEmail = "e2e-client-login@example.com";
-  const clientLoginPassword = "e2e-test-password-123";
-  const clientSignupEmail = "e2e-client-freestyle@example.com";
-  const clientVerifyEmail = "e2e-client-verify@example.com";
-
-  await client.query(
-    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
-     VALUES ($1, $2, $3, now())`,
-    [clientVerifyProfileId, "e2e_client_verify", clientVerifyEmail]
-  );
-  await client.query(
-    `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "updatedAt")
-     VALUES
-       ($1, 'PENDING', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], now())`,
-    [clientVerifyRequestId, clientVerifyProfileId, artistId]
-  );
 
   await client.query(
     `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
@@ -899,14 +868,9 @@ export default async function globalSetup() {
   const clientLoginSessionId = randomUUID();
 
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
-    [
-      clientLoginAccountId,
-      clientLoginEmail,
-      hashPasswordForFixture(clientLoginPassword),
-      clientLoginProfileId,
-    ]
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [clientLoginAccountId, clientLoginEmail, clientLoginProfileId]
   );
   await client.query(
     `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
@@ -914,14 +878,13 @@ export default async function globalSetup() {
     [clientLoginSessionId, sessionExpiresAt, clientLoginAccountId]
   );
 
-  // A separate login-capable ClientProfile that already has its
+  // A separate ClientProfile + Account that already has its
   // onboarding fields set (CLAUDE.md 6.2), for the "locked fields"
   // spec -- clientLoginProfileId above deliberately predates 6.2 (null
   // firstName/lastName/dateOfBirth) so it doubles as the "still
   // editable" case instead.
   const onboardedClientId = randomUUID();
   const onboardedClientEmail = "e2e-client-onboarded@example.com";
-  const onboardedClientPassword = "e2e-test-password-123";
 
   await client.query(
     `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "firstName", "lastName", "dateOfBirth", "updatedAt")
@@ -939,14 +902,9 @@ export default async function globalSetup() {
   const onboardedClientSessionId = randomUUID();
 
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
-    [
-      onboardedClientAccountId,
-      onboardedClientEmail,
-      hashPasswordForFixture(onboardedClientPassword),
-      onboardedClientId,
-    ]
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [onboardedClientAccountId, onboardedClientEmail, onboardedClientId]
   );
   await client.query(
     `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
@@ -954,9 +912,9 @@ export default async function globalSetup() {
     [onboardedClientSessionId, sessionExpiresAt, onboardedClientAccountId]
   );
 
-  // A fully separate login-capable client, entirely off
-  // clientLoginProfileId, for the image add/remove/preview e2e specs
-  // (CLAUDE.md 13.2.5) -- two reasons, not one:
+  // A fully separate client, entirely off clientLoginProfileId, for the
+  // image add/remove/preview e2e specs (CLAUDE.md 13.2.5) -- two
+  // reasons, not one:
   // 1. Every ComplexityTier value is already claimed by a plain
   //    `hasText` card locator somewhere across the e2e suite (this
   //    file's own cancel/edit specs plus deposit-payment.spec.ts), so
@@ -975,7 +933,6 @@ export default async function globalSetup() {
   const imageRemoveRequestId = randomUUID();
   const imageRejectRequestId = randomUUID();
   const imageClientEmail = "e2e-client-image-only@example.com";
-  const imageClientPassword = "e2e-test-password-123";
 
   await client.query(
     `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
@@ -1022,14 +979,9 @@ export default async function globalSetup() {
   const imageClientSessionId = randomUUID();
 
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
-    [
-      imageClientAccountId,
-      imageClientEmail,
-      hashPasswordForFixture(imageClientPassword),
-      imageClientId,
-    ]
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [imageClientAccountId, imageClientEmail, imageClientId]
   );
   await client.query(
     `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
@@ -1039,8 +991,7 @@ export default async function globalSetup() {
 
   // A CLIENT Account with a linked ClientProfile -- exactly what
   // requestClientSignInCode requires before it issues a code (54.3.6.1).
-  // No booking: the sign-in spec only asserts the dashboard renders. Still
-  // gets a password hash since passwordHash stays NOT NULL until 54.8.1.1.
+  // No booking: the sign-in spec only asserts the dashboard renders.
   const otpClientId = randomUUID();
   const otpClientEmail = "e2e-client-otp@example.com";
 
@@ -1050,14 +1001,9 @@ export default async function globalSetup() {
     [otpClientId, "e2e_client_otp", otpClientEmail]
   );
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
-    [
-      randomUUID(),
-      otpClientEmail,
-      hashPasswordForFixture("e2e-test-password-123"),
-      otpClientId,
-    ]
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [randomUUID(), otpClientEmail, otpClientId]
   );
 
   // Same shape as otpClientEmail above, for portal-gate.spec.ts only
@@ -1071,14 +1017,9 @@ export default async function globalSetup() {
     [gateOtpClientId, "e2e_client_gate_otp", gateOtpClientEmail]
   );
   await client.query(
-    `INSERT INTO "Account" (id, email, "passwordHash", role, "clientProfileId", "emailVerifiedAt", "updatedAt")
-     VALUES ($1, $2, $3, 'CLIENT', $4, now(), now())`,
-    [
-      randomUUID(),
-      gateOtpClientEmail,
-      hashPasswordForFixture("e2e-test-password-123"),
-      gateOtpClientId,
-    ]
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [randomUUID(), gateOtpClientEmail, gateOtpClientId]
   );
 
   // An existing passwordless client for the booking code flow (54.5.6.2) --
@@ -1139,7 +1080,6 @@ export default async function globalSetup() {
       bookedSlotClientId,
       rescheduleTestClientId,
       clientLoginProfileId,
-      clientVerifyProfileId,
       ...pastDueClientIds,
       cancelUpcomingClientId,
       onboardedClientId,
@@ -1159,7 +1099,6 @@ export default async function globalSetup() {
       bookedSlotRequestId,
       rescheduleTestRequestId,
       clientLoginRequestId,
-      clientVerifyRequestId,
       clientEditableRequestId,
       depositRequestId,
       refundedDepositRequestId,
@@ -1191,13 +1130,8 @@ export default async function globalSetup() {
     dualRoleClientViewSessionId,
     dualRoleArtistViewSessionId,
     clientLoginEmail,
-    clientLoginPassword,
-    clientSignupEmail,
-    clientVerifyEmail,
     onboardedClientEmail,
-    onboardedClientPassword,
     imageClientEmail,
-    imageClientPassword,
     clientLoginSessionId,
     onboardedClientSessionId,
     imageClientSessionId,

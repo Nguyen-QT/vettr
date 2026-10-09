@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import { readCapturedCode, readCapturedEmails } from "./authHelpers";
-import { resetClientSignup, resetEmailOtpChallenge } from "./dbHelpers";
+import { resetEmailOtpChallenge } from "./dbHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -151,43 +151,5 @@ test.describe("client sign-in privacy and layout", () => {
       mask: [page.getByRole("button", { name: /Resend code/ })],
       stylePath: path.join(__dirname, "screenshot.css"),
     });
-  });
-});
-
-test.describe("client signup", () => {
-  // Signup no longer issues a session (27.3.2.4) -- it routes through
-  // /client/verify-email, reading the code back from the e2e capture sink.
-  test("signs up with an email that has a prior booking and reaches the dashboard", async ({
-    page,
-  }) => {
-    const fixture = await readFixture();
-    await resetClientSignup(fixture.clientSignupEmail);
-
-    await page.goto("/client/signup");
-    await page.getByLabel("Email").fill(fixture.clientSignupEmail);
-    await page.getByLabel("Password").fill("a-brand-new-password");
-    await page.getByRole("button", { name: "Create account" }).click();
-
-    await expect(page).toHaveURL(/\/client\/verify-email\?email=/);
-    const code = await readCapturedCode(fixture.clientSignupEmail);
-    await page.getByLabel("Verification code").fill(code);
-    await page.getByLabel("Password").fill("a-brand-new-password");
-    await page.getByRole("button", { name: "Verify" }).click();
-
-    await expect(page).toHaveURL("http://localhost:3000/client");
-  });
-
-  test("rejects signup for an email with no prior booking", async ({ page }) => {
-    await page.goto("/client/signup");
-    await page.getByLabel("Email").fill("no-such-booking@example.com");
-    await page.getByLabel("Password").fill("a-brand-new-password");
-    await page.getByRole("button", { name: "Create account" }).click();
-
-    await expect(
-      page.getByText("We couldn't find a booking under that email.", {
-        exact: false,
-      })
-    ).toBeVisible();
-    await expect(page).toHaveURL(/\/client\/signup/);
   });
 });
