@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import type { E2eFixture } from "./global-setup";
-import { completeContactDetailsStep, completeServiceCanvasStep } from "./wizardHelpers";
+import { completeIntakeStep, completeServiceStep, goToDetailsStep } from "./wizardHelpers";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
@@ -25,8 +25,8 @@ test.describe("client booking form -- requested slot", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-    await completeServiceCanvasStep(page);
+    await completeServiceStep(page);
+    await completeIntakeStep(page);
 
     await expect(page.getByLabel("Preferred date")).toBeVisible();
     await expect(page.getByText("11:00")).toBeVisible();
@@ -42,7 +42,7 @@ test.describe("client booking form -- requested slot", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
+    await completeServiceStep(page);
 
     // Full add/remove/preview coverage (CLAUDE.md 13.1) needs a real
     // uploaded image to interact with, which needs driving UploadThing's
@@ -68,7 +68,7 @@ test.describe("client booking form -- requested slot", () => {
     await expect(page.getByText("Pay your deposit")).toBeVisible();
   });
 
-  test("rejects a preferred date/time in the past on Step 3's Next", async ({
+  test("rejects a preferred date/time in the past on Date & Slot's Next", async ({
     page,
   }) => {
     const fixture = await readFixture();
@@ -78,13 +78,12 @@ test.describe("client booking form -- requested slot", () => {
     // before Next.js attaches its event handlers silently drops the fill.
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-    await completeServiceCanvasStep(page);
+    await completeServiceStep(page);
+    await completeIntakeStep(page);
 
     await page.getByLabel("Preferred date").fill("2020-01-01");
-    // Step 3 (Date & Slot)'s own "Next" gate already validates
-    // requestedDate, so the error surfaces without needing to reach
-    // the review step's Submit button.
+    // Date & Slot's own "Next" gate already validates requestedDate, so
+    // the error surfaces without needing to reach the last step.
     await page.getByRole("button", { name: "Next", exact: true }).click();
 
     await expect(
@@ -92,21 +91,24 @@ test.describe("client booking form -- requested slot", () => {
     ).toBeVisible();
   });
 
-  test("requires an email address to advance past Step 1", async ({ page }) => {
+  test("requires an email address before sending a code", async ({ page }) => {
     const fixture = await readFixture();
 
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
+    await goToDetailsStep(page);
+
+    await page.getByLabel("Instagram handle").fill("test_client_no_email");
     await page.getByLabel("First name").fill("Test");
     await page.getByLabel("Last name").fill("Client");
     await page.getByLabel("Date of birth").fill("2000-01-01");
-    await page.getByLabel("Instagram handle").fill("test_client_no_email");
-    await page.getByRole("button", { name: "Next", exact: true }).click();
+    // The whole draft is validated before any code is sent (54.5.5.2).
+    await page.getByRole("button", { name: "Email me a code" }).click();
 
     await expect(page.getByText("Enter a valid email address.")).toBeVisible();
-    // Still on Step 1 -- Step 3's own field never rendered.
-    await expect(page.getByLabel("Preferred date")).not.toBeVisible();
+    // Still on the request step -- no code was sent.
+    await expect(page.getByLabel("6-digit code")).toHaveCount(0);
   });
 
   test("shows the tier reference gallery for the default tier and hides it for a tier with no examples", async ({
@@ -117,10 +119,8 @@ test.describe("client booking form -- requested slot", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-
-    // TIER_2 is the form's default and the only tier the fixture
-    // seeded an example image for.
+    // The wizard lands on Service (54.5). TIER_2 is the form's default
+    // and the only tier the fixture seeded an example image for.
     await expect(page.getByText("Examples of TIER_2 work")).toBeVisible();
 
     await page.getByRole("radio", { name: "TIER_3" }).click();
@@ -137,8 +137,8 @@ test.describe("client booking form -- requested slot", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-    await completeServiceCanvasStep(page);
+    await completeServiceStep(page);
+    await completeIntakeStep(page);
 
     await page.getByLabel("Preferred date").fill(fixture.bookedSlotDate);
 
@@ -163,16 +163,15 @@ test.describe("client booking form -- requested slot", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-    await completeServiceCanvasStep(page);
+    await completeServiceStep(page);
+    await completeIntakeStep(page);
 
     await page.getByLabel("Preferred date").fill("2099-01-01");
     await page.getByLabel("Preferred date").press("Enter");
 
-    // A real submit (there's no submit button until the review step)
-    // would have navigated away from Step 3 entirely -- its own
-    // fields, and the still-present "Next" control, confirm Enter
-    // didn't trigger anything.
+    // A native submit would reload the page and drop the draft back to
+    // the Service step -- Date & Slot's own field, and the still-present
+    // "Next" control, confirm Enter didn't trigger anything.
     await expect(page.getByLabel("Preferred date")).toBeVisible();
     await expect(page.getByRole("button", { name: "Next", exact: true })).toBeVisible();
   });

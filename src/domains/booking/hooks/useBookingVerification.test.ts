@@ -77,9 +77,7 @@ function renderVerification(isSignedInClient = false) {
 
 type Hook = ReturnType<typeof renderVerification>;
 
-// Every field valid. The phone is filled because the form's resolver is
-// still clientBookingInputSchema, which rejects a blank one until 54.5.6.1
-// switches it to the draft schema.
+// Every field valid, the optional phone included.
 async function fillValidDraft(form: UseFormReturn<ClientBookingInput>) {
   // Setting the date fires useVisualBookingForm's availability fetch.
   await act(async () => {

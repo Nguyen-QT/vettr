@@ -1,47 +1,35 @@
+import { randomBytes } from "node:crypto";
+
 import type { Page } from "@playwright/test";
 
-// Fills every Step 1 (Contact Details) field with valid defaults
-// (callers can override any of them) and advances to Step 2 -- shared
-// by every spec that needs to reach a later step as a guest, since
-// Step 1 only skips itself entirely for a signed-in client with a
-// complete profile (CLAUDE.md 17.1).
-export async function completeContactDetailsStep(
-  page: Page,
-  overrides: Partial<{
-    firstName: string;
-    lastName: string;
-    dateOfBirth: string;
-    email: string;
-    phone: string;
-    instagramHandle: string;
-  }> = {}
-) {
-  // INSTAGRAM_HANDLE_REGEX only allows letters/digits/periods/
-  // underscores (no hyphens) up to 30 chars total, so the uniqueness
-  // suffix below stays short and digits-only.
-  const unique = `${Date.now() % 1_000_000}`;
-  const details = {
-    firstName: "Wizard",
-    lastName: "Guest",
-    dateOfBirth: "2000-01-01",
-    email: `wizard-guest-${unique}@example.com`,
-    // clientBookingInputSchema's phone field rejects a blank string --
-    // only a genuinely omitted value passes -- but react-hook-form
-    // registers this input with a "" default, not undefined, so a
-    // real, pre-existing (not introduced by the wizard) gap leaves an
-    // untouched phone field unable to pass validation at all. Always
-    // filling it here sidesteps that instead of masking it.
-    phone: "+1 555 0100",
-    instagramHandle: `wizard_guest_${unique}`,
-    ...overrides,
-  };
+import { readCapturedCode } from "./authHelpers";
 
-  await page.getByLabel("First name").fill(details.firstName);
-  await page.getByLabel("Last name").fill(details.lastName);
-  await page.getByLabel("Date of birth").fill(details.dateOfBirth);
-  await page.getByLabel("Email").fill(details.email);
-  await page.getByLabel("Phone (optional)").fill(details.phone);
-  await page.getByLabel("Instagram handle").fill(details.instagramHandle);
+// Step helpers for the booking wizard at /@handle/book, in its 54.5 order:
+// Service -> Design & Budget -> Date & Slot -> Details & Verify. Each
+// "complete" helper fills its step's minimum and clicks Next; the last step
+// has no Next -- a guest finishes with verifyAndSubmit, a signed-in client
+// with "Submit request".
+
+// Mirrors the prisma ComplexityTier enum -- the tier radios are named by it.
+type WizardTier = "TIER_2" | "TIER_3" | "TIER_4" | "FREESTYLE";
+
+export interface WizardDetails {
+  instagramHandle: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  email: string;
+  phone: string;
+}
+
+// Picks the tier (or keeps the form's default) and advances to Intake.
+export async function completeServiceStep(
+  page: Page,
+  { tier }: { tier?: WizardTier } = {}
+) {
+  if (tier) {
+    await page.getByRole("radio", { name: tier }).check();
+  }
   await page.getByRole("button", { name: "Next", exact: true }).click();
 }
 
@@ -100,7 +88,7 @@ async function mockImageUploadNetwork(page: Page) {
 }
 
 // Uploads one mocked design reference image via the real dropzone
-// input, so the Remove-image control (and Step 2's own "Next" gate on
+// input, so the Remove-image control (and Intake's own "Next" gate on
 // designReferenceImageUrls, CLAUDE.md 17.1) sees a genuine, populated
 // image list rather than an empty one.
 async function uploadMockDesignReferenceImage(page: Page) {
@@ -119,11 +107,11 @@ async function uploadMockDesignReferenceImage(page: Page) {
   await page.getByRole("button", { name: "Remove image" }).waitFor();
 }
 
-// Picks the minimum Step 2 (Service, Budget & Canvas) selection needed
-// to satisfy its own "Next" gate -- the default tier (TIER_2) requires
-// at least one design tag, and at least one design reference image is
-// always required -- and advances to Step 3.
-export async function completeServiceCanvasStep(page: Page) {
+// Picks the minimum Intake (Design & Budget) selection needed to satisfy
+// its own "Next" gate -- a non-FREESTYLE tier requires at least one design
+// tag, and at least one design reference image is always required -- and
+// advances to Date & Slot.
+export async function completeIntakeStep(page: Page) {
   await page.getByRole("checkbox", { name: "fine-line-detail" }).check();
   await uploadMockDesignReferenceImage(page);
   // Payment method preference (CLAUDE.md 23.1) is required -- the form
@@ -131,4 +119,75 @@ export async function completeServiceCanvasStep(page: Page) {
   // against that default ever changing.
   await page.getByRole("radio", { name: "Card" }).check();
   await page.getByRole("button", { name: "Next", exact: true }).click();
+}
+
+// A future slot and advances to Details & Verify. The default date is
+// one no fixture books, so the slot is always selectable.
+export async function completeDateSlotStep(
+  page: Page,
+  { date = "2099-02-02", time = "14:00" }: { date?: string; time?: string } = {}
+) {
+  await page.getByLabel("Preferred date").fill(date);
+  await page.getByRole("radio", { name: time }).check();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+}
+
+// From a fresh /@handle/book landing (the Service step) to Details & Verify.
+export async function goToDetailsStep(
+  page: Page,
+  { tier }: { tier?: WizardTier } = {}
+) {
+  await completeServiceStep(page, { tier });
+  await completeIntakeStep(page);
+  await completeDateSlotStep(page);
+}
+
+// Fills every Details & Verify field for a guest and returns what was
+// used. No Next -- this is the last step. The phone stays blank by
+// default: the form's draft resolver (54.5.6.1) treats it as not provided.
+//
+// The suffix is fresh on every call (and so on every retry): a reused
+// address would sit in the 60s resend cooldown or hit the daily cap, which
+// quietly sends no new code. The `e2e-` prefix matches global-setup's
+// stale-fixture sweep, so the Account and ClientProfile a verified submit
+// creates never outlive the next run. Lowercase, since the capture sink
+// records the normalised address. 12 hex chars keep the handle at 25,
+// inside INSTAGRAM_HANDLE_REGEX's 30.
+export async function fillDetailsStep(
+  page: Page,
+  overrides: Partial<WizardDetails> = {}
+): Promise<WizardDetails> {
+  const unique = randomBytes(6).toString("hex");
+  const details: WizardDetails = {
+    instagramHandle: `wizard_guest_${unique}`,
+    firstName: "Wizard",
+    lastName: "Guest",
+    dateOfBirth: "2000-01-01",
+    email: `e2e-wizard-guest-${unique}@example.com`,
+    phone: "",
+    ...overrides,
+  };
+
+  await page.getByLabel("Instagram handle").fill(details.instagramHandle);
+  await page.getByLabel("First name").fill(details.firstName);
+  await page.getByLabel("Last name").fill(details.lastName);
+  await page.getByLabel("Date of birth").fill(details.dateOfBirth);
+  await page.getByLabel("Email").fill(details.email);
+  await page.getByLabel("Phone (optional)").fill(details.phone);
+  return details;
+}
+
+// The guest's inline email code: sends it, reads it back from the e2e
+// capture sink and submits. `email` must be the normalised address (as
+// fillDetailsStep returns it). The caller asserts the outcome. Never point
+// this at otpClientEmail/gateOtpClientEmail -- one challenge row per
+// address, so a booking code would replace their sign-in code.
+export async function verifyAndSubmit(page: Page, email: string) {
+  await page.getByRole("button", { name: "Email me a code" }).click();
+  // The code input renders once the action returns, and the action awaits
+  // the sink write before returning -- so the code is already there.
+  const codeInput = page.getByLabel("6-digit code");
+  await codeInput.waitFor();
+  await codeInput.fill(await readCapturedCode(email));
+  await page.getByRole("button", { name: "Verify and submit request" }).click();
 }

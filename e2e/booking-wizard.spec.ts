@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 
 import { loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
-import { completeContactDetailsStep, completeServiceCanvasStep } from "./wizardHelpers";
+import { fillDetailsStep, goToDetailsStep, verifyAndSubmit } from "./wizardHelpers";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
@@ -23,42 +23,27 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page, {
+    // Intake's own "Next" gate requires at least one design reference
+    // image (CLAUDE.md 17.1) -- completeIntakeStep uploads one via a
+    // mocked UploadThing network flow (see wizardHelpers.ts), since a
+    // real upload can't be driven in this environment.
+    await goToDetailsStep(page);
+    const { email } = await fillDetailsStep(page, {
       firstName: "Wanda",
       lastName: "Wizard",
     });
-    // Step 2's own "Next" gate requires at least one design reference
-    // image (CLAUDE.md 17.1) -- completeServiceCanvasStep uploads one
-    // via a mocked UploadThing network flow (see wizardHelpers.ts),
-    // since a real upload can't be driven in this environment.
-    await completeServiceCanvasStep(page);
+    // The guest proves their email inline (54.5); the phone is left blank.
+    await verifyAndSubmit(page, email);
 
-    await page.getByLabel("Preferred date").fill("2099-02-02");
-    await page.getByRole("radio", { name: "14:00" }).click();
-    await page.getByRole("button", { name: "Next", exact: true }).click();
-
-    // Review step recaps what was entered on earlier steps, including
-    // the payment method preference (CLAUDE.md 23.1) selected on Step 2
-    // by completeServiceCanvasStep.
-    await expect(page.getByText("Review your request")).toBeVisible();
-    await expect(page.getByText("Wanda Wizard")).toBeVisible();
-    await expect(page.getByText("Final balance payment method")).toBeVisible();
-
-    await page.getByRole("button", { name: "Submit request" }).click();
-    await page
-      .getByRole("alertdialog")
-      .getByRole("button", { name: "Submit request" })
-      .click();
-
-    await expect(page.getByText("Request submitted.")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Request submitted" })
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "View your bookings" })).toBeVisible();
   });
 
-  // A fuller assertion of the same skip-Step-1 behavior (locked-field
-  // interplay with 6.1/6.2) lives in client-onboarding-fields.spec.ts;
-  // this covers it as one of the wizard's own core navigation rules.
-  test("a signed-in client with a complete profile skips Step 1 entirely", async ({
-    page,
-  }) => {
+  // The locked-field interplay with 6.1/6.2 lives in
+  // client-onboarding-fields.spec.ts; this covers the signed-in submit.
+  test("a signed-in client submits without an email code", async ({ page }) => {
     const fixture = await readFixture();
 
     // Guards against a real, previously-shipped bug: the "Not you? Log
@@ -76,9 +61,23 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await expect(page.getByText(/Booking as Jamie Rivera/)).toBeVisible();
-    await expect(page.getByLabel("First name")).not.toBeVisible();
+    await expect(
+      page.getByText(`Booking as ${fixture.onboardedClientEmail}`)
+    ).toBeVisible();
 
+    await goToDetailsStep(page);
+
+    // Not the phone: client-profile.spec.ts edits this client's phone in
+    // parallel, so its lock state isn't fixed.
+    await expect(page.getByLabel("First name")).toHaveValue("Jamie");
+    await expect(page.getByLabel("First name")).toBeDisabled();
+    await expect(page.getByText("Verify your email")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Submit request" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "Request submitted" })
+    ).toBeVisible();
     expect(
       consoleErrors.filter((text) => text.includes("cannot be a descendant"))
     ).toHaveLength(0);
@@ -92,10 +91,8 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page, {
-      firstName: "Backy",
-      lastName: "Steps",
-    });
+    await goToDetailsStep(page);
+    await fillDetailsStep(page, { firstName: "Backy", lastName: "Steps" });
 
     // dispatchEvent, not click -- Next.js's own dev-mode tools
     // indicator is a fixed, high-z-index overlay anchored at the same
@@ -107,6 +104,9 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
     // production build, so this is purely a test-environment
     // workaround, not evidence of a real click-target bug.
     await page.getByRole("button", { name: "Back" }).dispatchEvent("click");
+    await expect(page.getByLabel("Preferred date")).toHaveValue("2099-02-02");
+
+    await page.getByRole("button", { name: "Next", exact: true }).click();
 
     await expect(page.getByLabel("First name")).toHaveValue("Backy");
     await expect(page.getByLabel("Last name")).toHaveValue("Steps");
@@ -120,13 +120,36 @@ test.describe("client booking wizard (CLAUDE.md 17.1)", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    // Still on Step 1, never clicked Next -- the progress bar's Step 3
+    // Still on Service, never clicked Next -- the progress bar's Step 3
     // chip must stay unreachable.
     await expect(
       page.getByRole("button", { name: "3", exact: true })
     ).toBeDisabled();
 
-    await expect(page.getByLabel("First name")).toBeVisible();
+    await expect(page.getByText("Tier", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Preferred date")).not.toBeVisible();
+  });
+
+  test("the guest Details & Verify step matches the visual baseline", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    // Tall enough that the whole step fits above the fixed WizardActionBar
+    // -- a viewport capture, since a full-page one paints that bar mid-form.
+    await page.setViewportSize({ width: 1280, height: 1600 });
+
+    await page.goto(`/@${fixture.artistHandle}/book`);
+    await page.waitForLoadState("networkidle");
+
+    await goToDetailsStep(page);
+    await expect(page.getByText("Verify your email")).toBeVisible();
+    // The step clicks may have scrolled; the baseline is the page top.
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    // stylePath hides the Next dev indicator. Fields left empty, so no
+    // generated value lands in the image.
+    await expect(page).toHaveScreenshot({
+      stylePath: path.join(__dirname, "screenshot.css"),
+    });
   });
 });

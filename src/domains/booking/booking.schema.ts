@@ -270,8 +270,8 @@ const optionalPhoneSchema = z
 // keeps the superRefine above as the one copy of the draft rules. Parsed by
 // requestBookingVerificationCodeAction (54.5.3.4). No artistId or
 // clientProfileId -- unknown keys are stripped, and identity comes from the
-// route and the session or code (validation.md Sec2). The old wizard keeps
-// clientBookingInputSchema until 54.5.6.1 switches over.
+// route and the session or code (validation.md Sec2). Also the booking
+// form's resolver (useVisualBookingForm, since 54.5.6.1).
 export const bookingRequestDraftInputSchema = clientBookingInputSchema.safeExtend({
   email: normalizedEmailSchema,
   phone: optionalPhoneSchema,

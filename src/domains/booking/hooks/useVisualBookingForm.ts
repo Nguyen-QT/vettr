@@ -14,7 +14,7 @@ import {
   TIER_ESTIMATED_DURATION_MINUTES,
 } from "@/domains/booking/constants";
 import {
-  clientBookingInputSchema,
+  bookingRequestDraftInputSchema,
   combineRequestedDateAndTime,
 } from "@/domains/booking/booking.schema";
 import type {
@@ -57,8 +57,11 @@ export function useVisualBookingForm({
   initialClientDetails,
   initialTier = "TIER_2",
 }: UseVisualBookingFormArgs) {
+  // The draft schema (54.5.6.1): a blank phone parses to "not provided" and
+  // the email is normalised, so the values handed to every submit action
+  // match what the server re-parses.
   const form = useForm({
-    resolver: zodResolver(clientBookingInputSchema),
+    resolver: zodResolver(bookingRequestDraftInputSchema),
     defaultValues: {
       instagramHandle: initialClientDetails?.instagramHandle ?? "",
       designReferenceImageUrls: [] as string[],

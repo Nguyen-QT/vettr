@@ -10,9 +10,9 @@ import { buttonVariants } from "@/components/ui/button";
 // the cookie the verify-and-submit action sets), so it links straight to
 // /client, where the request is listed under "Your bookings". Fixed copy,
 // no props: nothing about the request or the client (no id, no email) is
-// shown. Not wired yet -- BookingRequestWizard (54.5.6.1) mounts it in
-// place of the wizard, and only on success; a verified-but-failed submit
-// stays on the wizard's error state.
+// shown. BookingRequestWizard (54.5.6.1) mounts it in place of the wizard,
+// and only on success; a verified-but-failed submit stays on the wizard's
+// error state.
 //
 // The heading takes focus on mount: the wizard (and the button just
 // pressed) unmounts underneath the user, so focus would otherwise drop to
