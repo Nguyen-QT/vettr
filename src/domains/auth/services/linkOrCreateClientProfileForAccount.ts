@@ -35,9 +35,8 @@ function isClientProfileUniqueConflict(
 }
 
 // Only fills fields the matched ClientProfile doesn't already have set --
-// unlike booking's resolveGuestClientProfile, this is a one-time
-// authenticated link (CLAUDE.md 26.1.2.4), not a repeat guest checkout,
-// so it must never clobber another client's existing saved data.
+// this is a one-time authenticated link (CLAUDE.md 26.1.2.4), so it must
+// never clobber another client's existing saved data.
 function blankFieldsToFill(
   existing: ClientProfile,
   input: LinkOrCreateClientProfileInput
