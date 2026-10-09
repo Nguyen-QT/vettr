@@ -5,7 +5,7 @@ import { config } from "dotenv";
 import { Client } from "pg";
 
 import { EMAIL_CAPTURE_SINK_PATH } from "./authHelpers";
-import type { E2eFixture } from "./global-setup";
+import { E2E_FIXTURE_EMAIL_PATTERN, type E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
@@ -39,6 +39,12 @@ export default async function globalTeardown() {
     .map((row) => row.clientId)
     .filter((id) => !fixture.clientProfileIds.includes(id));
   if (adHocClientIds.length > 0) {
+    // A guest who proved their email by code (54.5) also got an Account
+    // linked to that profile -- ON DELETE SET NULL, so it would outlive
+    // the profile delete below. Its Sessions cascade.
+    await client.query(`DELETE FROM "Account" WHERE "clientProfileId" = ANY($1)`, [
+      adHocClientIds,
+    ]);
     await client.query(`DELETE FROM "ClientProfile" WHERE id = ANY($1)`, [
       adHocClientIds,
     ]);
@@ -54,9 +60,11 @@ export default async function globalTeardown() {
     fixture.clientProfileIds,
   ]);
   // EmailOtpChallenge has no FK (54.3.1.1), so nothing above cascades to
-  // the sign-in specs' challenge rows (54.3.6.1, 54.4.6.1).
-  await client.query(`DELETE FROM "EmailOtpChallenge" WHERE email = ANY($1)`, [
-    [fixture.otpClientEmail, fixture.gateOtpClientEmail],
+  // it. Matched by global-setup's own sweep pattern rather than by address:
+  // a booking code (54.5) goes to a fresh guest address on every run, and a
+  // guest whose code was rejected leaves no Account or profile to find it by.
+  await client.query(`DELETE FROM "EmailOtpChallenge" WHERE email LIKE $1`, [
+    E2E_FIXTURE_EMAIL_PATTERN,
   ]);
   // ArtistWeeklyHours/ArtistScheduleOverride (CLAUDE.md 4.3) reference
   // Artist with ON DELETE RESTRICT -- must clear these before the
@@ -79,11 +87,13 @@ export default async function globalTeardown() {
   ]);
   // Account.artistId is ON DELETE SET NULL (CLAUDE.md 5.1.1), so it
   // won't clean itself up when Artist is deleted below -- Session
-  // cascades from Account automatically.
-  await client.query(`DELETE FROM "Account" WHERE "artistId" = $1`, [
-    fixture.artistId,
+  // cascades from Account automatically. bookingOtpArtistId (54.5.6.2) has
+  // only its Account -- none of the per-artist rows above.
+  const artistIds = [fixture.artistId, fixture.bookingOtpArtistId];
+  await client.query(`DELETE FROM "Account" WHERE "artistId" = ANY($1)`, [
+    artistIds,
   ]);
-  await client.query(`DELETE FROM "Artist" WHERE id = $1`, [fixture.artistId]);
+  await client.query(`DELETE FROM "Artist" WHERE id = ANY($1)`, [artistIds]);
 
   await client.end();
   await rm(FIXTURE_PATH, { force: true });

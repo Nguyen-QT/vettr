@@ -265,7 +265,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.4.6.1** View & Route — gate in `src/app/page.tsx` (`activeRole` redirect, finder, inline `ClientSignInForm`, artist sign-in link); `e2e/portal-gate.spec.ts` replaces `landing-and-directory.spec.ts` (incl. a seeded dual-role CLIENT-active session redirect) + `toHaveScreenshot()`. Confirmed additions: `directory/components/FindArtistContainer.tsx`; a session-lookup failure fails open to the signed-out gate (non-PII log, `unstable_rethrow` first so `cookies()`'s dynamic-usage signal survives `next build`) (+ `src/app/page.test.ts`); a dedicated `gateOtpClientEmail` fixture so the gate's full inline sign-in never shares `otpClientEmail`'s challenge row.
     - [x] **54.4.6.2** View & Route — client portal "Find an artist" link becomes the inline finder; update its spec.
     - [x] **54.4.6.3** View & Route — delete `src/app/artists/page.tsx`; no redirect — `/artists` falls through to the themed 404; assert the 404 in e2e.
-- [ ] **54.5: Email-Code-Gated Booking Submission & Wizard Reorder**
+- [x] **54.5: Email-Code-Gated Booking Submission & Wizard Reorder**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.5.1.1** Data Gateway — `Account.passwordHash` nullable; audit enum values for provisioning outcomes (`AuditEventType.EMAIL_OTP_BOOKING_VERIFICATION`; `AuditReasonCode.CLIENT_ACCOUNT_AND_PROFILE_CREATED` / `CLIENT_ACCOUNT_LINKED_TO_EXISTING_PROFILE` / `INSTAGRAM_HANDLE_TAKEN`; the other outcomes reuse `SIGNED_IN_WITH_EMAIL_OTP` / `ROLE_MISMATCH` / `NOT_LINKED_TO_CLIENT` / `CLIENT_PROFILE_ALREADY_LINKED` / `INVALID_EMAIL_OTP`; the `types.ts` audit mirrors are extended by 54.5.2.2, the first writer). No app code.
     - [x] **54.5.2.1** Domain Service (auth) — `requestBookingSubmissionCode` (+ tests).
@@ -285,7 +285,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.5.5.1** Domain Hook — `useBookingRequestWizard` (new step order, `?service=` start) (+ tests).
     - [x] **54.5.5.2** Domain Hook — `useBookingVerification` (send/resend/verify; resets on email change; copes with session props changing mid-flow) (+ tests).
     - [x] **54.5.6.1** View & Route — `BookingRequestWizard` container on `/at/[handle]/book`; `e2e/wizardHelpers.ts` new step helpers + `verifyAndSubmit` (capture-sink code); update the 5 booking specs and their baselines.
-    - [ ] **54.5.6.2** View & Route — new e2e cases (new guest ends signed in with the booking at `/client`; existing client email via code; wrong code; artist email gets the post-proof message) + setup/teardown cleanup for OTP accounts and challenges.
+    - [x] **54.5.6.2** View & Route — new e2e cases (new guest ends signed in with the booking at `/client`; existing client email via code; wrong code; artist email gets the post-proof message) + setup/teardown cleanup for OTP accounts and challenges.
 - [ ] **54.6: Remove the Unverified Guest Booking Path** (execute 54.6.3.1 → 54.6.2.1, immediately after 54.5.6.1)
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [ ] **54.6.1.1 / 54.6.4.1–54.6.6.1** Data/UI/Hook/View — N/A.

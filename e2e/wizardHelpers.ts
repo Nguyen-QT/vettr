@@ -177,17 +177,26 @@ export async function fillDetailsStep(
   return details;
 }
 
+// Sends the guest's inline email code and waits for the code input. The
+// input renders once the action returns, and the action awaits the sink
+// write before returning -- so the code is already in the sink.
+export async function requestBookingCode(page: Page) {
+  await page.getByRole("button", { name: "Email me a code" }).click();
+  await page.getByLabel("6-digit code").waitFor();
+}
+
+// Enters `code` and submits. The caller asserts the outcome.
+export async function submitBookingCode(page: Page, code: string) {
+  await page.getByLabel("6-digit code").fill(code);
+  await page.getByRole("button", { name: "Verify and submit request" }).click();
+}
+
 // The guest's inline email code: sends it, reads it back from the e2e
 // capture sink and submits. `email` must be the normalised address (as
 // fillDetailsStep returns it). The caller asserts the outcome. Never point
 // this at otpClientEmail/gateOtpClientEmail -- one challenge row per
 // address, so a booking code would replace their sign-in code.
 export async function verifyAndSubmit(page: Page, email: string) {
-  await page.getByRole("button", { name: "Email me a code" }).click();
-  // The code input renders once the action returns, and the action awaits
-  // the sink write before returning -- so the code is already there.
-  const codeInput = page.getByLabel("6-digit code");
-  await codeInput.waitFor();
-  await codeInput.fill(await readCapturedCode(email));
-  await page.getByRole("button", { name: "Verify and submit request" }).click();
+  await requestBookingCode(page);
+  await submitBookingCode(page, await readCapturedCode(email));
 }

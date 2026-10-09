@@ -133,6 +133,17 @@ export interface E2eFixture {
   // sharing otpClientEmail's single EmailOtpChallenge row would let
   // client-auth.spec.ts's resets/cooldowns invalidate the gate's code.
   gateOtpClientEmail: string;
+  // A CLIENT Account + ClientProfile with no bookings (54.5.6.2), driven only
+  // by booking-verification.spec.ts's "existing client email" case -- its own
+  // EmailOtpChallenge row, and a booking count that spec can reset and pin.
+  bookingOtpClientEmail: string;
+  bookingOtpClientHandle: string;
+  // An artist-only ARTIST Account on its own Artist (54.5.6.2), for the
+  // booking post-proof message. Not artistLoginEmail: client-auth.spec.ts
+  // asserts that address is never sent a code, and set-up-client-profile
+  // .spec.ts makes its Account dual-role mid-suite (a different message).
+  bookingOtpArtistId: string;
+  bookingOtpArtistEmail: string;
   // A dynamically-dated (always "today"), already-started APPROVED
   // booking for the artist dashboard spec (Phase 22).
   dashboardTodayClientHandle: string;
@@ -141,7 +152,8 @@ export interface E2eFixture {
 // Every literal email this file seeds -- for both the one fixture Artist
 // and every fixture ClientProfile -- follows "e2e-*@example.com" (e.g.
 // "e2e-fixture-artist@example.com", "e2e-client-approve@example.com").
-const E2E_FIXTURE_EMAIL_PATTERN = "e2e-%@example.com";
+// Exported for global-teardown.ts's EmailOtpChallenge cleanup.
+export const E2E_FIXTURE_EMAIL_PATTERN = "e2e-%@example.com";
 
 // Self-healing guard against a previous run's global-teardown never having
 // run (Ctrl-C, a hung test getting killed, a webServer startup timeout, a
@@ -1069,6 +1081,52 @@ export default async function globalSetup() {
     ]
   );
 
+  // An existing passwordless client for the booking code flow (54.5.6.2) --
+  // the shape verifyEmailOtpAndProvisionClient creates (null password,
+  // already verified). No bookings, so the spec can pin a count of one.
+  const bookingOtpClientId = randomUUID();
+  const bookingOtpClientEmail = "e2e-client-booking-otp@example.com";
+  const bookingOtpClientHandle = "e2e_client_booking_otp";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [bookingOtpClientId, bookingOtpClientHandle, bookingOtpClientEmail]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [randomUUID(), bookingOtpClientEmail, bookingOtpClientId]
+  );
+
+  // An artist-only ARTIST Account (no clientProfileId) on its own Artist --
+  // Account.artistId is unique, and both existing fixture Artists already
+  // have one (see bookingOtpArtistEmail's comment on E2eFixture).
+  const bookingOtpArtistId = randomUUID();
+  const bookingOtpArtistEmail = "e2e-booking-otp-artist-login@example.com";
+
+  await client.query(
+    `INSERT INTO "Artist" (id, name, "instagramHandle", handle, email, "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, now())`,
+    [
+      bookingOtpArtistId,
+      "E2E Booking OTP Artist",
+      "e2e_booking_otp_artist",
+      "e2e_booking_otp_artist",
+      "e2e-booking-otp-artist@example.com",
+    ]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "artistId", "updatedAt")
+     VALUES ($1, $2, $3, 'ARTIST', $4, now())`,
+    [
+      randomUUID(),
+      bookingOtpArtistEmail,
+      hashPasswordForFixture("e2e-test-password-123"),
+      bookingOtpArtistId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -1091,6 +1149,7 @@ export default async function globalSetup() {
       dashboardTodayClientId,
       otpClientId,
       gateOtpClientId,
+      bookingOtpClientId,
     ],
     bookingRequestIds: [
       approveRequestId,
@@ -1144,6 +1203,10 @@ export default async function globalSetup() {
     imageClientSessionId,
     otpClientEmail,
     gateOtpClientEmail,
+    bookingOtpClientEmail,
+    bookingOtpClientHandle,
+    bookingOtpArtistId,
+    bookingOtpArtistEmail,
     maxEndTimeClientHandle,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
