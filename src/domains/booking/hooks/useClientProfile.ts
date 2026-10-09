@@ -8,7 +8,6 @@ import type { ClientProfileContactDetails } from "@/domains/booking/types";
 
 export interface ClientProfileFormFields {
   instagramHandle: string;
-  email: string;
   phone: string;
   firstName: string;
   lastName: string;
@@ -24,7 +23,6 @@ function toFormFields(
 ): ClientProfileFormFields {
   return {
     instagramHandle: details.instagramHandle,
-    email: details.email,
     phone: details.phone ?? "",
     firstName: details.firstName ?? "",
     lastName: details.lastName ?? "",
@@ -42,7 +40,9 @@ function toFormFields(
 // form fields and the save mutation. A single isPending/error pair is
 // enough here (unlike useCheckout, CLAUDE.md's Independent Mutation
 // State Isolation rule) -- save is the one mutation this page has, not
-// several independently-triggerable ones.
+// several independently-triggerable ones. No email field: the verified
+// email is the fixed client identity (54.7), so it's never edited or
+// sent -- ClientProfileForm shows it read-only from initialDetails.
 export function useClientProfile({ initialDetails }: UseClientProfileArgs) {
   const router = useRouter();
   const [fields, setFields] = useState(() => toFormFields(initialDetails));
