@@ -16,9 +16,9 @@ interface BookingDetailsFieldsProps {
 
 // Pure view (54.5.4.2): the Details & Verify step's identity and contact
 // fields, in the reordered wizard's order -- handle first, email and phone
-// last so they sit directly above the inline code (54.5.4.3). Same ids and
-// labels as VisualBookingForm's contact step. Locks come from the caller's
-// hook. Returns a fragment -- the caller's <FieldGroup> owns layout.
+// last so they sit directly above the inline code (54.5.4.3). Locks come
+// from the caller's hook. Returns a fragment -- the caller's <FieldGroup>
+// owns layout.
 export function BookingDetailsFields({
   form,
   lockedFields,

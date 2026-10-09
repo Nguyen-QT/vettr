@@ -36,7 +36,7 @@ function toFormFields(
 // client's own profile page. No fetch here -- the page already has
 // the initial read (getClientProfileContactDetails, 6.1.1) as a
 // server component, passed in as a prop, same precedent as
-// VisualBookingForm's initialClientDetails; this hook only owns the
+// BookingRequestWizard's initialClientDetails; this hook only owns the
 // form fields and the save mutation. A single isPending/error pair is
 // enough here (unlike useCheckout, CLAUDE.md's Independent Mutation
 // State Isolation rule) -- save is the one mutation this page has, not
