@@ -304,7 +304,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.8.6.1** View & Route — delete `/client/signup` and `/client/verify-email` (+ `VerifyEmailCodeContainer`); `PUBLIC_CLIENT_PATHS` keeps only the login path; delete `verify-email.spec` + baselines, the signup cases and `resetClientSignup`; `global-setup` creates client accounts with null passwords.
     - [x] **54.8.4.1** UI Primitive — delete `ClientSignupForm`, `VerifyEmailCodeForm`, `ClientLoginForm`, `VisualBookingForm`, `ArtistDirectoryCard`.
-    - [ ] **54.8.5.1** Domain Hook — delete `useClientSignup`, `useVerifyEmailCode`, `useClientLogin`, `useBookingWizard` (+ their tests).
+    - [x] **54.8.5.1** Domain Hook — delete `useClientSignup`, `useVerifyEmailCode`, `useClientLogin`, `useBookingWizard` (+ their tests).
     - [ ] **54.8.3.1** Controller/Action — delete the signup, client-login, verify and resend actions with their schemas, types and tests.
     - [ ] **54.8.2.1** Domain Service — delete `signupClient`, `loginClient`, `verifyEmailCode`, `resendVerificationCode`, `getArtistDirectory` (+ tests, the integration signup-race case, dead constants).
     - [ ] **54.8.1.1** Data Gateway — drop the four `emailVerification*` code columns (keep `emailVerifiedAt`); set CLIENT `passwordHash` to NULL; CHECK (ARTIST ⇒ NOT NULL, CLIENT ⇒ NULL); fixture-only edits: typed Account builders, integration `createClientAccount`, `seed.ts` client accounts.
