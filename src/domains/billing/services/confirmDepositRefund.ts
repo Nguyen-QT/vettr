@@ -5,9 +5,11 @@ import { DEPOSIT_REFUND_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE } from "../consta
 import type { ConfirmDepositRefundResult } from "../types";
 
 // Domain Service (CLAUDE.md 7.3.3-fix): called from the Stripe webhook
-// handler once a charge.refunded event confirms a refund actually
-// completed. The authoritative confirmation for depositRefunded/
-// stripeRefundId -- same role payment_intent.succeeded plays for
+// handler once a refund.created or refund.updated event reports a
+// refund as succeeded (56.1) -- not charge.refunded, which fires on
+// creation even for a refund that stays pending or later fails. The
+// authoritative confirmation for depositRefunded/stripeRefundId --
+// same role payment_intent.succeeded plays for
 // confirmDepositPayment/depositPaid -- so a refundDeposit call whose
 // own DB write failed after Stripe already processed the refund gets
 // reconciled here via Stripe's own retried webhook delivery, rather

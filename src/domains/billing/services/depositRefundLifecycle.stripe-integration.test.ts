@@ -100,9 +100,12 @@ describe("deposit refund lifecycle (real Stripe test mode)", () => {
     const refund = await stripe.refunds.retrieve(afterRefund!.stripeRefundId!);
     expect(refund.payment_intent).toBe(paymentIntentId);
 
-    // Stands in for the `refund.updated` webhook redelivering the same
-    // event after refundDeposit's own write already succeeded -- the
-    // common case confirmDepositRefund exists to no-op on.
+    // Stands in for the webhook's refund.created (and the
+    // refund.updated that follows once the card's ARN arrives, 56.1)
+    // reaching confirmDepositRefund after refundDeposit's own write
+    // already succeeded -- the common case confirmDepositRefund exists
+    // to no-op on. Real delivery through the route is proven in
+    // route.stripe-integration.test.ts.
     const redeliveryResult = await confirmDepositRefund(
       paymentIntentId,
       afterRefund!.stripeRefundId!

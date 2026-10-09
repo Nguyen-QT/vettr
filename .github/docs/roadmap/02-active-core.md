@@ -335,9 +335,9 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Subscribed events** (for the endpoints 53.2.1.2 and 53.3.1.1 register): `payment_intent.succeeded`, `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `account.updated`. 56.6 adds `refund.failed`.
   - **Flagged, not fixed:** `confirmDepositRefund` treats any `succeeded` refund on the PaymentIntent as a full deposit refund, so a partial refund issued from the Stripe Dashboard reads as fully refunded. The app itself only issues full refunds. Owner: 56.6.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **56.1.1.1 / 56.1.4.1–56.1.6.1** Data/UI/Hook/View — N/A.
-    - [ ] **56.1.3.1** Controller/Action — the webhook route also handles `refund.created` (the same `succeeded`-only body as `refund.updated`), and its header comment lists the subscribed events (+ route unit tests, and a Stripe-tier case that replays a real `refund.created` event through the route for a refund whose local write never happened).
-    - [ ] **56.1.2.1** Domain Service — comment-only: replace the stale `charge.refunded` in `refundDeposit.ts` and `confirmDepositRefund.ts`, and the `refund.updated` redelivery comment in `depositRefundLifecycle.stripe-integration.test.ts`, with the proven events.
+    - [x] **56.1.1.1 / 56.1.4.1–56.1.6.1** Data/UI/Hook/View — N/A.
+    - [x] **56.1.3.1** Controller/Action — the webhook route also handles `refund.created` (the same `succeeded`-only body as `refund.updated`), and its header comment lists the subscribed events (+ route unit tests, and a Stripe-tier case that replays a real `refund.created` event through the route for a refund whose local write never happened).
+    - [x] **56.1.2.1** Domain Service — comment-only: replace the stale `charge.refunded` in `refundDeposit.ts` and `confirmDepositRefund.ts`, and the `refund.updated` redelivery comment in `depositRefundLifecycle.stripe-integration.test.ts`, with the proven events.
 - [ ] **56.2: Deposit Paid on a Cancelled or Declined Booking** — *unscoped.*
   - `confirmDepositPayment` sets `depositPaid` without checking the booking's status.
   - Both cancel paths (`cancelBookingRequest`, `cancelApprovedBookingAsArtist`) only refund when `depositPaid` is already true.
