@@ -316,7 +316,6 @@ const VALID_PENDING_EDIT = {
 
 const VALID_PROFILE = {
   instagramHandle: "  @Valid.Handle ",
-  email: "client@example.com",
   phone: "07123456789",
   firstName: "  Ada ",
   lastName: " Lovelace  ",
@@ -464,6 +463,15 @@ describe("updateClientProfileAction", () => {
     expect(updateClientProfileMock).not.toHaveBeenCalled();
   });
 
+  const NORMALISED_PROFILE = {
+    clientProfileId: "profile-1",
+    instagramHandle: "Valid.Handle",
+    phone: "07123456789",
+    firstName: "Ada",
+    lastName: "Lovelace",
+    dateOfBirth: "1990-01-01",
+  };
+
   it("sends the session id and normalised fields, ignoring a hostile clientProfileId", async () => {
     updateClientProfileMock.mockResolvedValue({ success: true });
 
@@ -472,15 +480,22 @@ describe("updateClientProfileAction", () => {
       clientProfileId: "attacker-profile",
     });
 
-    expect(updateClientProfileMock).toHaveBeenCalledWith({
-      clientProfileId: "profile-1",
-      instagramHandle: "Valid.Handle",
-      email: "client@example.com",
-      phone: "07123456789",
-      firstName: "Ada",
-      lastName: "Lovelace",
-      dateOfBirth: "1990-01-01",
+    expect(updateClientProfileMock).toHaveBeenCalledWith(NORMALISED_PROFILE);
+  });
+
+  // 54.7: the verified email is the fixed client identity. An invalid
+  // value proves the email is no longer validated; the exact-match
+  // assertion proves it is never forwarded to the service.
+  it("strips a supplied email instead of validating or forwarding it", async () => {
+    updateClientProfileMock.mockResolvedValue({ success: true });
+
+    const result = await updateClientProfileAction({
+      ...VALID_PROFILE,
+      email: "not-an-email",
     });
+
+    expect(result).toEqual({ success: true });
+    expect(updateClientProfileMock).toHaveBeenCalledWith(NORMALISED_PROFILE);
   });
 
   it("passes success and service errors through unchanged", async () => {

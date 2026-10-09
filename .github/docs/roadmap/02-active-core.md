@@ -45,7 +45,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 
 ---
 
-### 📦 Phase 27: Auth Session Security & Lifecycle Hardening ◄ CURRENT FOCUS
+### 📦 Phase 27: Auth Session Security & Lifecycle Hardening
 - **Status:** 27.1–27.2 scoped; 27.3–27.5 and 27.7 remain unscoped (each will get its own layered breakdown pass closer to when it's picked up).
 - **Sequencing (confirmed):** Paused pending **28.1** (mocked-Prisma foundation). 27.1.2.1, 27.4.2.2 and 27.5.2.1 already specify "mocked-Prisma unit tests", but no Prisma mock exists anywhere in the repo yet — resume at 27.1 once 28.1 lands.
 - **Objectives:** Gaps surfaced during review of the Phase 26 dual-role/session work, ordered by priority for production risk:
@@ -201,7 +201,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 
 ---
 
-### 📦 Phase 54: Private Portal, `/@handle` Artist Profiles & Passwordless Client Booking
+### 📦 Phase 54: Private Portal, `/@handle` Artist Profiles & Passwordless Client Booking ◄ CURRENT FOCUS
 > Pivots the front door to a single domain (vettr.studio): artists share `vettr.studio/@handle` (public profile + booking intake in client view), `/` becomes a Private Portal Gate (no public marketplace directory), and clients authenticate with a 6-digit email code instead of a password — inline at the final "Submit request" step of a booking, or from the portal gate. Signed-in users are routed by `Session.activeRole` (existing Artist/Client view switcher). **Sequenced after 27.8** (takeover hotfix).
 - **Design (confirmed):**
   - **Decisions:** email code now, SMS later (Phase 55 stub); magic links rejected (27.3's prefetch finding + they lose the in-tab draft). Clients become fully passwordless, artists keep passwords, `Account.passwordHash` becomes nullable (no real users, no backfill). New `Artist.handle` column (lowercase, unique, backfilled from `lower(instagramHandle)`). Profile content is *derived* from existing data (service menu = the 4 `ComplexityTier`s with `ArtistDepositSetting` deposits + `TIER_BASELINE_BUDGETS`; portfolio = `TierReferenceImage`; policies = deposit, `CANCELLATION_WINDOW_HOURS`, strike → precharge) — editable versions stay in Phases 34/35/39.
@@ -296,7 +296,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **54.7.1.1** Data Gateway — N/A.
     - [x] **54.7.2.1** Domain Service — `updateClientProfile` stops writing `email` (+ tests).
-    - [ ] **54.7.3.1** Controller/Action — schema drops `email` (+ tests).
+    - [x] **54.7.3.1** Controller/Action — schema drops `email` (+ tests).
     - [ ] **54.7.4.1** UI Primitive — `ClientProfileForm` shows the email read-only.
     - [ ] **54.7.5.1** Domain Hook — `useClientProfile` stops sending the email (+ tests).
     - [ ] **54.7.6.1** View & Route — `client-profile.spec` asserts the field is read-only.

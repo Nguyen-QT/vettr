@@ -292,10 +292,12 @@ export const submitBookingRequestWithCodeInputSchema =
 // (unlike ClientProfileContactDetails' nullable onboarding fields) --
 // this is the one place a client can ever fill in a still-blank
 // firstName/lastName/dateOfBirth after 6.2, or fix a typo in any
-// field, so the form always collects the complete set on save.
+// field, so the form always collects the complete set on save. No
+// email: the verified email is the fixed client identity (54.7), so a
+// supplied email is stripped like clientProfileId, never validated or
+// forwarded.
 export const updateClientProfileInputSchema = z.object({
   instagramHandle: instagramHandleSchema,
-  email: z.email("Enter a valid email address."),
   phone: z.string().trim().min(1).optional(),
   firstName: clientFirstNameSchema,
   lastName: clientLastNameSchema,
