@@ -282,7 +282,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.5.4.2** UI Primitive — `BookingDetailsFields`.
     - [x] **54.5.4.3** UI Primitive — `InlineBookingVerification`.
     - [x] **54.5.4.4** UI Primitive — `BookingSubmittedConfirmation` (links to `/client`).
-    - [ ] **54.5.5.1** Domain Hook — `useBookingRequestWizard` (new step order, `?service=` start) (+ tests).
+    - [x] **54.5.5.1** Domain Hook — `useBookingRequestWizard` (new step order, `?service=` start) (+ tests).
     - [ ] **54.5.5.2** Domain Hook — `useBookingVerification` (send/resend/verify; resets on email change; copes with session props changing mid-flow) (+ tests).
     - [ ] **54.5.6.1** View & Route — `BookingRequestWizard` container on `/at/[handle]/book`; `e2e/wizardHelpers.ts` new step helpers + `verifyAndSubmit` (capture-sink code); update the 5 booking specs and their baselines.
     - [ ] **54.5.6.2** View & Route — new e2e cases (new guest ends signed in with the booking at `/client`; existing client email via code; wrong code; artist email gets the post-proof message) + setup/teardown cleanup for OTP accounts and challenges.
