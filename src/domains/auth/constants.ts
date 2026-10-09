@@ -16,10 +16,6 @@ export const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 // enumerate registered accounts.
 export const INVALID_CREDENTIALS_ERROR_MESSAGE = "Incorrect email or password.";
 
-// Structural floor only, enforced at signup/provisioning time -- login
-// itself never rejects on length (see INVALID_CREDENTIALS_ERROR_MESSAGE).
-export const MIN_PASSWORD_LENGTH = 8;
-
 // How many failed login attempts are allowed before a temporary lockout
 // is enforced. The lockout is a rolling window, so a user who fails
 // to log in 5 times in a row will be locked out for 15 minutes, but
@@ -115,31 +111,6 @@ export const EMAIL_OTP_CODE_LENGTH = 6;
 export const CLIENT_SIGN_IN_CODE_RESENT_MESSAGE =
   "If this email has a client account with us, we've sent it a new code.";
 
-export const RESEND_VERIFICATION_UNEXPECTED_ERROR_MESSAGE =
-  "Something went wrong resending the verification code. Please try again.";
-
-// Deliberately generic -- unknown email, wrong code, expired code, a
-// locked-out code and an already-verified account all return this, so
-// verifyEmailCode can't be used to enumerate accounts or their state.
-export const INVALID_VERIFICATION_CODE_ERROR_MESSAGE =
-  "Incorrect or expired verification code. Request a new code and try again.";
-
-// Retry-oriented message for an unexpected DB failure only.
-export const VERIFY_EMAIL_UNEXPECTED_ERROR_MESSAGE =
-  "Something went wrong verifying your email. Please try again.";
-
-// signupClient (CLAUDE.md 5.2) only links an *existing* ClientProfile
-// found by email -- it never creates one. A client who's never booked
-// has nothing to link an account to yet.
-export const NO_BOOKING_FOUND_ERROR_MESSAGE =
-  "We couldn't find a booking under that email. Submit a booking request first, then create your account.";
-
-// Surfaced when the ClientProfile a signup would link to already has
-// an Account -- points them at login instead of a confusing duplicate
-// email error at the database level.
-export const ACCOUNT_ALREADY_EXISTS_ERROR_MESSAGE =
-  "An account already exists for this email. Try logging in instead.";
-
 // linkOrCreateClientProfileForAccount (CLAUDE.md 26.1.2.4) is a one-time
 // link -- an account that's already dual-role has nothing left to link.
 export const ACCOUNT_ALREADY_HAS_CLIENT_PROFILE_ERROR_MESSAGE =
@@ -168,7 +139,6 @@ export const SESSION_COOKIE_NAME = "vettr_session";
 // 5.2.2) rather than hardcoding one.
 export const ARTIST_LOGIN_PATH = "/artist/login";
 export const CLIENT_LOGIN_PATH = "/client/login";
-export const CLIENT_VERIFY_EMAIL_PATH = "/client/verify-email";
 
 // The session-derived client dashboard (CLAUDE.md 5.2.4), and the fallback
 // for any rejected post-sign-in redirectTo.

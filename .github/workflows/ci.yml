@@ -215,8 +215,8 @@ jobs:
       STRIPE_WEBHOOK_SECRET: whsec_dummy
       UPLOADTHING_TOKEN: dummy_uploadthing_token
       # Non-secret placeholders -- `src/lib/resend.ts` constructs the
-      # client at import time, and signupClient (27.3.2.4) now pulls it
-      # into the dev server's module graph, so an unset key crashes
+      # client at import time, and the email-code auth actions (54.3)
+      # pull it into the dev server's module graph, so an unset key crashes
       # every route that loads auth actions. No real email is sent.
       RESEND_API_KEY: re_dummy
       EMAIL_FROM: "Vettr <noreply@example.com>"
