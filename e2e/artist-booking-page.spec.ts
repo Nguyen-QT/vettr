@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import type { E2eFixture } from "./global-setup";
-import { completeContactDetailsStep } from "./wizardHelpers";
+import { completeServiceStep } from "./wizardHelpers";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
@@ -71,11 +71,14 @@ test.describe("booking page at /@handle/book (54.1.6.2)", () => {
     );
     await page.waitForLoadState("networkidle");
 
-    // A guest starts on contact details; the tier lives on the next step.
-    await completeContactDetailsStep(page);
-
-    await expect(page.getByRole("radio", { name: "TIER_4" })).toBeChecked();
+    // A preselected service starts at Design & Budget (54.5), already on
+    // that tier's baseline budget.
     await expect(page.getByText("£200 – £400")).toBeVisible();
+
+    // Service stays reachable so the tier can still change. dispatchEvent:
+    // the Next dev indicator overlays Back's corner (booking-wizard.spec.ts).
+    await page.getByRole("button", { name: "Back" }).dispatchEvent("click");
+    await expect(page.getByRole("radio", { name: "TIER_4" })).toBeChecked();
   });
 
   test("ignores an unknown ?service value and keeps the default tier", async ({
@@ -86,9 +89,10 @@ test.describe("booking page at /@handle/book (54.1.6.2)", () => {
     await page.goto(`/@${artistHandle}/book?service=bogus`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-
+    // No preselected service, so the wizard lands on Service.
     await expect(page.getByRole("radio", { name: "TIER_2" })).toBeChecked();
+
+    await completeServiceStep(page);
     await expect(page.getByText("£50 – £100")).toBeVisible();
   });
 

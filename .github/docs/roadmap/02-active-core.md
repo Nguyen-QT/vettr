@@ -284,7 +284,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.5.4.4** UI Primitive — `BookingSubmittedConfirmation` (links to `/client`).
     - [x] **54.5.5.1** Domain Hook — `useBookingRequestWizard` (new step order, `?service=` start) (+ tests).
     - [x] **54.5.5.2** Domain Hook — `useBookingVerification` (send/resend/verify; resets on email change; copes with session props changing mid-flow) (+ tests).
-    - [ ] **54.5.6.1** View & Route — `BookingRequestWizard` container on `/at/[handle]/book`; `e2e/wizardHelpers.ts` new step helpers + `verifyAndSubmit` (capture-sink code); update the 5 booking specs and their baselines.
+    - [x] **54.5.6.1** View & Route — `BookingRequestWizard` container on `/at/[handle]/book`; `e2e/wizardHelpers.ts` new step helpers + `verifyAndSubmit` (capture-sink code); update the 5 booking specs and their baselines.
     - [ ] **54.5.6.2** View & Route — new e2e cases (new guest ends signed in with the booking at `/client`; existing client email via code; wrong code; artist email gets the post-proof message) + setup/teardown cleanup for OTP accounts and challenges.
 - [ ] **54.6: Remove the Unverified Guest Booking Path** (execute 54.6.3.1 → 54.6.2.1, immediately after 54.5.6.1)
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):

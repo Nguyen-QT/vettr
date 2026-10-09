@@ -5,7 +5,7 @@ import { BackNav } from "@/components/ui/back-nav";
 import { getCurrentSession } from "@/domains/auth/actions";
 import { complexityTierSchema } from "@/domains/booking/booking.schema";
 import { BookingProcessExplainer } from "@/domains/booking/components/BookingProcessExplainer";
-import { VisualBookingForm } from "@/domains/booking/components/VisualBookingForm";
+import { BookingRequestWizard } from "@/domains/booking/components/BookingRequestWizard";
 import { getClientProfileContactDetails } from "@/domains/booking/services/getClientProfileContactDetails";
 import { getTierReferenceImages } from "@/domains/booking/services/getTierReferenceImages";
 import type { ClientProfileContactDetails } from "@/domains/booking/types";
@@ -55,11 +55,11 @@ export async function generateMetadata({
 }
 
 // Booking intake at `/@handle/book` (54.1.6.2), served via the
-// next.config.ts rewrite. Mounts the existing wizard; `?service=` (the
-// profile's service menu links) preselects the tier, and anything
-// missing or unrecognised falls back to the wizard's default. No
-// loading.tsx or Suspense sits above the lookup, so notFound() and the
-// 308 keep their real statuses.
+// next.config.ts rewrite. Mounts the email-code-gated wizard (54.5.6.1);
+// `?service=` (the profile's service menu links) preselects the tier and
+// starts at Intake, and anything missing or unrecognised falls back to the
+// wizard's default. No loading.tsx or Suspense sits above the lookup, so
+// notFound() and the 308 keep their real statuses.
 export default async function ArtistBookPage({
   params,
   searchParams,
@@ -113,7 +113,7 @@ export default async function ArtistBookPage({
         </p>
       </div>
       <BookingProcessExplainer />
-      <VisualBookingForm
+      <BookingRequestWizard
         artistId={profile.id}
         tierReferenceImages={tierReferenceImages}
         initialClientDetails={initialClientDetails ?? undefined}

@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 
 import { loginAsClient, loginWithSessionId } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
+import { goToDetailsStep } from "./wizardHelpers";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
@@ -43,6 +44,8 @@ test.describe("logged-in client booking & search access", () => {
 
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
+    // Identity fields live on the last step (54.5).
+    await goToDetailsStep(page);
 
     const instagramHandle = page.getByLabel("Instagram handle");
     const email = page.getByLabel("Email");
@@ -56,6 +59,9 @@ test.describe("logged-in client booking & search access", () => {
     // set, so unlike instagramHandle/email it stays editable rather
     // than being locked empty.
     await expect(phone).toBeEnabled();
+    // A CLIENT session submits directly -- no email code.
+    await expect(page.getByText("Verify your email")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Submit request" })).toBeVisible();
   });
 
   test("leaves the booking form blank and editable for a signed-out visitor", async ({
@@ -65,6 +71,7 @@ test.describe("logged-in client booking & search access", () => {
 
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
+    await goToDetailsStep(page);
 
     const instagramHandle = page.getByLabel("Instagram handle");
     const email = page.getByLabel("Email");
@@ -83,6 +90,7 @@ test.describe("logged-in client booking & search access", () => {
 
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
+    await goToDetailsStep(page);
 
     const instagramHandle = page.getByLabel("Instagram handle");
     await expect(instagramHandle).toHaveValue("e2e_client_dual_role");
@@ -97,9 +105,12 @@ test.describe("logged-in client booking & search access", () => {
 
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
+    await goToDetailsStep(page);
 
     const instagramHandle = page.getByLabel("Instagram handle");
     await expect(instagramHandle).toHaveValue("");
     await expect(instagramHandle).toBeEnabled();
+    // A guest proves their email inline (54.5), artist session or not.
+    await expect(page.getByText("Verify your email")).toBeVisible();
   });
 });

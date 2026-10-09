@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 
 import { loginAsArtist } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
-import { completeContactDetailsStep, completeServiceCanvasStep } from "./wizardHelpers";
+import { completeIntakeStep, completeServiceStep } from "./wizardHelpers";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
@@ -23,8 +23,8 @@ test.describe("client max end time", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-    await completeServiceCanvasStep(page);
+    await completeServiceStep(page);
+    await completeIntakeStep(page);
 
     await expect(page.getByLabel("Must be finished by (optional)")).toBeVisible();
   });
@@ -37,15 +37,14 @@ test.describe("client max end time", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-    await completeServiceCanvasStep(page);
+    await completeServiceStep(page);
+    await completeIntakeStep(page);
 
     await page.getByLabel("Preferred date").fill("2099-01-01");
     await page.getByRole("radio", { name: "14:00" }).click();
     await page.getByLabel("Must be finished by (optional)").fill("14:30");
-    // Step 3 (Date & Slot)'s own "Next" gate already validates
-    // clientMaxEndTime, so the error surfaces without needing to reach
-    // the review step's Submit button.
+    // Date & Slot's own "Next" gate already validates clientMaxEndTime,
+    // so the error surfaces without needing to reach the last step.
     await page.getByRole("button", { name: "Next", exact: true }).click();
 
     await expect(
@@ -63,8 +62,6 @@ test.describe("client max end time", () => {
     await page.goto(`/@${fixture.artistHandle}/book`);
     await page.waitForLoadState("networkidle");
 
-    await completeContactDetailsStep(page);
-
     // TIER_2 (the form's default) has a 60-minute estimated duration,
     // shorter than the 90-minute hard floor, so the warning can never
     // fire for it -- TIER_4 (180 min) is used here so a valid (>= 90
@@ -73,8 +70,8 @@ test.describe("client max end time", () => {
     // in particular gets legitimately BOOKED by artist-dashboard.spec.ts's
     // approve test (shared, artist-wide availability, not test-scoped),
     // which would otherwise race this test's own radio selection.
-    await page.getByRole("radio", { name: "TIER_4" }).click();
-    await completeServiceCanvasStep(page);
+    await completeServiceStep(page, { tier: "TIER_4" });
+    await completeIntakeStep(page);
     await page.getByLabel("Preferred date").fill("2099-10-01");
     await page.getByRole("radio", { name: "11:00" }).click();
     await page.getByLabel("Must be finished by (optional)").fill("13:00");

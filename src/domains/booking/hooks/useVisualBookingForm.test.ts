@@ -7,6 +7,7 @@ import {
   COMPLEXITY_TIERS,
   TIER_BASELINE_BUDGETS,
 } from "@/domains/booking/constants";
+import type { ClientBookingInput } from "@/domains/booking/types";
 
 import { useVisualBookingForm } from "./useVisualBookingForm";
 
@@ -78,5 +79,35 @@ describe("useVisualBookingForm", () => {
     renderHook(() => useVisualBookingForm({ artistId: "artist_1", initialTier: "TIER_4" }));
 
     expect(getAvailableSlotsActionMock).not.toHaveBeenCalled();
+  });
+
+  // The resolver is the draft schema (54.5.6.1): an untouched optional phone
+  // reports "" and must still let the draft through.
+  it("accepts a blank phone as not provided and normalises the email", async () => {
+    getAvailableSlotsActionMock.mockResolvedValue({ success: true, slots: [] });
+    const { result } = renderHook(() => useVisualBookingForm({ artistId: "artist_1" }));
+    const onValid = vi.fn<(draft: ClientBookingInput) => void>();
+
+    // Setting the date fires the availability fetch.
+    await act(async () => {
+      const { form } = result.current;
+      form.setValue("designTags", ["fine-line-detail"]);
+      form.setValue("designReferenceImageUrls", ["https://example.com/reference.jpg"]);
+      form.setValue("requestedDate", "2099-01-01");
+      form.setValue("instagramHandle", "@client.handle");
+      form.setValue("firstName", "Ada");
+      form.setValue("lastName", "Lovelace");
+      form.setValue("dateOfBirth", "1990-01-01");
+      form.setValue("email", "  Client@Example.COM ");
+      form.setValue("phone", "");
+    });
+    await act(async () => {
+      await result.current.form.handleSubmit(onValid)();
+    });
+
+    expect(onValid).toHaveBeenCalledTimes(1);
+    const draft = onValid.mock.calls[0]?.[0];
+    expect(draft?.email).toBe("client@example.com");
+    expect(draft?.phone).toBeUndefined();
   });
 });
