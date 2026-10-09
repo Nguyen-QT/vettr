@@ -84,3 +84,22 @@ export async function resetEmailOtpChallenge(email: string): Promise<void> {
     await client.end();
   }
 }
+
+// Drops every BookingRequest on the ClientProfile with this email (54.5.6.2)
+// so a spec that submits as an existing client can pin the dashboard's
+// booking count across Playwright UI mode re-runs. DesignReference rows
+// cascade.
+export async function resetClientBookingRequests(email: string): Promise<void> {
+  config();
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(
+      `DELETE FROM "BookingRequest"
+       WHERE "clientId" IN (SELECT id FROM "ClientProfile" WHERE email = $1)`,
+      [email]
+    );
+  } finally {
+    await client.end();
+  }
+}
