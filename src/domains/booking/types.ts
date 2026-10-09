@@ -5,10 +5,13 @@
 // runtime arrays and booking.schema.ts's Zod schemas by hand; they are not
 // derived from one another.
 //
-// SlotTime is the one exception to "standalone" above: it's imported
-// from scheduling rather than redefined, since scheduling is the
-// lower-level domain that owns it (booking depends on scheduling, not
-// the other way around) and both domains need the exact same set.
+// SlotTime and OtpCodeInputProps are the two exceptions to "standalone"
+// above: they're imported (type-only) from the lower-level domains that
+// own them rather than redefined -- booking depends on scheduling and
+// auth, never the other way around -- so both sides share the exact same
+// shape. SlotTime is scheduling's slot set; OtpCodeInputProps is the code
+// field InlineBookingVerificationProps (54.5.4.3) passes straight through.
+import type { OtpCodeInputProps } from "@/domains/auth/types";
 import type { SlotTime } from "@/domains/scheduling/types";
 
 export type ComplexityTier = "TIER_2" | "TIER_3" | "TIER_4" | "FREESTYLE";
@@ -145,6 +148,23 @@ export type SubmitBookingRequestWithEmailOtpInput = ClientBookingInput & {
 export type SubmitBookingRequestWithEmailOtpResult =
   | { success: true; bookingRequestId: string; session: VerifiedClientSession }
   | { success: false; error: string; session: VerifiedClientSession | null };
+
+// InlineBookingVerification (54.5.4.3) -- the Details & Verify step's code
+// block for a visitor without a CLIENT session. "request" shows the send
+// button, "code" the code field and the verify-and-submit button. Extends
+// OtpCodeInputProps so useBookingVerification (54.5.5.2) can pass the code
+// fields straight through; `error` belongs to whichever step is showing.
+// `email` is the address the code went to, not the live field.
+export type BookingVerificationStep = "request" | "code";
+
+export interface InlineBookingVerificationProps extends OtpCodeInputProps {
+  step: BookingVerificationStep;
+  email: string;
+  onRequestCode: () => void;
+  isRequestingCode?: boolean;
+  onVerifyAndSubmit: () => void;
+  isSubmitting?: boolean;
+}
 
 // Requests the artist dashboard shows because they need action:
 // PENDING (never reviewed) or AWAITING_SLOT_CONFIRMATION (a proposed

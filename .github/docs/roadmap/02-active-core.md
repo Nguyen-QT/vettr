@@ -280,7 +280,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.5.3.4** Controller/Action — `requestBookingVerificationCodeAction`/`submitBookingRequestWithCodeAction` set the cookie on success and on partial failure, ignore hostile ids (+ tests).
     - [x] **54.5.4.1** UI Primitive — extract `TierSelectFields`/`IntakeFields`/`DateSlotFields` from `VisualBookingForm` (behaviour and e2e unchanged).
     - [x] **54.5.4.2** UI Primitive — `BookingDetailsFields`.
-    - [ ] **54.5.4.3** UI Primitive — `InlineBookingVerification`.
+    - [x] **54.5.4.3** UI Primitive — `InlineBookingVerification`.
     - [ ] **54.5.4.4** UI Primitive — `BookingSubmittedConfirmation` (links to `/client`).
     - [ ] **54.5.5.1** Domain Hook — `useBookingRequestWizard` (new step order, `?service=` start) (+ tests).
     - [ ] **54.5.5.2** Domain Hook — `useBookingVerification` (send/resend/verify; resets on email change; copes with session props changing mid-flow) (+ tests).
