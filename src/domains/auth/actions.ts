@@ -6,12 +6,9 @@ import { redirect } from "next/navigation";
 import {
   loginInputSchema,
   requestClientSignInCodeInputSchema,
-  resendVerificationCodeInputSchema,
   setUpClientProfileInputSchema,
-  signupInputSchema,
   switchActiveRoleInputSchema,
   verifyClientSignInCodeInputSchema,
-  verifyEmailCodeInputSchema,
 } from "./auth.schema";
 import {
   ARTIST_LOGIN_PATH,
@@ -22,13 +19,9 @@ import { deleteSession } from "./services/deleteSession";
 import { getSessionWithAccount } from "./services/getSessionWithAccount";
 import { linkOrCreateClientProfileForAccount } from "./services/linkOrCreateClientProfileForAccount";
 import { loginArtist } from "./services/loginArtist";
-import { loginClient } from "./services/loginClient";
 import { requestClientSignInCode } from "./services/requestClientSignInCode";
-import { resendVerificationCode } from "./services/resendVerificationCode";
 import { signInClientWithEmailOtp } from "./services/signInClientWithEmailOtp";
-import { signupClient } from "./services/signupClient";
 import { switchActiveRole } from "./services/switchActiveRole";
-import { verifyEmailCode } from "./services/verifyEmailCode";
 import { setSessionCookie } from "./sessionCookie";
 import type { SessionWithAccount } from "./types";
 
@@ -43,17 +36,7 @@ export type ClientAuthActionResult =
   | { success: true; clientProfileId: string }
   | { success: false; error: string };
 
-// signupClientAction/loginClientAction (CLAUDE.md 27.3.3.2): an unverified
-// account gets no session, only a pointer to the verify-email step.
-export type ClientEntryActionResult =
-  | ClientAuthActionResult
-  | { success: true; pendingVerification: true; clientProfileId: string };
-
 export type SwitchActiveRoleActionResult = { success: false; error: string };
-
-export type ResendVerificationCodeActionResult =
-  | { success: true }
-  | { success: false; error: string };
 
 export type RequestClientSignInCodeActionResult =
   | { success: true }
@@ -83,39 +66,9 @@ export async function loginAction(input: unknown): Promise<LoginActionResult> {
   return { success: true, artistId: result.artistId };
 }
 
-// Controller/Action boundary (CLAUDE.md 5.2.2): validates structurally
-// (enforcing the signup password-length floor, unlike login), delegates
-// to signupClient, then sets the session cookie on success -- same
-// shape as loginAction above.
-export async function signupClientAction(
-  input: unknown
-): Promise<ClientEntryActionResult> {
-  const parsed = signupInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid signup request.",
-    };
-  }
-
-  const result = await signupClient(parsed.data);
-  if (!result.success) {
-    return { success: false, error: result.error };
-  }
-
-  // signupClient never issues a session; no cookie is set until
-  // verifyEmailCodeAction succeeds.
-  return {
-    success: true,
-    pendingVerification: true,
-    clientProfileId: result.clientProfileId,
-  };
-}
-
-// Controller/Action boundary (CLAUDE.md 26.1.3.1): validates structurally, derives accountId 
-// from the server-side session (never from client input, per .claude/rules/validation.md), 
-// delegates to linkOrCreateClientProfileForAccount, and — unlike login/signup — does not touch
+// Controller/Action boundary (CLAUDE.md 26.1.3.1): validates structurally, derives accountId
+// from the server-side session (never from client input, per .claude/rules/validation.md),
+// delegates to linkOrCreateClientProfileForAccount, and — unlike login — does not touch
 // the session cookie (switching activeRole is 26.1.3.2's job).
 export async function setUpClientProfileAction(input: unknown): Promise<ClientAuthActionResult> {
   const session = await getCurrentSession();
@@ -168,80 +121,6 @@ export async function switchActiveRoleAction(input: unknown): Promise<SwitchActi
   }  
   
   redirect(result.activeRole === "CLIENT" ? "/client" : `/artist/${result.artistId}`);
-}
-
-// Controller/Action boundary (CLAUDE.md 5.2.2): mirrors loginAction,
-// delegating to loginClient instead of loginArtist.
-export async function loginClientAction(
-  input: unknown
-): Promise<ClientEntryActionResult> {
-  const parsed = loginInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid login request.",
-    };
-  }
-
-  const result = await loginClient(parsed.data);
-  if (!result.success) {
-    return { success: false, error: result.error };
-  }
-
-  // Never sets a cookie for an unverified account.
-  if ("pendingVerification" in result) {
-    return {
-      success: true,
-      pendingVerification: true,
-      clientProfileId: result.clientProfileId,
-    };
-  }
-
-  await setSessionCookie(result.sessionId, result.expiresAt);
-  return { success: true, clientProfileId: result.clientProfileId };
-}
-
-// Controller/Action boundary (CLAUDE.md 27.3.3.1): validates structurally,
-// delegates to verifyEmailCode, and sets the session cookie only on
-// success -- the only place a fresh signup receives a session.
-export async function verifyEmailCodeAction(
-  input: unknown
-): Promise<ClientAuthActionResult> {
-  const parsed = verifyEmailCodeInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid verification request.",
-    };
-  }
-
-  const result = await verifyEmailCode(parsed.data);
-  if (!result.success) {
-    return { success: false, error: result.error };
-  }
-
-  await setSessionCookie(result.sessionId, result.expiresAt);
-  return { success: true, clientProfileId: result.clientProfileId };
-}
-
-// Controller/Action boundary (CLAUDE.md 27.3.3.1): validates the email
-// shape only and returns the service's generic result unchanged, so
-// nothing here can reveal whether an account exists.
-export async function resendVerificationCodeAction(
-  input: unknown
-): Promise<ResendVerificationCodeActionResult> {
-  const parsed = resendVerificationCodeInputSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid resend request.",
-    };
-  }
-
-  return resendVerificationCode(parsed.data);
 }
 
 // Controller/Action boundary (54.3.3.1): validates the email shape only
