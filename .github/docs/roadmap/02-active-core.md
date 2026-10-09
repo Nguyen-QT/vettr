@@ -306,7 +306,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.8.4.1** UI Primitive — delete `ClientSignupForm`, `VerifyEmailCodeForm`, `ClientLoginForm`, `VisualBookingForm`, `ArtistDirectoryCard`.
     - [x] **54.8.5.1** Domain Hook — delete `useClientSignup`, `useVerifyEmailCode`, `useClientLogin`, `useBookingWizard` (+ their tests).
     - [x] **54.8.3.1** Controller/Action — delete the signup, client-login, verify and resend actions with their schemas, types and tests.
-    - [ ] **54.8.2.1** Domain Service — delete `signupClient`, `loginClient`, `verifyEmailCode`, `resendVerificationCode`, `getArtistDirectory` (+ tests, the integration signup-race case, dead constants).
+    - [x] **54.8.2.1** Domain Service — delete `signupClient`, `loginClient`, `verifyEmailCode`, `resendVerificationCode`, `getArtistDirectory` (+ tests, the integration signup-race case, dead constants).
     - [ ] **54.8.1.1** Data Gateway — drop the four `emailVerification*` code columns (keep `emailVerifiedAt`); set CLIENT `passwordHash` to NULL; CHECK (ARTIST ⇒ NOT NULL, CLIENT ⇒ NULL); fixture-only edits: typed Account builders, integration `createClientAccount`, `seed.ts` client accounts.
 - [x] **54.9: Consistent Client Resolution on Booking Verify** (found 2026-10-09: intermittent `auth.otp-provisioning` LINK failure. A loser's split read reports "email unavailable" after its own concurrent verify won.)
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):

@@ -15,46 +15,18 @@ export type LoginResult =
   | { success: true; sessionId: string; expiresAt: Date; artistId: string }
   | { success: false; error: string };
 
-// loginClient's result (CLAUDE.md 5.2) -- ends in an authenticated
-// session for a specific ClientProfile.
+// A client sign-in's result (signInClientWithEmailOtp,
+// verifyEmailOtpAndProvisionClient) -- ends in an authenticated session
+// for a specific ClientProfile.
 export type ClientAuthResult =
   | { success: true; sessionId: string; expiresAt: Date; clientProfileId: string }
   | { success: false; error: string };
 
-// loginClient (CLAUDE.md 27.3.2.7) -- an unverified account with the
-// correct password gets no session, only a pointer to the verify step.
-export type ClientLoginResult =
-  | ClientAuthResult
-  | { success: true; pendingVerification: true; clientProfileId: string };
-
-// signupClient (CLAUDE.md 27.3.2.4) -- deliberately no session fields:
-// a fresh signup only ever gets a session via verifyEmailCode, after
-// proving ownership of the email.
-export type SignupClientResult =
-  | { success: true; pendingVerification: true; clientProfileId: string }
-  | { success: false; error: string };
-
-// verifyEmailCode (CLAUDE.md 27.3.2.5) -- resolves to ClientAuthResult:
-// a correct code *and* password end in an authenticated session
-// (27.3.2.8 -- the password closes the pre-verification squatting path).
-export interface VerifyEmailCodeInput {
-  email: string;
-  code: string;
-  password: string;
-}
-
 // sendVerificationEmail (CLAUDE.md 27.3.2.3) -- no user-facing `error`
-// field: the caller (signupClient/resendVerificationCode) always
-// proceeds to the same pending-verification/generic result either way,
-// so a failed send is only ever surfaced as "use the resend button".
+// field: the callers (requestClientSignInCode/requestBookingSubmissionCode)
+// always proceed to the same generic result either way, so a failed send
+// is only ever surfaced as "use the resend button".
 export type SendVerificationEmailResult = { success: true } | { success: false };
-
-
-export interface ResendVerificationCodeInput {
-  email: string;
-}
-
-export type ResendVerificationCodeResult = { success: true } | { success: false; error: string };
 
 // issueEmailOtp (54.3.2.4) -- literal union kept structurally in sync by
 // hand with the EmailOtpPurpose enum in schema.prisma.
@@ -107,9 +79,8 @@ export type RequestBookingSubmissionCodeResult =
   | { success: true }
   | { success: false; error: string };
 
-// signInClientWithEmailOtp (54.3.2.7) -- resolves to ClientAuthResult, the
-// same shape verifyEmailCode returns, so the action sets the cookie the
-// same way.
+// signInClientWithEmailOtp (54.3.2.7) -- resolves to ClientAuthResult, so
+// the action sets the cookie from a session-shaped result.
 export interface SignInClientWithEmailOtpInput {
   email: string;
   code: string;

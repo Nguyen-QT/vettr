@@ -86,7 +86,7 @@ async function requestCode(email: string): Promise<RequestClientSignInCodeResult
 // Cooldown, send cap and concurrent double-requests are all owned by
 // issueEmailOtp's atomic guards -- a blocked issue is the same success
 // with no send. A failed or timed-out send keeps the cooldown (no retry
-// storm against a degraded provider, mirroring resendVerificationCode).
+// storm against a degraded provider).
 export async function requestClientSignInCode(
   input: RequestClientSignInCodeInput
 ): Promise<RequestClientSignInCodeResult> {
