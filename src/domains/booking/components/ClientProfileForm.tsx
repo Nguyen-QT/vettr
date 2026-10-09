@@ -1,7 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useClientProfile } from "@/domains/booking/hooks/useClientProfile";
 import type { ClientProfileContactDetails } from "@/domains/booking/types";
@@ -13,7 +19,9 @@ interface ClientProfileFormProps {
 // Pure view (CLAUDE.md 10.1.4): renders whatever useClientProfile
 // reports -- every field editable, unlike the booking form's per-field
 // locking (6.1.3/6.2), since this page is the one place a client can
-// ever go back and correct something after the fact.
+// ever go back and correct something after the fact. The one exception
+// is email: it's the verified sign-in identity (54.7), so it's shown
+// read-only straight from initialDetails rather than the hook's fields.
 export function ClientProfileForm({ initialDetails }: ClientProfileFormProps) {
   const { fields, setField, save, isPending, error, saved } = useClientProfile({
     initialDetails,
@@ -69,9 +77,15 @@ export function ClientProfileForm({ initialDetails }: ClientProfileFormProps) {
           <Input
             id="email"
             type="email"
-            value={fields.email}
-            onChange={(event) => setField("email", event.target.value)}
+            value={initialDetails.email}
+            readOnly
+            aria-describedby="email-description"
+            className="bg-muted"
           />
+          <FieldDescription id="email-description">
+            This is the email you sign in with, so it can&apos;t be changed
+            here.
+          </FieldDescription>
         </Field>
 
         <Field>

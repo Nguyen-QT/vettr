@@ -297,7 +297,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **54.7.1.1** Data Gateway — N/A.
     - [x] **54.7.2.1** Domain Service — `updateClientProfile` stops writing `email` (+ tests).
     - [x] **54.7.3.1** Controller/Action — schema drops `email` (+ tests).
-    - [ ] **54.7.4.1** UI Primitive — `ClientProfileForm` shows the email read-only.
+    - [x] **54.7.4.1** UI Primitive — `ClientProfileForm` shows the email read-only.
     - [ ] **54.7.5.1** Domain Hook — `useClientProfile` stops sending the email (+ tests).
     - [ ] **54.7.6.1** View & Route — `client-profile.spec` asserts the field is read-only.
 - [ ] **54.8: Retire Client Passwords & Dead Code** (execute 6.1 → 4.1 → 5.1 → 3.1 → 2.1 → 1.1)
