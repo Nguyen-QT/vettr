@@ -1,11 +1,13 @@
 "use server";
 
 import { getCurrentSession } from "@/domains/auth/actions";
+import { Prisma } from "@/generated/prisma/client";
 
 import {
   addBillingAddonInputSchema,
   setArtistDepositSettingInputSchema,
 } from "./billing.schema";
+import { DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE } from "./constants";
 import { addBillingAddon } from "./services/addBillingAddon";
 import { createConnectOnboardingLink } from "./services/createConnectOnboardingLink";
 import { createDepositPaymentIntent } from "./services/createDepositPaymentIntent";
@@ -48,15 +50,29 @@ async function requireArtistId(): Promise<string | null> {
 // from the trusted session -- createDepositPaymentIntent itself
 // re-checks ownership, this layer just supplies a trustworthy id, same
 // posture as booking's cancelBookingRequestAction (5.4.2).
+// Anything the session lookup or the service throws (a DB read -- the
+// service already catches its Stripe calls and record write) returns the
+// generic retryable error instead of rejecting (56.5). The typed Prisma
+// code only: the client-supplied bookingRequestId stays out of the log.
 export async function createDepositPaymentIntentAction(
   bookingRequestId: string
 ): Promise<CreateDepositPaymentIntentResult> {
-  const clientProfileId = await requireClientProfileId();
-  if (!clientProfileId) {
-    return { success: false, error: NOT_SIGNED_IN_ERROR_MESSAGE };
-  }
+  try {
+    const clientProfileId = await requireClientProfileId();
+    if (!clientProfileId) {
+      return { success: false, error: NOT_SIGNED_IN_ERROR_MESSAGE };
+    }
 
-  return createDepositPaymentIntent({ bookingRequestId, clientProfileId });
+    return await createDepositPaymentIntent({ bookingRequestId, clientProfileId });
+  } catch (error) {
+    console.error({
+      operation: "createDepositPaymentIntentAction",
+      reason: "unexpected_failure",
+      severity: "warning",
+      errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+    });
+    return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
+  }
 }
 
 export type DepositSettingsMutationResult =

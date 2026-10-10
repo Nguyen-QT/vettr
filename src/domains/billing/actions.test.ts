@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import type { SessionWithAccount } from "@/domains/auth/types";
+import { Prisma } from "@/generated/prisma/client";
 
 const {
   getCurrentSessionMock,
@@ -60,6 +61,7 @@ import {
   removeBillingAddonAction,
   setArtistDepositSettingsAction,
 } from "./actions";
+import { DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE } from "./constants";
 import type { ArtistConnectStatus, ArtistDepositSettings } from "./types";
 
 const NOT_SIGNED_IN_AS_CLIENT = {
@@ -132,6 +134,32 @@ beforeEach(() => {
 });
 
 describe("createDepositPaymentIntentAction", () => {
+  const GENERIC_ERROR = { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
+  const EMAIL = "client@example.com";
+
+  let consoleErrorSpy: MockInstance<typeof console.error>;
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  function unexpectedFailureLog(errorCode: string | undefined) {
+    return [
+      [
+        {
+          operation: "createDepositPaymentIntentAction",
+          reason: "unexpected_failure",
+          severity: "warning",
+          errorCode,
+        },
+      ],
+    ];
+  }
+
   it.each(REJECTED_CLIENT_SESSIONS)(
     "rejects when %s without calling the service",
     async (_label, current) => {
@@ -141,6 +169,7 @@ describe("createDepositPaymentIntentAction", () => {
 
       expect(result).toEqual(NOT_SIGNED_IN_AS_CLIENT);
       expect(createDepositPaymentIntentMock).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
     }
   );
 
@@ -158,6 +187,7 @@ describe("createDepositPaymentIntentAction", () => {
       clientProfileId: "client-1",
     });
     expect(result).toEqual({ success: true, clientSecret: "secret-1" });
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
   it("passes a service failure through", async () => {
@@ -167,6 +197,50 @@ describe("createDepositPaymentIntentAction", () => {
     const result = await createDepositPaymentIntentAction("request-1");
 
     expect(result).toEqual({ success: false, error: "nope" });
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns the generic error and logs the Prisma code only when the session lookup throws", async () => {
+    getCurrentSessionMock.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("Can't reach database server", {
+        code: "P1001",
+        clientVersion: "test",
+      })
+    );
+
+    const result = await createDepositPaymentIntentAction("request-1");
+
+    expect(result).toEqual(GENERIC_ERROR);
+    expect(createDepositPaymentIntentMock).not.toHaveBeenCalled();
+    expect(consoleErrorSpy.mock.calls).toStrictEqual(unexpectedFailureLog("P1001"));
+  });
+
+  it("returns the generic error and logs the Prisma code only when the service throws", async () => {
+    getCurrentSessionMock.mockResolvedValue(CLIENT_SESSION);
+    createDepositPaymentIntentMock.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError(`Timed out reading request-1 for ${EMAIL}`, {
+        code: "P1008",
+        clientVersion: "test",
+      })
+    );
+
+    const result = await createDepositPaymentIntentAction("request-1");
+
+    expect(result).toEqual(GENERIC_ERROR);
+    expect(consoleErrorSpy.mock.calls).toStrictEqual(unexpectedFailureLog("P1008"));
+    const logged = JSON.stringify(consoleErrorSpy.mock.calls);
+    expect(logged).not.toContain("request-1");
+    expect(logged).not.toContain(EMAIL);
+  });
+
+  it("returns the generic error with no Prisma code when the service throws anything else", async () => {
+    getCurrentSessionMock.mockResolvedValue(CLIENT_SESSION);
+    createDepositPaymentIntentMock.mockRejectedValue(new Error("boom"));
+
+    const result = await createDepositPaymentIntentAction("request-1");
+
+    expect(result).toEqual(GENERIC_ERROR);
+    expect(consoleErrorSpy.mock.calls).toStrictEqual(unexpectedFailureLog(undefined));
   });
 });
 
