@@ -375,13 +375,49 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.3.3.1–56.3.6.1** Controller/UI/Hook/View — N/A. No caller-visible change.
     - [x] **56.3.1.1** Data Gateway — `@unique` on `BookingRequest.stripePaymentIntentId` and `stripeRefundId` + migration (two `CREATE UNIQUE INDEX`, no guard: nothing is backfilled). Fixture-only edit forced by the index: `booking.deposits-and-strikes.integration.test.ts` mocks `refunds.create` with a unique id per call instead of a shared `re_it`, because its 56.2 race case refunds 10 bookings in one test.
     - [x] **56.3.2.1** Domain Service — booking: `getBookingRequestByPaymentIntentId` uses `findUnique` and drops the "safe in practice" comment (+ its unit test mocks `findUnique`).
-- [ ] **56.4: Stale PaymentIntent After the 24h Idempotency-Key Window** — *unscoped.*
+- [ ] **56.4: Stale PaymentIntent After the 24h Idempotency-Key Window**
   - The idempotency key is fixed per booking (`deposit-intent:<bookingRequestId>`), and Stripe only keeps keys for 24h. A visit after 24h creates a second PaymentIntent, and `recordDepositPaymentIntent` overwrites `stripePaymentIntentId`.
   - If the old PaymentIntent is then paid, `confirmDepositPayment` returns not-found. The webhook route ignores that result and answers 200, so Stripe stops retrying and the payment is never recorded. If both PaymentIntents are paid, the client is charged twice.
   - Design pass:
     - Reuse a stored PaymentIntent that is still open instead of creating a new one. Retrieve it, then update the amount, or cancel and recreate it, if the amount changed.
     - Resolve unknown PaymentIntents through the `metadata.bookingRequestId` already set at creation.
     - Treat not-found as a logged critical alert (53.7), not a silent 200.
+  - **Design (confirmed 2026-10-10):**
+    - At most one payable PaymentIntent per booking: the stored one. `createDepositPaymentIntent` retrieves it and acts on its status, through a `Record` over Stripe's PaymentIntent statuses in `billing/constants.ts` (same idea as 56.2's `DEPOSIT_PAYMENT_ACTION_BY_STATUS`):
+      - `requires_payment_method`, `requires_confirmation`, `requires_action`: reuse it if its amount, `on_behalf_of` and `transfer_data.destination` match what would be created now. Otherwise cancel it, then create a new one. Stripe can't change routing on an existing PaymentIntent, so there is no update path.
+      - `processing`, `succeeded`, `requires_capture`: refuse with a new "already being processed" message. The webhook records the payment. (`requires_capture` can't happen, since nothing uses manual capture.)
+      - `canceled`: create a new one.
+    - A PaymentIntent is only replaced after Stripe confirms it's cancelled. Stripe refuses to cancel one that's processing or has succeeded, so two payable PaymentIntents never exist at once.
+    - Keys: a new PaymentIntent uses `deposit-intent:<bookingRequestId>:<id of the PaymentIntent it replaces, or "initial">`, and a cancel uses `deposit-intent-cancel:<paymentIntentId>`. Concurrent tabs that replace the same PaymentIntent with the same parameters end up with the same new one.
+    - `recordDepositPaymentIntent` becomes a compare-and-set. It writes only while the booking is `APPROVED` and still stores the PaymentIntent the caller replaced (or already stores the new one, for a duplicate request), and it returns whether it wrote.
+    - The client secret comes after the commit: `createDepositPaymentIntent` only returns a client secret for a PaymentIntent already committed as the stored id. A lost write returns the generic retryable error and no secret, so the PaymentIntent left behind can't be paid.
+      - The client can't confirm without the secret, so `payment_intent.succeeded` can't arrive before the write it depends on, whatever order Stripe delivers events in.
+      - This relies on the webhook reading the primary database. If read replicas are added, that lookup stays on the primary.
+    - Retrieve and cancel are each wrapped in try/catch (architecture.md §6.1). A failure returns the generic retryable error and logs ids only.
+    - Booking cancel paths: after the transaction commits, cancel an unpaid booking's stored PaymentIntent through billing's `cancelDepositPaymentIntent`. This is an optimisation, not the guarantee. The guarantee is 56.2's late-payment refund, which Stripe's webhook retries make durable.
+      - If the process dies between the commit and the Stripe call, the PaymentIntent stays open. Only a tab that already has the form open can pay it, because a non-`APPROVED` booking gets no new secret. A payment on it is refunded.
+      - The remaining cost is a Stripe fee, and the client sees a charge followed by a refund.
+      - Decline needs nothing: PaymentIntents only exist on `APPROVED` bookings.
+    - Unmatched `payment_intent.succeeded`: no automatic money movement. Under the rules above, it can only come from state left before 56.4 or a bug. `confirmDepositPayment` logs it (ids only) with the event's `metadata.bookingRequestId`: critical when that metadata is set (a deposit payment that wasn't recorded), a warning when it isn't (not a deposit).
+      - The route still answers 200, because a retry can't create a match.
+      - To recover by hand: fix the row, then resend the event from the Stripe Dashboard or CLI.
+    - Left for 56.5: the create call's own try/catch, handling a failed call in the action and hook, and making the key vary with amount and routing. Until then, a create that reached Stripe but wasn't recorded, followed by a parameter change within 24h, still gets an idempotency error from Stripe.
+  - **Flagged, not fixed:**
+    - A crash between a booking cancel's commit and its PaymentIntent cancel leaves the PaymentIntent open. 56.2 refunds any payment made on it. A durable sweep for cancelled bookings with an open PaymentIntent would fit 56.7's retry cron.
+    - `getPayableDeposits` shows the artist's tier amount and ignores precharge. A flagged client's card therefore shows less than the PaymentIntent charges. A flagged client whose artist has no amount set for that tier never sees the card at all.
+  - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **56.4.1.1 / 56.4.4.1–56.4.6.1** Data/UI/Hook/View — N/A. No schema change (the stored `stripePaymentIntentId` is already unique, 56.3). The new refusal surfaces through `useDepositPayment`'s existing error path.
+    - [ ] **56.4.2.1** Domain Service — billing: new `cancelDepositPaymentIntent(paymentIntentId)`. It cancels with the per-PaymentIntent key and returns whether it worked, logging ids only on failure (+ unit tests).
+    - [ ] **56.4.2.2** Domain Service — booking: `recordDepositPaymentIntent` becomes the compare-and-set above (`updateMany`) and returns whether it wrote.
+      - Tests: unit tests, plus an integration case in `booking.deposits-and-strikes.integration.test.ts` (a stale write loses to a newer PaymentIntent, a write on a cancelled booking is refused, and a duplicate write of the same id succeeds).
+      - Compile-forced caller edit: `createDepositPaymentIntent` passes the id it read.
+    - [ ] **56.4.2.3** Domain Service — billing: `createDepositPaymentIntent` reuses, replaces or refuses by status, uses the new keys, and keeps the secret-after-commit rule.
+      - Tests: unit tests per status and path, including that a lost write returns no secret.
+      - Stripe-tier case in `depositPaymentIntentLifecycle.stripe-integration.test.ts`: a second call reuses the same PaymentIntent, and after the tier amount changes the old one is cancelled and can't be confirmed.
+    - [ ] **56.4.2.4** Domain Service — booking: `cancelBookingRequest` and `cancelApprovedBookingAsArtist` read `stripePaymentIntentId` back from their status update and cancel an unpaid booking's PaymentIntent after commit.
+      - Unit tests: unpaid with a PaymentIntent → cancelled; paid → refunded, not cancelled; no PaymentIntent → neither.
+    - [ ] **56.4.2.5** Domain Service — billing: `confirmDepositPayment` takes the event's `metadata.bookingRequestId` (optional) and logs an unmatched PaymentIntent as above (+ unit tests).
+    - [ ] **56.4.3.1** Controller/Action — the webhook route passes `metadata.bookingRequestId` and still answers 200 when no booking matches (+ route unit tests).
 - [ ] **56.5: Deposit Creation Lockout and Uncaught Stripe Errors** — *unscoped.*
   - Reusing the fixed key with different parameters makes Stripe reject the call with an idempotency error for up to 24h. The parameters change when the artist edits the tier deposit, when the client is flagged for precharge, or when the artist's Connect `chargesEnabled` flips `on_behalf_of`/`transfer_data`.
   - `stripe.paymentIntents.create` has no try/catch (architecture.md §6.1, §8.B). Nor do `createDepositPaymentIntentAction` or `useDepositPayment`, so the rejection escapes uncaught and the hook's `isLoading` never resets (a stuck spinner).
