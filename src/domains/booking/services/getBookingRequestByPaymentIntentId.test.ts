@@ -7,7 +7,7 @@ import { getBookingRequestByPaymentIntentId } from "./getBookingRequestByPayment
 // Mocked-Prisma unit test (architecture.md §7).
 describe("getBookingRequestByPaymentIntentId", () => {
   it("returns the narrow view for the request matching the PaymentIntent id", async () => {
-    prismaMock.bookingRequest.findFirst.mockResolvedValue({
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
       id: "request-1",
       clientId: "client-1",
       artistId: "artist-1",
@@ -22,7 +22,7 @@ describe("getBookingRequestByPaymentIntentId", () => {
 
     const result = await getBookingRequestByPaymentIntentId("pi_lookup_123");
 
-    expect(prismaMock.bookingRequest.findFirst).toHaveBeenCalledWith(
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { stripePaymentIntentId: "pi_lookup_123" } })
     );
     expect(result).toEqual({
@@ -40,7 +40,7 @@ describe("getBookingRequestByPaymentIntentId", () => {
   });
 
   it("maps a Decimal estimatedPrice to a number and surfaces enforcePrecharge", async () => {
-    prismaMock.bookingRequest.findFirst.mockResolvedValue({
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
       id: "request-1",
       clientId: "client-1",
       artistId: "artist-1",
@@ -60,7 +60,7 @@ describe("getBookingRequestByPaymentIntentId", () => {
   });
 
   it("returns null for a PaymentIntent id that matches no request", async () => {
-    prismaMock.bookingRequest.findFirst.mockResolvedValue(null);
+    prismaMock.bookingRequest.findUnique.mockResolvedValue(null);
 
     const result = await getBookingRequestByPaymentIntentId("pi_unknown");
 

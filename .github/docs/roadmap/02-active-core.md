@@ -374,7 +374,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **56.3.3.1–56.3.6.1** Controller/UI/Hook/View — N/A. No caller-visible change.
     - [x] **56.3.1.1** Data Gateway — `@unique` on `BookingRequest.stripePaymentIntentId` and `stripeRefundId` + migration (two `CREATE UNIQUE INDEX`, no guard: nothing is backfilled). Fixture-only edit forced by the index: `booking.deposits-and-strikes.integration.test.ts` mocks `refunds.create` with a unique id per call instead of a shared `re_it`, because its 56.2 race case refunds 10 bookings in one test.
-    - [ ] **56.3.2.1** Domain Service — booking: `getBookingRequestByPaymentIntentId` uses `findUnique` and drops the "safe in practice" comment (+ its unit test mocks `findUnique`).
+    - [x] **56.3.2.1** Domain Service — booking: `getBookingRequestByPaymentIntentId` uses `findUnique` and drops the "safe in practice" comment (+ its unit test mocks `findUnique`).
 - [ ] **56.4: Stale PaymentIntent After the 24h Idempotency-Key Window** — *unscoped.*
   - The idempotency key is fixed per booking (`deposit-intent:<bookingRequestId>`), and Stripe only keeps keys for 24h. A visit after 24h creates a second PaymentIntent, and `recordDepositPaymentIntent` overwrites `stripePaymentIntentId`.
   - If the old PaymentIntent is then paid, `confirmDepositPayment` returns not-found. The webhook route ignores that result and answers 200, so Stripe stops retrying and the payment is never recorded. If both PaymentIntents are paid, the client is charged twice.
