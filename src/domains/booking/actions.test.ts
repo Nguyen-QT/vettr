@@ -9,6 +9,7 @@ const {
   getCurrentSessionMock,
   reviewBookingRequestMock,
   confirmProposedBookingMock,
+  declineBookingRequestMock,
   cancelBookingRequestMock,
   updatePendingBookingRequestMock,
   updateClientProfileMock,
@@ -26,6 +27,7 @@ const {
   getCurrentSessionMock: vi.fn(),
   reviewBookingRequestMock: vi.fn(),
   confirmProposedBookingMock: vi.fn(),
+  declineBookingRequestMock: vi.fn(),
   cancelBookingRequestMock: vi.fn(),
   updatePendingBookingRequestMock: vi.fn(),
   updateClientProfileMock: vi.fn(),
@@ -52,6 +54,9 @@ vi.mock("./services/reviewBookingRequest", () => ({
 }));
 vi.mock("./services/confirmProposedBooking", () => ({
   confirmProposedBooking: confirmProposedBookingMock,
+}));
+vi.mock("./services/declineBookingRequest", () => ({
+  declineBookingRequest: declineBookingRequestMock,
 }));
 vi.mock("./services/cancelBookingRequest", () => ({
   cancelBookingRequest: cancelBookingRequestMock,
@@ -112,6 +117,7 @@ import {
   BOOKING_FAILED_AFTER_VERIFICATION_ERROR_MESSAGE,
   CREATE_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
   EMAIL_VERIFICATION_REQUIRED_ERROR_MESSAGE,
+  REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE,
 } from "./constants";
 import { generateResponseMessage } from "./services/generateResponseMessage";
 
@@ -179,6 +185,7 @@ function expectNoMutation(): void {
   expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
   expect(reviewBookingRequestMock).not.toHaveBeenCalled();
   expect(confirmProposedBookingMock).not.toHaveBeenCalled();
+  expect(declineBookingRequestMock).not.toHaveBeenCalled();
   expect(rescheduleApprovedBookingMock).not.toHaveBeenCalled();
   expect(cancelApprovedBookingAsArtistMock).not.toHaveBeenCalled();
   expect(markAppointmentNoShowMock).not.toHaveBeenCalled();
@@ -235,22 +242,58 @@ describe("owned request", () => {
     getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
   });
 
-  it.each([
-    ["approveBookingRequest", approveBookingRequest, "APPROVED"],
-    ["declineBookingRequest", declineBookingRequest, "DECLINED"],
-  ] as const)("%s updates the status", async (_name, action, status) => {
+  it("approveBookingRequest updates the status", async () => {
     prismaMock.bookingRequest.findUnique.mockResolvedValue({
       artistId: "artist-1",
     } as never);
     prismaMock.bookingRequest.update.mockResolvedValue({} as never);
 
-    const result = await action("request-1");
+    const result = await approveBookingRequest("request-1");
 
     expect(result.success).toBe(true);
     expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
       where: { id: "request-1" },
-      data: { status },
+      data: { status: "APPROVED" },
     });
+  });
+
+  it("declineBookingRequest delegates the id and passes results through", async () => {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "artist-1",
+    } as never);
+    const declined = {
+      success: true,
+      responseMessage: generateResponseMessage("DECLINED"),
+    };
+    declineBookingRequestMock.mockResolvedValueOnce(declined);
+
+    expect(await declineBookingRequest("request-1")).toEqual(declined);
+    expect(declineBookingRequestMock).toHaveBeenCalledWith({ bookingRequestId: "request-1" });
+
+    const refused = { success: false, error: REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE };
+    declineBookingRequestMock.mockResolvedValueOnce(refused);
+
+    expect(await declineBookingRequest("request-1")).toEqual(refused);
+  });
+
+  it("declineBookingRequest checks ownership once and never writes itself", async () => {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "artist-1",
+    } as never);
+    declineBookingRequestMock.mockResolvedValue({
+      success: true,
+      responseMessage: generateResponseMessage("DECLINED"),
+    });
+
+    await declineBookingRequest("request-1");
+
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenCalledTimes(1);
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenCalledWith({
+      where: { id: "request-1" },
+      select: { artistId: true },
+    });
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+    expect(prismaMock.bookingRequest.updateMany).not.toHaveBeenCalled();
   });
 
   it("reviewBookingRequestAction delegates the validated input", async () => {
@@ -689,59 +732,48 @@ describe("updateBookingPaymentMethodAction", () => {
   });
 });
 
-describe("approveBookingRequest / declineBookingRequest (setBookingRequestStatus)", () => {
+describe("approveBookingRequest (setBookingRequestStatus)", () => {
   beforeEach(() => {
     getCurrentSessionMock.mockResolvedValue(ARTIST_SESSION);
   });
 
-  const STATUS_ACTIONS = [
-    ["approveBookingRequest", approveBookingRequest, "APPROVED"],
-    ["declineBookingRequest", declineBookingRequest, "DECLINED"],
-  ] as const;
-
-  it.each(STATUS_ACTIONS)("%s returns the exact response message", async (_name, action, status) => {
+  it("returns the exact response message", async () => {
     prismaMock.bookingRequest.findUnique.mockResolvedValue({
       artistId: "artist-1",
     } as never);
     prismaMock.bookingRequest.update.mockResolvedValue({} as never);
 
-    expect(await action("request-1")).toEqual({
+    expect(await approveBookingRequest("request-1")).toEqual({
       success: true,
-      responseMessage: generateResponseMessage(status),
+      responseMessage: generateResponseMessage("APPROVED"),
     });
   });
 
-  it.each(STATUS_ACTIONS)(
-    "%s checks ownership selecting only artistId, then re-reads the row",
-    async (_name, action) => {
-      prismaMock.bookingRequest.findUnique.mockResolvedValue({
-        artistId: "artist-1",
-      } as never);
-      prismaMock.bookingRequest.update.mockResolvedValue({} as never);
+  it("checks ownership selecting only artistId, then re-reads the row", async () => {
+    prismaMock.bookingRequest.findUnique.mockResolvedValue({
+      artistId: "artist-1",
+    } as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
 
-      await action("request-1");
+    await approveBookingRequest("request-1");
 
-      expect(prismaMock.bookingRequest.findUnique).toHaveBeenNthCalledWith(1, {
-        where: { id: "request-1" },
-        select: { artistId: true },
-      });
-      expect(prismaMock.bookingRequest.findUnique).toHaveBeenNthCalledWith(2, {
-        where: { id: "request-1" },
-      });
-    }
-  );
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenNthCalledWith(1, {
+      where: { id: "request-1" },
+      select: { artistId: true },
+    });
+    expect(prismaMock.bookingRequest.findUnique).toHaveBeenNthCalledWith(2, {
+      where: { id: "request-1" },
+    });
+  });
 
-  it.each(STATUS_ACTIONS)(
-    "%s reports a row deleted after the ownership check as not found without updating",
-    async (_name, action) => {
-      prismaMock.bookingRequest.findUnique
-        .mockResolvedValueOnce({ artistId: "artist-1" } as never)
-        .mockResolvedValueOnce(null);
+  it("reports a row deleted after the ownership check as not found without updating", async () => {
+    prismaMock.bookingRequest.findUnique
+      .mockResolvedValueOnce({ artistId: "artist-1" } as never)
+      .mockResolvedValueOnce(null);
 
-      expect(await action("request-1")).toEqual(REQUEST_NOT_FOUND);
-      expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
-    }
-  );
+    expect(await approveBookingRequest("request-1")).toEqual(REQUEST_NOT_FOUND);
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("guard runs before validation (review)", () => {

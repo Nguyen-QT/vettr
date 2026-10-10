@@ -28,6 +28,7 @@ import {
   type ConfirmProposedBookingResult,
 } from "./services/confirmProposedBooking";
 import { createBookingRequest } from "./services/createBookingRequest";
+import { declineBookingRequest as declineBookingRequestService } from "./services/declineBookingRequest";
 import { generateResponseMessage } from "./services/generateResponseMessage";
 import { markAppointmentCompleted } from "./services/markAppointmentCompleted";
 import { markAppointmentNoShow } from "./services/markAppointmentNoShow";
@@ -299,6 +300,11 @@ export async function approveBookingRequest(
   return setBookingRequestStatus(bookingRequestId, "APPROVED");
 }
 
+// Controller/Action boundary (56.2): same session + ownership guards as
+// approveBookingRequest above, then delegates to the declineBookingRequest
+// service, which declines only a request not yet approved and refuses an
+// APPROVED booking -- that one is cancelled through
+// cancelApprovedBookingAsArtistAction, which releases its slots and refunds.
 export async function declineBookingRequest(
   bookingRequestId: string
 ): Promise<RequestActionResult> {
@@ -311,7 +317,7 @@ export async function declineBookingRequest(
     return { success: false, error: REQUEST_NOT_FOUND_ERROR_MESSAGE };
   }
 
-  return setBookingRequestStatus(bookingRequestId, "DECLINED");
+  return declineBookingRequestService({ bookingRequestId });
 }
 
 // Controller/Action boundary (CLAUDE.md 4.1h) for the artist's review
@@ -553,9 +559,11 @@ export async function updateBookingPaymentMethodAction(
   });
 }
 
+// Approve-only since 56.2 (decline has its own conditional service); its
+// removal is 28.7 flagged item 1.
 async function setBookingRequestStatus(
   bookingRequestId: string,
-  status: "APPROVED" | "DECLINED"
+  status: "APPROVED"
 ): Promise<RequestActionResult> {
   const existing = await prisma.bookingRequest.findUnique({
     where: { id: bookingRequestId },
