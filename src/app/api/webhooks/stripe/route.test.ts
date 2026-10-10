@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE } from "@/domains/billing/constants";
+import { confirmDepositPayment } from "@/domains/billing/services/confirmDepositPayment";
 import { confirmDepositRefund } from "@/domains/billing/services/confirmDepositRefund";
 import { stripe } from "@/lib/stripe";
 
@@ -41,6 +43,15 @@ function buildSignedRequest(type: string, object: Record<string, unknown>): Next
   });
 }
 
+function paymentIntent(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "pi_123",
+    object: "payment_intent",
+    metadata: { bookingRequestId: "request-1" },
+    ...overrides,
+  };
+}
+
 function refund(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: "re_123",
@@ -51,9 +62,62 @@ function refund(overrides: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
-// Route-handler unit test (56.1.3.1): refund event dispatch only.
-// Signature verification is covered against real Stripe signing in
-// route.stripe-integration.test.ts.
+// Route-handler unit test (56.1.3.1, 56.4.3.1): payment_intent.succeeded
+// and refund event dispatch only. Signature verification is covered
+// against real Stripe signing in route.stripe-integration.test.ts.
+describe("POST /api/webhooks/stripe -- payment_intent.succeeded", () => {
+  beforeEach(() => {
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET);
+    vi.mocked(confirmDepositPayment).mockReset();
+    vi.mocked(confirmDepositPayment).mockResolvedValue({ success: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("confirms the PaymentIntent and passes its metadata.bookingRequestId", async () => {
+    const response = await POST(buildSignedRequest("payment_intent.succeeded", paymentIntent()));
+
+    expect(response.status).toBe(200);
+    expect(confirmDepositPayment).toHaveBeenCalledTimes(1);
+    expect(confirmDepositPayment).toHaveBeenCalledWith("pi_123", "request-1");
+  });
+
+  it.each([
+    ["metadata without a bookingRequestId", { metadata: {} }],
+    ["no metadata at all", { metadata: undefined }],
+  ])("confirms the PaymentIntent with no booking id when it has %s", async (_, overrides) => {
+    const response = await POST(
+      buildSignedRequest("payment_intent.succeeded", paymentIntent(overrides))
+    );
+
+    expect(response.status).toBe(200);
+    expect(confirmDepositPayment).toHaveBeenCalledWith("pi_123", undefined);
+  });
+
+  it("still answers 200 when no booking matches, since a retry can't create a match", async () => {
+    vi.mocked(confirmDepositPayment).mockResolvedValue({
+      success: false,
+      error: DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
+    });
+
+    const response = await POST(buildSignedRequest("payment_intent.succeeded", paymentIntent()));
+
+    expect(response.status).toBe(200);
+  });
+
+  it("returns 500 so Stripe retries when confirming the payment throws", async () => {
+    vi.mocked(confirmDepositPayment).mockRejectedValue(new Error("db down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await POST(buildSignedRequest("payment_intent.succeeded", paymentIntent()));
+
+    expect(response.status).toBe(500);
+  });
+});
+
 describe("POST /api/webhooks/stripe -- refund events", () => {
   beforeEach(() => {
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET);
