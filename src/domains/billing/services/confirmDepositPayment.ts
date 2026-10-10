@@ -22,15 +22,31 @@ import { refundDeposit } from "./refundDeposit";
 // route answers 500 and Stripe redelivers to retry it. A newly paid
 // COMPLETED/NO_SHOW booking only raises a critical alert (ids only) for
 // manual reconciliation.
+// A PaymentIntent that matches no booking (56.4) can only be state left
+// from before 56.4, a bug, or not a deposit at all. It is logged (ids
+// only) with the event's metadata.bookingRequestId: critical when that is
+// set (a deposit payment that wasn't recorded), a warning when it isn't.
+// The metadata is never used to find or change a booking, so nothing
+// moves money on it, and a retry can't create a match, so the webhook
+// still answers 200. To recover by hand: fix the row, then resend the
+// event from the Stripe Dashboard or CLI.
 // Reads/writes BookingRequest through booking's narrow deposit functions
 // (7.2.3) rather than prisma.bookingRequest directly -- billing never
 // queries booking's table (CLAUDE.md's Domain Boundary Isolation rule).
 export async function confirmDepositPayment(
-  paymentIntentId: string
+  paymentIntentId: string,
+  metadataBookingRequestId?: string
 ): Promise<ConfirmDepositPaymentResult> {
   const request = await getBookingRequestByPaymentIntentId(paymentIntentId);
 
   if (!request) {
+    console.error({
+      operation: "confirmDepositPayment",
+      reason: "payment_intent_unmatched",
+      severity: metadataBookingRequestId ? "critical" : "warning",
+      paymentIntentId,
+      bookingRequestId: metadataBookingRequestId,
+    });
     return { success: false, error: DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE };
   }
 
