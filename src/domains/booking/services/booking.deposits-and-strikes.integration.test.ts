@@ -9,10 +9,13 @@ import { combineRequestedDateAndTime } from "../booking.schema";
 import {
   APPOINTMENT_NOT_YET_DUE_ERROR_MESSAGE,
   INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE,
+  REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE,
 } from "../constants";
 import type { RequestStatus } from "../types";
 import { cancelApprovedBookingAsArtist } from "./cancelApprovedBookingAsArtist";
 import { cancelBookingRequest } from "./cancelBookingRequest";
+import { declineBookingRequest } from "./declineBookingRequest";
+import { generateResponseMessage } from "./generateResponseMessage";
 import { getPendingBookingRequests } from "./getPendingBookingRequests";
 import { markAppointmentNoShow } from "./markAppointmentNoShow";
 import { rescheduleApprovedBooking } from "./rescheduleApprovedBooking";
@@ -392,6 +395,75 @@ describe("booking deposits-and-strikes integration", () => {
       expect(refundsCreateMock).not.toHaveBeenCalled();
       const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
       expect(after).toMatchObject({ depositPaid: true, depositRefunded: false, stripeRefundId: null });
+    });
+  });
+
+  describe("declineBookingRequest (56.2)", () => {
+    it.each(["PENDING", "AWAITING_SLOT_CONFIRMATION"] as const)(
+      "declines a request in %s",
+      async (status) => {
+        const { artistId, clientId } = await setup();
+        const request = await createBookingRequest({
+          artistId,
+          clientId,
+          requestedStartTime: futureStart(),
+          status,
+        });
+
+        const result = await declineBookingRequest({ bookingRequestId: request.id });
+
+        expect(result).toEqual({
+          success: true,
+          responseMessage: generateResponseMessage("DECLINED"),
+        });
+        const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
+        expect(after.status).toBe("DECLINED");
+      }
+    );
+
+    it("refuses an APPROVED booking, leaving its status, slots and deposit untouched", async () => {
+      const { artistId, clientId } = await setup();
+      const request = await createApprovedWithSlot(artistId, clientId, futureStart());
+      await prisma.bookingRequest.update({
+        where: { id: request.id },
+        data: { depositPaid: true },
+      });
+
+      const result = await declineBookingRequest({ bookingRequestId: request.id });
+
+      expect(result).toEqual({ success: false, error: REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE });
+      const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
+      expect(after).toMatchObject({
+        status: "APPROVED",
+        depositPaid: true,
+        depositRefunded: false,
+        stripeRefundId: null,
+      });
+      const slots = await prisma.timeSlot.findMany({ where: { bookingRequestId: request.id } });
+      expect(slots.map((s) => s.status)).toEqual(["BOOKED"]);
+      expect(refundsCreateMock).not.toHaveBeenCalled();
+    });
+
+    it("two concurrent declines of one request: exactly one succeeds", async () => {
+      const { artistId, clientId } = await setup();
+      const request = await createBookingRequest({
+        artistId,
+        clientId,
+        requestedStartTime: futureStart(),
+      });
+
+      const results = await Promise.all([
+        declineBookingRequest({ bookingRequestId: request.id }),
+        declineBookingRequest({ bookingRequestId: request.id }),
+      ]);
+
+      expect(results.filter((r) => r.success)).toHaveLength(1);
+      expect(results).toContainEqual({
+        success: false,
+        error: REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE,
+      });
+      const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
+      expect(after.status).toBe("DECLINED");
     });
   });
 

@@ -1,4 +1,4 @@
-import type { ClientBudgetRange, ComplexityTier } from "./types";
+import type { ActionableRequestStatus, ClientBudgetRange, ComplexityTier } from "./types";
 
 export const MIN_DESIGN_REFERENCE_IMAGES = 1;
 export const MAX_DESIGN_REFERENCE_IMAGES = 5;
@@ -89,6 +89,15 @@ export const BOOKING_FAILED_AFTER_VERIFICATION_ERROR_MESSAGE =
 // success (54.5.2.1), so it claims no more than the code step already does.
 export const BOOKING_VERIFICATION_CODE_RESENT_MESSAGE =
   "We've sent a new code to your email. It can take a minute to arrive.";
+
+// declineBookingRequest (56.2): the only statuses an artist can decline,
+// the same ones the dashboard offers Decline on. An APPROVED booking is
+// cancelled through cancelApprovedBookingAsArtist instead, which
+// releases its slots and refunds its deposit.
+export const DECLINABLE_REQUEST_STATUSES: readonly ActionableRequestStatus[] = [
+  "PENDING",
+  "AWAITING_SLOT_CONFIRMATION",
+];
 
 export const REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE =
   "This request has already been cancelled, declined, or completed.";
