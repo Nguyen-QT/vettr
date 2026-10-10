@@ -43,7 +43,13 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object;
-        await confirmDepositPayment(paymentIntent.id);
+        // metadata.bookingRequestId (set at creation) only tells
+        // confirmDepositPayment how loudly to log a PaymentIntent that
+        // matches no booking (56.4); it never picks the booking. Read
+        // defensively so a log-only field can't fail the confirmation.
+        // A not-found result still answers 200: the service has logged
+        // it, and a retry can't create a match.
+        await confirmDepositPayment(paymentIntent.id, paymentIntent.metadata?.bookingRequestId);
         break;
       }
       case "payment_intent.payment_failed":

@@ -416,8 +416,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - Stripe-tier case in `depositPaymentIntentLifecycle.stripe-integration.test.ts`: a second call reuses the same PaymentIntent, and after the tier amount changes the old one is cancelled and can't be confirmed.
     - [x] **56.4.2.4** Domain Service — booking: `cancelBookingRequest` and `cancelApprovedBookingAsArtist` read `stripePaymentIntentId` back from their status update and cancel an unpaid booking's PaymentIntent after commit.
       - Unit tests: unpaid with a PaymentIntent → cancelled; paid → refunded, not cancelled; no PaymentIntent → neither.
-    - [ ] **56.4.2.5** Domain Service — billing: `confirmDepositPayment` takes the event's `metadata.bookingRequestId` (optional) and logs an unmatched PaymentIntent as above (+ unit tests).
-    - [ ] **56.4.3.1** Controller/Action — the webhook route passes `metadata.bookingRequestId` and still answers 200 when no booking matches (+ route unit tests).
+    - [x] **56.4.2.5** Domain Service — billing: `confirmDepositPayment` takes the event's `metadata.bookingRequestId` (optional) and logs an unmatched PaymentIntent as above (+ unit tests).
+    - [x] **56.4.3.1** Controller/Action — the webhook route passes `metadata.bookingRequestId` and still answers 200 when no booking matches (+ route unit tests).
 - [ ] **56.5: Deposit Creation Lockout and Uncaught Stripe Errors** — *unscoped.*
   - Reusing the fixed key with different parameters makes Stripe reject the call with an idempotency error for up to 24h. The parameters change when the artist edits the tier deposit, when the client is flagged for precharge, or when the artist's Connect `chargesEnabled` flips `on_behalf_of`/`transfer_data`.
   - `stripe.paymentIntents.create` has no try/catch (architecture.md §6.1, §8.B). Nor do `createDepositPaymentIntentAction` or `useDepositPayment`, so the rejection escapes uncaught and the hook's `isLoading` never resets (a stuck spinner).
