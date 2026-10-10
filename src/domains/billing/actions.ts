@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { getCurrentSession } from "@/domains/auth/actions";
 import { Prisma } from "@/generated/prisma/client";
 
@@ -54,6 +56,8 @@ async function requireArtistId(): Promise<string | null> {
 // service already catches its Stripe calls and record write) returns the
 // generic retryable error instead of rejecting (56.5). The typed Prisma
 // code only: the client-supplied bookingRequestId stays out of the log.
+// Next control flow (redirect/notFound) is rethrown first, as in
+// src/app/page.tsx, so it never reads as a failure.
 export async function createDepositPaymentIntentAction(
   bookingRequestId: string
 ): Promise<CreateDepositPaymentIntentResult> {
@@ -65,6 +69,7 @@ export async function createDepositPaymentIntentAction(
 
     return await createDepositPaymentIntent({ bookingRequestId, clientProfileId });
   } catch (error) {
+    unstable_rethrow(error);
     console.error({
       operation: "createDepositPaymentIntentAction",
       reason: "unexpected_failure",

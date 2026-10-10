@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import type { SessionWithAccount } from "@/domains/auth/types";
 import { Prisma } from "@/generated/prisma/client";
+import { expectRedirect } from "@/testUtils/expectRedirect";
 
 const {
   getCurrentSessionMock,
@@ -241,6 +243,16 @@ describe("createDepositPaymentIntentAction", () => {
 
     expect(result).toEqual(GENERIC_ERROR);
     expect(consoleErrorSpy.mock.calls).toStrictEqual(unexpectedFailureLog(undefined));
+  });
+
+  // next/navigation is left unmocked, so redirect() throws the real
+  // NEXT_REDIRECT (see expectRedirect).
+  it("rethrows Next control-flow errors from the session lookup instead of swallowing them", async () => {
+    getCurrentSessionMock.mockImplementation(async () => redirect("/elsewhere"));
+
+    await expectRedirect(createDepositPaymentIntentAction("request-1"), "/elsewhere");
+    expect(createDepositPaymentIntentMock).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 });
 
