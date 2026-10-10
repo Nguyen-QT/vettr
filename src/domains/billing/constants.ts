@@ -1,6 +1,10 @@
 import type { RequestStatus } from "@/domains/booking/types";
 
-import type { DepositPaymentAction } from "./types";
+import type {
+  DepositPaymentAction,
+  DepositPaymentIntentStatus,
+  StoredDepositPaymentIntentAction,
+} from "./types";
 
 // Placeholder bound -- tune to the actual minimum deposit an artist may
 // require. Kept above zero so an artist can't accidentally configure a
@@ -25,11 +29,15 @@ export const PRECHARGE_PERCENTAGE = 0.5;
 // after Stripe already accepted the call (not a failed call -- that's
 // already try/catch'd, see External Side-Effect Safety) could otherwise
 // make a client-side retry create a second PaymentIntent/refund for the
-// same booking. Keyed per booking + action rather than a random value
-// per call, so a genuine retry of the *same* logical operation reuses
-// Stripe's cached result instead of duplicating the side effect. Stripe
-// retains a key for 24h, comfortably longer than any realistic retry
-// window for a dropped response.
+// same booking. Keyed per logical operation rather than a random value
+// per call, so a genuine retry of the *same* operation reuses Stripe's
+// cached result instead of duplicating the side effect. The refund key is
+// per booking. A PaymentIntent create is keyed per booking + the
+// PaymentIntent it replaces, or "initial" (56.4):
+// `deposit-intent:<bookingRequestId>:<replaced id | "initial">`. So
+// concurrent tabs replacing the same PaymentIntent with the same
+// parameters get the same new one, and a visit after Stripe's 24h key
+// window reuses the stored PaymentIntent instead of keying a new create.
 export const DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX = "deposit-intent";
 export const DEPOSIT_REFUND_IDEMPOTENCY_KEY_PREFIX = "deposit-refund";
 // Keyed per PaymentIntent rather than per booking (56.4): every caller
@@ -50,6 +58,31 @@ export const DEPOSIT_NOT_CONFIGURED_ERROR_MESSAGE =
   "This artist has not set a deposit amount for this service tier yet.";
 export const DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE =
   "Something went wrong starting your deposit payment. Please try again.";
+// The stored PaymentIntent is processing or has succeeded (56.4): the
+// webhook records the payment, so no new one is offered.
+export const DEPOSIT_PAYMENT_PROCESSING_ERROR_MESSAGE =
+  "Your deposit payment is already being processed. Please check back shortly.";
+
+// createDepositPaymentIntent's policy for the booking's stored
+// PaymentIntent, by its Stripe status (56.4). A Record, like
+// DEPOSIT_PAYMENT_ACTION_BY_STATUS below, so a status can't be added
+// without a policy. Open statuses are reused if the amount and routing
+// still match, otherwise cancelled and replaced (Stripe can't change
+// routing on an existing PaymentIntent, so there is no update path).
+// A payment in flight is refused. requires_capture can't happen
+// (nothing uses manual capture) and is refused with it.
+export const STORED_DEPOSIT_PAYMENT_INTENT_ACTION_BY_STATUS: Record<
+  DepositPaymentIntentStatus,
+  StoredDepositPaymentIntentAction
+> = {
+  requires_payment_method: "REUSE",
+  requires_confirmation: "REUSE",
+  requires_action: "REUSE",
+  processing: "REFUSE",
+  requires_capture: "REFUSE",
+  succeeded: "REFUSE",
+  canceled: "REPLACE",
+};
 
 // Surfaced by confirmDepositPayment (CLAUDE.md 7.1.4) when the webhook
 // reports a PaymentIntent id that doesn't match any BookingRequest --

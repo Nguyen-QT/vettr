@@ -1,3 +1,5 @@
+import type Stripe from "stripe";
+
 import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
 import { recordDepositPaymentIntent } from "@/domains/booking/services/recordDepositPaymentIntent";
 import { prisma } from "@/lib/prisma";
@@ -8,14 +10,18 @@ import {
   DEPOSIT_NOT_CONFIGURED_ERROR_MESSAGE,
   DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE,
   DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX,
+  DEPOSIT_PAYMENT_PROCESSING_ERROR_MESSAGE,
   DEPOSIT_REQUEST_NOT_APPROVED_ERROR_MESSAGE,
   DEPOSIT_REQUEST_NOT_FOUND_ERROR_MESSAGE,
   PRECHARGE_PERCENTAGE,
+  STORED_DEPOSIT_PAYMENT_INTENT_ACTION_BY_STATUS,
 } from "../constants";
 import type {
   CreateDepositPaymentIntentInput,
   CreateDepositPaymentIntentResult,
+  DepositPaymentIntentStatus,
 } from "../types";
+import { cancelDepositPaymentIntent } from "./cancelDepositPaymentIntent";
 import { getArtistDepositSettings } from "./getArtistDepositSettings";
 
 // Stripe Connect deposit routing (CLAUDE.md 24.1.2): the connected
@@ -32,18 +38,47 @@ async function getChargeableConnectAccountId(artistId: string): Promise<string |
   return artist?.stripeConnectChargesEnabled ? artist.stripeConnectAccountId : null;
 }
 
-// Domain Service (CLAUDE.md 7.1.3, migrated in 7.2.4): creates the
-// Stripe PaymentIntent a client pays to secure an already-APPROVED
-// booking. clientProfileId is the trusted session's own id (see
-// booking's cancelBookingRequest precedent) -- an ownership mismatch is
-// reported the same as a missing request. depositAmount is
-// snapshotted onto the BookingRequest here rather than read live from
-// ArtistDepositSetting on every future check, so a later change to
-// the artist's per-tier amount never retroactively alters an
-// in-flight or already-paid request. Reads/writes BookingRequest
-// through booking's narrow deposit functions (7.2.3) rather than
-// prisma.bookingRequest directly -- billing never queries booking's
-// table (CLAUDE.md's Domain Boundary Isolation rule).
+function isDepositPaymentIntentStatus(status: string): status is DepositPaymentIntentStatus {
+  return Object.hasOwn(STORED_DEPOSIT_PAYMENT_INTENT_ACTION_BY_STATUS, status);
+}
+
+// Whether a stored PaymentIntent charges what would be created now. Retrieve
+// doesn't expand on_behalf_of or the destination, so both are ids.
+function matchesDepositParams(
+  paymentIntent: Stripe.PaymentIntent,
+  amount: number,
+  artistConnectAccountId: string | null
+): boolean {
+  return (
+    paymentIntent.amount === amount &&
+    paymentIntent.on_behalf_of === artistConnectAccountId &&
+    (paymentIntent.transfer_data?.destination ?? null) === artistConnectAccountId
+  );
+}
+
+// Domain Service (CLAUDE.md 7.1.3, migrated in 7.2.4, PaymentIntent reuse
+// 56.4): returns the client secret for the Stripe PaymentIntent a client
+// pays to secure an already-APPROVED booking. clientProfileId is the
+// trusted session's own id (see booking's cancelBookingRequest
+// precedent) -- an ownership mismatch is reported the same as a missing
+// request. depositAmount is snapshotted onto the BookingRequest here
+// rather than read live from ArtistDepositSetting on every future check,
+// so a later change to the artist's per-tier amount never retroactively
+// alters an in-flight or already-paid request.
+// At most one payable PaymentIntent per booking: the stored one. It is
+// retrieved and acted on by status (STORED_DEPOSIT_PAYMENT_INTENT_ACTION_BY_STATUS),
+// and only replaced once Stripe confirms it's cancelled -- Stripe refuses
+// to cancel one that's processing or has succeeded.
+// The client secret comes after the commit: it's only returned once
+// recordDepositPaymentIntent's compare-and-set has committed this
+// PaymentIntent as the stored id, reuse included (a cancel or a newer
+// PaymentIntent that committed after the read above makes it refuse). A
+// lost write returns no secret, so the PaymentIntent left behind can't be
+// paid, and payment_intent.succeeded can never arrive before the write
+// the webhook's lookup depends on.
+// Reads/writes BookingRequest through booking's narrow deposit functions
+// (7.2.3) rather than prisma.bookingRequest directly -- billing never
+// queries booking's table (CLAUDE.md's Domain Boundary Isolation rule).
 export async function createDepositPaymentIntent(
   input: CreateDepositPaymentIntentInput
 ): Promise<CreateDepositPaymentIntentResult> {
@@ -95,9 +130,61 @@ export async function createDepositPaymentIntent(
   // block a payment, only change where the money ends up.
   const artistConnectAccountId = await getChargeableConnectAccountId(request.artistId);
 
-  const paymentIntent = await stripe.paymentIntents.create(
+  const amount = Math.round(depositAmount * 100);
+  const storedPaymentIntentId = request.stripePaymentIntentId;
+  let paymentIntent: Stripe.PaymentIntent | null = null;
+
+  if (storedPaymentIntentId !== null) {
+    let stored: Stripe.PaymentIntent;
+    try {
+      stored = await stripe.paymentIntents.retrieve(storedPaymentIntentId);
+    } catch {
+      // Ids only: a Stripe error can carry the whole PaymentIntent object,
+      // metadata included.
+      console.error({
+        operation: "createDepositPaymentIntent",
+        reason: "stripe_retrieve_failed",
+        severity: "warning",
+        bookingRequestId: request.id,
+        paymentIntentId: storedPaymentIntentId,
+      });
+      return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
+    }
+
+    // A status this code doesn't know might still be payable, so it is
+    // never replaced.
+    if (!isDepositPaymentIntentStatus(stored.status)) {
+      console.error({
+        operation: "createDepositPaymentIntent",
+        reason: "unknown_payment_intent_status",
+        severity: "warning",
+        bookingRequestId: request.id,
+        paymentIntentId: storedPaymentIntentId,
+        status: stored.status,
+      });
+      return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
+    }
+
+    const action = STORED_DEPOSIT_PAYMENT_INTENT_ACTION_BY_STATUS[stored.status];
+
+    if (action === "REFUSE") {
+      return { success: false, error: DEPOSIT_PAYMENT_PROCESSING_ERROR_MESSAGE };
+    }
+
+    if (action === "REUSE") {
+      if (matchesDepositParams(stored, amount, artistConnectAccountId)) {
+        paymentIntent = stored;
+      } else if (!(await cancelDepositPaymentIntent(storedPaymentIntentId))) {
+        // Already logged. Stripe also refuses a PaymentIntent that started
+        // processing since the retrieve; a retry then gets the refusal above.
+        return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
+      }
+    }
+  }
+
+  paymentIntent ??= await stripe.paymentIntents.create(
     {
-      amount: Math.round(depositAmount * 100),
+      amount,
       currency: "gbp",
       metadata: { bookingRequestId: request.id },
       // Restricts to payment methods that never redirect off-page, since
@@ -118,11 +205,11 @@ export async function createDepositPaymentIntent(
         : {}),
     },
     {
-      // Idempotency Keys on Deposit/Refund Calls (CLAUDE.md 15.1): a
-      // dropped response after Stripe already created the PaymentIntent
-      // must not let a client-side retry create a second one for the
-      // same booking.
-      idempotencyKey: `${DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX}:${request.id}`,
+      // Idempotency Keys on Deposit/Refund Calls (CLAUDE.md 15.1, 56.4):
+      // keyed by the PaymentIntent this replaces, so a dropped response
+      // or a concurrent tab replacing the same one gets the same new
+      // PaymentIntent instead of a second payable one.
+      idempotencyKey: `${DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX}:${request.id}:${storedPaymentIntentId ?? "initial"}`,
     }
   );
 
@@ -130,12 +217,15 @@ export async function createDepositPaymentIntent(
     return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
   }
 
-  // Whether it wrote gates the client secret from 56.4.2.3.
-  await recordDepositPaymentIntent(request.id, {
+  const recorded = await recordDepositPaymentIntent(request.id, {
     depositAmount,
     stripePaymentIntentId: paymentIntent.id,
-    replacedPaymentIntentId: request.stripePaymentIntentId,
+    replacedPaymentIntentId: storedPaymentIntentId,
   });
+
+  if (!recorded) {
+    return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
+  }
 
   return { success: true, clientSecret: paymentIntent.client_secret };
 }
