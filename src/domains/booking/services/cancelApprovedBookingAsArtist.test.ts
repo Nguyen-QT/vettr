@@ -36,7 +36,7 @@ describe("cancelApprovedBookingAsArtist", () => {
       status,
       depositPaid,
     } as never);
-    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({ depositPaid } as never);
   }
 
   it("cancels an APPROVED booking and releases its slot", async () => {
@@ -49,11 +49,23 @@ describe("cancelApprovedBookingAsArtist", () => {
     expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
       where: { id: requestId },
       data: { status: "CANCELLED_BY_ARTIST" },
+      select: { depositPaid: true },
     });
   });
 
   it("refunds a paid deposit in full", async () => {
     stubRequest("APPROVED", true);
+    vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
+
+    const result = await cancelApprovedBookingAsArtist({ bookingRequestId: requestId });
+
+    expect(result).toEqual({ success: true });
+    expect(refundDeposit).toHaveBeenCalledWith(requestId);
+  });
+
+  it("refunds a deposit paid after the pre-read, from the status update's own read-back", async () => {
+    stubRequest("APPROVED");
+    prismaMock.bookingRequest.update.mockResolvedValue({ depositPaid: true } as never);
     vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
 
     const result = await cancelApprovedBookingAsArtist({ bookingRequestId: requestId });

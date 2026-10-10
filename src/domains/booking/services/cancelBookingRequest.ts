@@ -52,15 +52,17 @@ export async function cancelBookingRequest(
 
   const wasApproved = request.status === "APPROVED";
 
-  await prisma.$transaction(async (tx) => {
+  const depositPaid = await prisma.$transaction(async (tx) => {
     await releaseBookedTimeSlots(tx, request.id);
-    await tx.bookingRequest.update({
+    const cancelled = await tx.bookingRequest.update({
       where: { id: request.id },
       data: { status: "CANCELLED_BY_CLIENT" },
+      select: { depositPaid: true },
     });
     if (wasApproved) {
       await applyCancellationStrike(tx, request.clientId);
     }
+    return cancelled.depositPaid;
   });
 
   // Refunds in full -- this cancellation only ever reaches here outside
@@ -71,8 +73,10 @@ export async function cancelBookingRequest(
   // point, so a refund failure is logged rather than reported back as a
   // cancellation failure -- the booking is genuinely cancelled either way,
   // and refundDeposit's own webhook backstop (confirmDepositRefund)
-  // reconciles a transient failure independently.
-  if (request.depositPaid) {
+  // reconciles a transient failure independently. depositPaid is read
+  // back from the status update above, not the earlier read (56.2), so a
+  // payment confirmed in between is still refunded.
+  if (depositPaid) {
     const refundResult = await refundDeposit(request.id);
     if (!refundResult.success) {
       console.error(

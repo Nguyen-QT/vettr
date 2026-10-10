@@ -30,19 +30,24 @@ export async function cancelApprovedBookingAsArtist(
     return { success: false, error: NOT_APPROVED_ERROR_MESSAGE };
   }
 
-  await prisma.$transaction(async (tx) => {
+  const depositPaid = await prisma.$transaction(async (tx) => {
     await releaseBookedTimeSlots(tx, request.id);
-    await tx.bookingRequest.update({
+    const cancelled = await tx.bookingRequest.update({
       where: { id: request.id },
       data: { status: "CANCELLED_BY_ARTIST" },
+      select: { depositPaid: true },
     });
+    return cancelled.depositPaid;
   });
 
   // Refunds in full, unconditionally on timing -- an artist-initiated
   // cancellation is never the client's fault (CLAUDE.md 7.3). Deliberately
   // outside the transaction and logged-not-thrown-on-failure, same
   // reasoning as cancelBookingRequest's identical refund step.
-  if (request.depositPaid) {
+  // depositPaid is read back from the status update above, not the
+  // earlier read (56.2), so a payment confirmed in between is still
+  // refunded.
+  if (depositPaid) {
     const refundResult = await refundDeposit(request.id);
     if (!refundResult.success) {
       console.error(

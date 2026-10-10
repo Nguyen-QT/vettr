@@ -56,7 +56,9 @@ describe("cancelBookingRequest", () => {
         endTime: new Date(startTime.getTime() + hour),
       })),
     } as never);
-    prismaMock.bookingRequest.update.mockResolvedValue({} as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({
+      depositPaid: options.depositPaid ?? false,
+    } as never);
     prismaMock.clientProfile.update.mockResolvedValue({
       cancellationCount: 1,
     } as never);
@@ -80,6 +82,7 @@ describe("cancelBookingRequest", () => {
     expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
       where: { id: requestId },
       data: { status: "CANCELLED_BY_CLIENT" },
+      select: { depositPaid: true },
     });
   });
 
@@ -101,11 +104,23 @@ describe("cancelBookingRequest", () => {
     expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
       where: { id: requestId },
       data: { status: "CANCELLED_BY_CLIENT" },
+      select: { depositPaid: true },
     });
   });
 
   it("refunds a paid deposit in full when cancelling an APPROVED request outside the window", async () => {
     stubRequest("APPROVED", { slotStarts: [farFuture()], depositPaid: true });
+    vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
+
+    const result = await call();
+
+    expect(result).toEqual({ success: true });
+    expect(refundDeposit).toHaveBeenCalledWith(requestId);
+  });
+
+  it("refunds a deposit paid after the pre-read, from the status update's own read-back", async () => {
+    stubRequest("APPROVED", { slotStarts: [farFuture()] });
+    prismaMock.bookingRequest.update.mockResolvedValue({ depositPaid: true } as never);
     vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
 
     const result = await call();
