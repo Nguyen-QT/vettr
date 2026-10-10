@@ -266,6 +266,7 @@ describe("billing integration", () => {
       const target = await createBookingRequest({
         artistId,
         clientId,
+        status: "APPROVED",
         stripePaymentIntentId: intent,
       });
       const bystander = await createBookingRequest({

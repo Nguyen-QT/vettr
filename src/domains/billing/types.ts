@@ -39,6 +39,12 @@ export type ConfirmDepositPaymentResult =
   | { success: true }
   | { success: false; error: string };
 
+// What confirmDepositPayment does with a payment once it's recorded, by
+// the status the booking was in when it landed (56.2): RECORD keeps the
+// deposit, REFUND returns it in full, ALERT keeps it and raises a
+// critical log for manual reconciliation.
+export type DepositPaymentAction = "RECORD" | "REFUND" | "ALERT";
+
 export type RefundDepositResult =
   | { success: true }
   | { success: false; error: string };

@@ -1,3 +1,7 @@
+import type { RequestStatus } from "@/domains/booking/types";
+
+import type { DepositPaymentAction } from "./types";
+
 // Placeholder bound -- tune to the actual minimum deposit an artist may
 // require. Kept above zero so an artist can't accidentally configure a
 // "free" deposit that would always trivially satisfy depositPaid.
@@ -51,9 +55,30 @@ export const DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE =
 export const DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE =
   "No booking request matches this payment.";
 
+// confirmDepositPayment's policy by the status a payment lands on (56.2).
+// A Record rather than sets, so a new RequestStatus doesn't compile until
+// it's given a policy. Cancelled and declined bookings owe the client a
+// full refund (both cancel paths refund in full). COMPLETED/NO_SHOW
+// alert instead of refunding: on a redelivery, a paid deposit there looks
+// the same as one used at checkout or forfeited by a no-show, so a failed
+// refund couldn't be retried safely. PENDING/AWAITING_SLOT_CONFIRMATION
+// are unreachable (a PaymentIntent is only created for APPROVED) and
+// alert for the same reason.
+export const DEPOSIT_PAYMENT_ACTION_BY_STATUS: Record<RequestStatus, DepositPaymentAction> = {
+  APPROVED: "RECORD",
+  CANCELLED_BY_CLIENT: "REFUND",
+  CANCELLED_BY_ARTIST: "REFUND",
+  DECLINED: "REFUND",
+  COMPLETED: "ALERT",
+  NO_SHOW: "ALERT",
+  PENDING: "ALERT",
+  AWAITING_SLOT_CONFIRMATION: "ALERT",
+};
+
 // Surfaced by refundDeposit (CLAUDE.md 7.3.3). Callers (booking's
-// cancelBookingRequest/cancelApprovedBookingAsArtist, 7.3.4) only ever
-// invoke this once they already know depositPaid was true, so
+// cancelBookingRequest/cancelApprovedBookingAsArtist, 7.3.4, and
+// confirmDepositPayment for a late payment, 56.2) only ever invoke this
+// once they already know depositPaid was true, so
 // DEPOSIT_REFUND_NOT_PAID_ERROR_MESSAGE is a defensive guard rather
 // than an expected user-facing path.
 export const DEPOSIT_REFUND_REQUEST_NOT_FOUND_ERROR_MESSAGE =
