@@ -439,8 +439,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - A PaymentIntent created but never recorded stays open on Stripe. Nobody can pay it, but nothing cancels it either. 56.4's flagged sweep could find these by `metadata.bookingRequestId`.
     - Stripe saves a 500 on create against its key for 24h. A retry with the same parameters gets the same 500 until the window passes or a parameter changes.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **56.5.1.1 / 56.5.4.1** Data/UI — N/A. No schema change. The card is a container (View, per 54.8's split), and no primitive changes.
-    - [ ] **56.5.2.1** Domain Service — billing: `createDepositPaymentIntent` keys a create by amount and routing as above.
+    - [x] **56.5.1.1 / 56.5.4.1** Data/UI — N/A. No schema change. The card is a container (View, per 54.8's split), and no primitive changes.
+    - [x] **56.5.2.1** Domain Service — billing: `createDepositPaymentIntent` keys a create by amount and routing as above.
       - Unit tests: the key carries the amount and routing, and a changed amount gets a new key.
       - Stripe-tier case in `depositPaymentIntentLifecycle.stripe-integration.test.ts`: clear the stored id after a create. A retry with the same parameters gets the same PaymentIntent. Clear it again and change the tier amount: the next call creates a new one instead of hitting an idempotency error.
     - [ ] **56.5.2.2** Domain Service — billing: `createDepositPaymentIntent` catches the create and the record write separately, as above (+ unit tests per failure: generic error, no secret, the exact log).

@@ -23,7 +23,9 @@ import { createDepositPaymentIntent } from "./createDepositPaymentIntent";
 // webhook -- would hand it in production. It also proves 56.4's reuse
 // and replace against real Stripe: that a retrieved PaymentIntent's shape
 // matches what the reuse check compares, and that a replaced one really
-// can't be paid.
+// can't be paid. And it proves 56.5's key against Stripe's real
+// idempotency checks: a retry with the same parameters replays the same
+// PaymentIntent, and a retry with a changed amount isn't rejected.
 describe("deposit PaymentIntent lifecycle (real Stripe test mode)", () => {
   let artistId: string;
   let clientId: string;
@@ -161,5 +163,60 @@ describe("deposit PaymentIntent lifecycle (real Stripe test mode)", () => {
     await expect(
       stripe.paymentIntents.confirm(firstPaymentIntentId, { payment_method: "pm_card_visa" })
     ).rejects.toThrow();
+  });
+
+  it("keys a create by its parameters, so a changed amount after an unrecorded create gets a new PaymentIntent", async () => {
+    const request = await prisma.bookingRequest.create({
+      data: {
+        clientId,
+        artistId,
+        tier: "TIER_2",
+        minPrice: 100,
+        maxPrice: 200,
+        status: "APPROVED",
+      },
+    });
+    const input = { bookingRequestId: request.id, clientProfileId: clientId };
+    // Stands in for a create that reached Stripe but was never recorded
+    // (a lost response, or a record write that threw or lost).
+    const forgetStoredPaymentIntent = (): Promise<unknown> =>
+      prisma.bookingRequest.update({
+        where: { id: request.id },
+        data: { stripePaymentIntentId: null },
+      });
+
+    const first = await createDepositPaymentIntent(input);
+    expect(first.success).toBe(true);
+    if (!first.success) return;
+    const afterFirst = await prisma.bookingRequest.findUnique({ where: { id: request.id } });
+    const firstPaymentIntentId = afterFirst?.stripePaymentIntentId;
+    expect(firstPaymentIntentId).toMatch(/^pi_/);
+
+    await forgetStoredPaymentIntent();
+    const retry = await createDepositPaymentIntent(input);
+    expect(retry).toEqual({ success: true, clientSecret: first.clientSecret });
+    const afterRetry = await prisma.bookingRequest.findUnique({ where: { id: request.id } });
+    expect(afterRetry?.stripePaymentIntentId).toBe(firstPaymentIntentId);
+
+    await forgetStoredPaymentIntent();
+    await prisma.artistDepositSetting.update({
+      where: { artistId_tier: { artistId, tier: "TIER_2" } },
+      data: { depositAmount: 30 },
+    });
+
+    // Before 56.5 this reused the first create's key with a new amount,
+    // and Stripe threw an idempotency error.
+    const changed = await createDepositPaymentIntent(input);
+    expect(changed.success).toBe(true);
+    if (!changed.success) return;
+    expect(changed.clientSecret).not.toBe(first.clientSecret);
+    const afterChanged = await prisma.bookingRequest.findUnique({ where: { id: request.id } });
+    const changedPaymentIntentId = afterChanged?.stripePaymentIntentId;
+    expect(changedPaymentIntentId).toMatch(/^pi_/);
+    expect(changedPaymentIntentId).not.toBe(firstPaymentIntentId);
+    if (!changedPaymentIntentId) return;
+
+    const changedPaymentIntent = await stripe.paymentIntents.retrieve(changedPaymentIntentId);
+    expect(changedPaymentIntent.amount).toBe(3000);
   });
 });
