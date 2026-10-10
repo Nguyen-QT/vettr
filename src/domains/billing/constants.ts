@@ -85,9 +85,10 @@ export const STORED_DEPOSIT_PAYMENT_INTENT_ACTION_BY_STATUS: Record<
 };
 
 // Surfaced by confirmDepositPayment (CLAUDE.md 7.1.4) when the webhook
-// reports a PaymentIntent id that doesn't match any BookingRequest --
-// should never happen for a genuine Stripe event, but guards against a
-// stale/forged id.
+// reports a PaymentIntent id that doesn't match any BookingRequest. The
+// route verifies Stripe's signature, so the id is genuine: it is state
+// left from before 56.4, a bug, or a PaymentIntent that isn't a deposit,
+// and confirmDepositPayment logs it (56.4).
 export const DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE =
   "No booking request matches this payment.";
 

@@ -4,7 +4,10 @@ import { getBookingRequestByPaymentIntentId } from "@/domains/booking/services/g
 import { markDepositPaid } from "@/domains/booking/services/markDepositPaid";
 import type { BookingRequestDepositView, RequestStatus } from "@/domains/booking/types";
 
-import { DEPOSIT_REFUND_INIT_ERROR_MESSAGE } from "../constants";
+import {
+  DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
+  DEPOSIT_REFUND_INIT_ERROR_MESSAGE,
+} from "../constants";
 import { confirmDepositPayment } from "./confirmDepositPayment";
 import { refundDeposit } from "./refundDeposit";
 
@@ -82,14 +85,61 @@ describe("confirmDepositPayment", () => {
     expect(markDepositPaid).not.toHaveBeenCalled();
   });
 
-  it("rejects a PaymentIntent id that matches no request", async () => {
+  it("logs a critical alert for an unmatched PaymentIntent whose metadata names a booking", async () => {
     vi.mocked(getBookingRequestByPaymentIntentId).mockResolvedValue(null);
 
-    const result = await confirmDepositPayment("pi_unknown");
+    const result = await confirmDepositPayment("pi_unknown", "request-1");
 
-    expect(result.success).toBe(false);
+    expect(result).toEqual({
+      success: false,
+      error: DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith({
+      operation: "confirmDepositPayment",
+      reason: "payment_intent_unmatched",
+      severity: "critical",
+      paymentIntentId: "pi_unknown",
+      bookingRequestId: "request-1",
+    });
     expect(markDepositPaid).not.toHaveBeenCalled();
     expect(refundDeposit).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, ""])(
+    "logs a warning for an unmatched PaymentIntent with no booking in its metadata (%j)",
+    async (metadataBookingRequestId) => {
+      vi.mocked(getBookingRequestByPaymentIntentId).mockResolvedValue(null);
+
+      const result = await confirmDepositPayment("pi_unknown", metadataBookingRequestId);
+
+      expect(result).toEqual({
+        success: false,
+        error: DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
+      });
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith({
+        operation: "confirmDepositPayment",
+        reason: "payment_intent_unmatched",
+        severity: "warning",
+        paymentIntentId: "pi_unknown",
+        bookingRequestId: metadataBookingRequestId,
+      });
+      expect(markDepositPaid).not.toHaveBeenCalled();
+      expect(refundDeposit).not.toHaveBeenCalled();
+    }
+  );
+
+  it("acts on the booking the PaymentIntent matches, never the one its metadata names", async () => {
+    vi.mocked(getBookingRequestByPaymentIntentId).mockResolvedValue(depositView());
+
+    const result = await confirmDepositPayment("pi_123", "request-other");
+
+    expect(result).toEqual({ success: true });
+    expect(getBookingRequestByPaymentIntentId).toHaveBeenCalledWith("pi_123");
+    expect(markDepositPaid).toHaveBeenCalledTimes(1);
+    expect(markDepositPaid).toHaveBeenCalledWith("request-1");
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
   it("only flips the request the PaymentIntent lookup resolved to", async () => {
