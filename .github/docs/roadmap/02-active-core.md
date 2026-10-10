@@ -443,7 +443,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.5.2.1** Domain Service — billing: `createDepositPaymentIntent` keys a create by amount and routing as above.
       - Unit tests: the key carries the amount and routing, and a changed amount gets a new key.
       - Stripe-tier case in `depositPaymentIntentLifecycle.stripe-integration.test.ts`: clear the stored id after a create. A retry with the same parameters gets the same PaymentIntent. Clear it again and change the tier amount: the next call creates a new one instead of hitting an idempotency error.
-    - [ ] **56.5.2.2** Domain Service — billing: `createDepositPaymentIntent` catches the create and the record write separately, as above (+ unit tests per failure: generic error, no secret, the exact log).
+    - [x] **56.5.2.2** Domain Service — billing: `createDepositPaymentIntent` catches the create and the record write separately, as above (+ unit tests per failure: generic error, no secret, the exact log).
     - [ ] **56.5.3.1** Controller/Action — `createDepositPaymentIntentAction` catches anything the session lookup or the service throws (+ `billing/actions.test.ts` cases).
     - [ ] **56.5.5.1** Domain Hook — `useDepositPayment` catches a rejection and resets `isLoading` (+ new `useDepositPayment.test.ts`, jsdom).
     - [ ] **56.5.6.1** View & Route — `DepositPaymentCard` drops `started`.
