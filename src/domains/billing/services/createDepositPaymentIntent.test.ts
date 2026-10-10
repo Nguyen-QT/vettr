@@ -113,6 +113,26 @@ describe("createDepositPaymentIntent", () => {
     expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
       depositAmount: 20,
       stripePaymentIntentId: "pi_123",
+      replacedPaymentIntentId: null,
+    });
+  });
+
+  it("passes the stored PaymentIntent id it read as the one being replaced", async () => {
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ stripePaymentIntentId: "pi_old" })
+    );
+    configureDeposit(20);
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_new",
+      client_secret: "secret_new",
+    });
+
+    await createDepositPaymentIntent(input);
+
+    expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
+      depositAmount: 20,
+      stripePaymentIntentId: "pi_new",
+      replacedPaymentIntentId: "pi_old",
     });
   });
 

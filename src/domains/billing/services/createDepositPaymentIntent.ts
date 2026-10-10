@@ -130,9 +130,11 @@ export async function createDepositPaymentIntent(
     return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
   }
 
+  // Whether it wrote gates the client secret from 56.4.2.3.
   await recordDepositPaymentIntent(request.id, {
     depositAmount,
     stripePaymentIntentId: paymentIntent.id,
+    replacedPaymentIntentId: request.stripePaymentIntentId,
   });
 
   return { success: true, clientSecret: paymentIntent.client_secret };

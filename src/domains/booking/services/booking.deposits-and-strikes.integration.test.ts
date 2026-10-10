@@ -18,6 +18,7 @@ import { declineBookingRequest } from "./declineBookingRequest";
 import { generateResponseMessage } from "./generateResponseMessage";
 import { getPendingBookingRequests } from "./getPendingBookingRequests";
 import { markAppointmentNoShow } from "./markAppointmentNoShow";
+import { recordDepositPaymentIntent } from "./recordDepositPaymentIntent";
 import { rescheduleApprovedBooking } from "./rescheduleApprovedBooking";
 import { updateClientProfile } from "./updateClientProfile";
 import { updatePendingBookingRequest } from "./updatePendingBookingRequest";
@@ -466,6 +467,138 @@ describe("booking deposits-and-strikes integration", () => {
       });
       const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
       expect(after.status).toBe("DECLINED");
+    });
+  });
+
+  describe("recordDepositPaymentIntent (56.4)", () => {
+    async function createDepositRequest(
+      status: RequestStatus,
+      stored: { stripePaymentIntentId: string; depositAmount: number } | null
+    ): Promise<{ id: string }> {
+      const { artistId, clientId } = await setup();
+      return createBookingRequest({
+        artistId,
+        clientId,
+        requestedStartTime: futureStart(),
+        status,
+        stripePaymentIntentId: stored?.stripePaymentIntentId,
+        depositAmount: stored?.depositAmount,
+      });
+    }
+
+    async function getStored(
+      id: string
+    ): Promise<{ stripePaymentIntentId: string | null; depositAmount: number | null }> {
+      const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id } });
+      return {
+        stripePaymentIntentId: after.stripePaymentIntentId,
+        depositAmount: after.depositAmount === null ? null : Number(after.depositAmount),
+      };
+    }
+
+    it("writes the first PaymentIntent onto a booking with none stored", async () => {
+      const request = await createDepositRequest("APPROVED", null);
+      const first = paymentIntentId();
+
+      const written = await recordDepositPaymentIntent(request.id, {
+        depositAmount: 20,
+        stripePaymentIntentId: first,
+        replacedPaymentIntentId: null,
+      });
+
+      expect(written).toBe(true);
+      expect(await getStored(request.id)).toEqual({
+        stripePaymentIntentId: first,
+        depositAmount: 20,
+      });
+    });
+
+    it("a stale write loses to a newer PaymentIntent", async () => {
+      const stale = paymentIntentId();
+      const newer = paymentIntentId();
+      const request = await createDepositRequest("APPROVED", {
+        stripePaymentIntentId: newer,
+        depositAmount: 20,
+      });
+
+      const written = await recordDepositPaymentIntent(request.id, {
+        depositAmount: 30,
+        stripePaymentIntentId: paymentIntentId(),
+        replacedPaymentIntentId: stale,
+      });
+
+      expect(written).toBe(false);
+      expect(await getStored(request.id)).toEqual({
+        stripePaymentIntentId: newer,
+        depositAmount: 20,
+      });
+    });
+
+    it("a write on a cancelled booking is refused", async () => {
+      const stored = paymentIntentId();
+      const request = await createDepositRequest("CANCELLED_BY_CLIENT", {
+        stripePaymentIntentId: stored,
+        depositAmount: 20,
+      });
+
+      const written = await recordDepositPaymentIntent(request.id, {
+        depositAmount: 30,
+        stripePaymentIntentId: paymentIntentId(),
+        replacedPaymentIntentId: stored,
+      });
+
+      expect(written).toBe(false);
+      expect(await getStored(request.id)).toEqual({
+        stripePaymentIntentId: stored,
+        depositAmount: 20,
+      });
+    });
+
+    it("a duplicate write of the already-stored id succeeds", async () => {
+      const replaced = paymentIntentId();
+      const stored = paymentIntentId();
+      const request = await createDepositRequest("APPROVED", {
+        stripePaymentIntentId: stored,
+        depositAmount: 20,
+      });
+
+      const written = await recordDepositPaymentIntent(request.id, {
+        depositAmount: 20,
+        stripePaymentIntentId: stored,
+        replacedPaymentIntentId: replaced,
+      });
+
+      expect(written).toBe(true);
+      expect(await getStored(request.id)).toEqual({
+        stripePaymentIntentId: stored,
+        depositAmount: 20,
+      });
+    });
+
+    it("two concurrent replacements of one PaymentIntent: exactly one wins", async () => {
+      const replaced = paymentIntentId();
+      const request = await createDepositRequest("APPROVED", {
+        stripePaymentIntentId: replaced,
+        depositAmount: 20,
+      });
+      const candidates = [paymentIntentId(), paymentIntentId()];
+
+      const results = await Promise.all(
+        candidates.map((candidate) =>
+          recordDepositPaymentIntent(request.id, {
+            depositAmount: 30,
+            stripePaymentIntentId: candidate,
+            replacedPaymentIntentId: replaced,
+          })
+        )
+      );
+
+      expect(results.filter(Boolean)).toHaveLength(1);
+      const winner = candidates[results.indexOf(true)];
+      expect(await getStored(request.id)).toEqual({
+        stripePaymentIntentId: winner,
+        depositAmount: 30,
+      });
     });
   });
 
