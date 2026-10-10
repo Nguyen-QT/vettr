@@ -32,6 +32,9 @@ export const PRECHARGE_PERCENTAGE = 0.5;
 // window for a dropped response.
 export const DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX = "deposit-intent";
 export const DEPOSIT_REFUND_IDEMPOTENCY_KEY_PREFIX = "deposit-refund";
+// Keyed per PaymentIntent rather than per booking (56.4): every caller
+// cancelling the same PaymentIntent shares one key.
+export const DEPOSIT_PAYMENT_INTENT_CANCEL_IDEMPOTENCY_KEY_PREFIX = "deposit-intent-cancel";
 
 // Surfaced by createDepositPaymentIntent (CLAUDE.md 7.1.3). Not found
 // and ownership-mismatch share one message deliberately, same
