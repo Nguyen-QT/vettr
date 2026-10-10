@@ -1,3 +1,4 @@
+import { cancelDepositPaymentIntent } from "@/domains/billing/services/cancelDepositPaymentIntent";
 import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 import { prisma } from "@/lib/prisma";
@@ -30,24 +31,23 @@ export async function cancelApprovedBookingAsArtist(
     return { success: false, error: NOT_APPROVED_ERROR_MESSAGE };
   }
 
-  const depositPaid = await prisma.$transaction(async (tx) => {
+  const cancelled = await prisma.$transaction(async (tx) => {
     await releaseBookedTimeSlots(tx, request.id);
-    const cancelled = await tx.bookingRequest.update({
+    return tx.bookingRequest.update({
       where: { id: request.id },
       data: { status: "CANCELLED_BY_ARTIST" },
-      select: { depositPaid: true },
+      select: { depositPaid: true, stripePaymentIntentId: true },
     });
-    return cancelled.depositPaid;
   });
 
   // Refunds in full, unconditionally on timing -- an artist-initiated
   // cancellation is never the client's fault (CLAUDE.md 7.3). Deliberately
   // outside the transaction and logged-not-thrown-on-failure, same
   // reasoning as cancelBookingRequest's identical refund step.
-  // depositPaid is read back from the status update above, not the
-  // earlier read (56.2), so a payment confirmed in between is still
-  // refunded.
-  if (depositPaid) {
+  // depositPaid and stripePaymentIntentId are read back from the status
+  // update above, not the earlier read (56.2, 56.4), so a payment
+  // confirmed or a PaymentIntent stored in between is still seen.
+  if (cancelled.depositPaid) {
     const refundResult = await refundDeposit(request.id);
     if (!refundResult.success) {
       console.error(
@@ -55,6 +55,10 @@ export async function cancelApprovedBookingAsArtist(
         refundResult.error
       );
     }
+  } else if (cancelled.stripePaymentIntentId) {
+    // Unpaid: cancel the stored PaymentIntent, same optimisation as
+    // cancelBookingRequest's identical step (56.4).
+    await cancelDepositPaymentIntent(cancelled.stripePaymentIntentId);
   }
 
   return { success: true };

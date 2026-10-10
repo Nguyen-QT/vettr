@@ -414,7 +414,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.4.2.3** Domain Service — billing: `createDepositPaymentIntent` reuses, replaces or refuses by status, uses the new keys, and keeps the secret-after-commit rule.
       - Tests: unit tests per status and path, including that a lost write returns no secret.
       - Stripe-tier case in `depositPaymentIntentLifecycle.stripe-integration.test.ts`: a second call reuses the same PaymentIntent, and after the tier amount changes the old one is cancelled and can't be confirmed.
-    - [ ] **56.4.2.4** Domain Service — booking: `cancelBookingRequest` and `cancelApprovedBookingAsArtist` read `stripePaymentIntentId` back from their status update and cancel an unpaid booking's PaymentIntent after commit.
+    - [x] **56.4.2.4** Domain Service — booking: `cancelBookingRequest` and `cancelApprovedBookingAsArtist` read `stripePaymentIntentId` back from their status update and cancel an unpaid booking's PaymentIntent after commit.
       - Unit tests: unpaid with a PaymentIntent → cancelled; paid → refunded, not cancelled; no PaymentIntent → neither.
     - [ ] **56.4.2.5** Domain Service — billing: `confirmDepositPayment` takes the event's `metadata.bookingRequestId` (optional) and logs an unmatched PaymentIntent as above (+ unit tests).
     - [ ] **56.4.3.1** Controller/Action — the webhook route passes `metadata.bookingRequestId` and still answers 200 when no booking matches (+ route unit tests).

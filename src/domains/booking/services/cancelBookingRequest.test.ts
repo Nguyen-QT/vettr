@@ -2,6 +2,7 @@ import { prismaMock } from "@/testUtils/prismaMock";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { cancelDepositPaymentIntent } from "@/domains/billing/services/cancelDepositPaymentIntent";
 import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 
@@ -12,6 +13,9 @@ import {
 } from "../constants";
 import { cancelBookingRequest } from "./cancelBookingRequest";
 
+vi.mock("@/domains/billing/services/cancelDepositPaymentIntent", () => ({
+  cancelDepositPaymentIntent: vi.fn(),
+}));
 vi.mock("@/domains/billing/services/refundDeposit", () => ({
   refundDeposit: vi.fn(),
 }));
@@ -20,10 +24,11 @@ vi.mock("@/domains/scheduling/services/releaseBookedTimeSlots", () => ({
 }));
 
 // Mocked-Prisma unit test (architecture.md §7): billing's refundDeposit and
-// scheduling's releaseBookedTimeSlots are mocked at their public contracts
-// (the Stripe call itself is covered by billing's own tests). Slot status
-// flipping to RELEASED and the transaction's all-or-nothing rollback are
-// real-DB behaviours -> 28.3 integration-tier candidates.
+// cancelDepositPaymentIntent and scheduling's releaseBookedTimeSlots are
+// mocked at their public contracts (the Stripe calls themselves are covered
+// by billing's own tests). Slot status flipping to RELEASED and the
+// transaction's all-or-nothing rollback are real-DB behaviours -> 28.3
+// integration-tier candidates.
 describe("cancelBookingRequest", () => {
   const now = new Date("2026-10-05T12:00:00.000Z");
   const hour = 60 * 60_000;
@@ -34,6 +39,8 @@ describe("cancelBookingRequest", () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
     vi.mocked(refundDeposit).mockReset();
+    vi.mocked(cancelDepositPaymentIntent).mockReset();
+    vi.mocked(cancelDepositPaymentIntent).mockResolvedValue(true);
     vi.mocked(releaseBookedTimeSlots).mockReset();
   });
 
@@ -44,13 +51,19 @@ describe("cancelBookingRequest", () => {
 
   function stubRequest(
     status: string,
-    options: { slotStarts?: Date[]; depositPaid?: boolean; clientId?: string } = {}
+    options: {
+      slotStarts?: Date[];
+      depositPaid?: boolean;
+      stripePaymentIntentId?: string;
+      clientId?: string;
+    } = {}
   ): void {
     prismaMock.bookingRequest.findUnique.mockResolvedValue({
       id: requestId,
       clientId: options.clientId ?? clientId,
       status,
       depositPaid: options.depositPaid ?? false,
+      stripePaymentIntentId: options.stripePaymentIntentId ?? null,
       timeSlots: (options.slotStarts ?? []).map((startTime) => ({
         startTime,
         endTime: new Date(startTime.getTime() + hour),
@@ -58,6 +71,7 @@ describe("cancelBookingRequest", () => {
     } as never);
     prismaMock.bookingRequest.update.mockResolvedValue({
       depositPaid: options.depositPaid ?? false,
+      stripePaymentIntentId: options.stripePaymentIntentId ?? null,
     } as never);
     prismaMock.clientProfile.update.mockResolvedValue({
       cancellationCount: 1,
@@ -82,7 +96,7 @@ describe("cancelBookingRequest", () => {
     expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
       where: { id: requestId },
       data: { status: "CANCELLED_BY_CLIENT" },
-      select: { depositPaid: true },
+      select: { depositPaid: true, stripePaymentIntentId: true },
     });
   });
 
@@ -104,7 +118,7 @@ describe("cancelBookingRequest", () => {
     expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
       where: { id: requestId },
       data: { status: "CANCELLED_BY_CLIENT" },
-      select: { depositPaid: true },
+      select: { depositPaid: true, stripePaymentIntentId: true },
     });
   });
 
@@ -152,6 +166,63 @@ describe("cancelBookingRequest", () => {
     expect(refundDeposit).not.toHaveBeenCalled();
   });
 
+  it("cancels an unpaid booking's stored PaymentIntent and does not refund", async () => {
+    stubRequest("APPROVED", { slotStarts: [farFuture()], stripePaymentIntentId: "pi_123" });
+
+    const result = await call();
+
+    expect(result).toEqual({ success: true });
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledTimes(1);
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledWith("pi_123");
+    expect(refundDeposit).not.toHaveBeenCalled();
+  });
+
+  it("refunds, and does not cancel, a paid booking's PaymentIntent", async () => {
+    stubRequest("APPROVED", {
+      slotStarts: [farFuture()],
+      depositPaid: true,
+      stripePaymentIntentId: "pi_123",
+    });
+    vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
+
+    await call();
+
+    expect(refundDeposit).toHaveBeenCalledWith(requestId);
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("neither refunds nor cancels when no PaymentIntent was stored", async () => {
+    stubRequest("APPROVED", { slotStarts: [farFuture()] });
+
+    await call();
+
+    expect(refundDeposit).not.toHaveBeenCalled();
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("cancels a PaymentIntent stored after the pre-read, from the status update's own read-back", async () => {
+    stubRequest("APPROVED", { slotStarts: [farFuture()], stripePaymentIntentId: "pi_old" });
+    prismaMock.bookingRequest.update.mockResolvedValue({
+      depositPaid: false,
+      stripePaymentIntentId: "pi_new",
+    } as never);
+
+    await call();
+
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledTimes(1);
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledWith("pi_new");
+  });
+
+  it("still reports success when the PaymentIntent cancel fails after the cancellation committed", async () => {
+    stubRequest("APPROVED", { slotStarts: [farFuture()], stripePaymentIntentId: "pi_123" });
+    vi.mocked(cancelDepositPaymentIntent).mockResolvedValue(false);
+
+    const result = await call();
+
+    expect(result).toEqual({ success: true });
+    expect(prismaMock.bookingRequest.update).toHaveBeenCalled();
+  });
+
   it("applies a cancellation strike and flags the client for an APPROVED cancellation", async () => {
     stubRequest("APPROVED", { slotStarts: [farFuture()] });
 
@@ -182,6 +253,7 @@ describe("cancelBookingRequest", () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
     expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
     expect(refundDeposit).not.toHaveBeenCalled();
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
   });
 
   it("rejects a cancellation 1ms inside the 48-hour window but allows exactly 48 hours out", async () => {

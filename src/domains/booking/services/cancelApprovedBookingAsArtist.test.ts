@@ -2,12 +2,16 @@ import { prismaMock } from "@/testUtils/prismaMock";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { cancelDepositPaymentIntent } from "@/domains/billing/services/cancelDepositPaymentIntent";
 import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 
 import { REQUEST_NOT_FOUND_ERROR_MESSAGE } from "../constants";
 import { cancelApprovedBookingAsArtist } from "./cancelApprovedBookingAsArtist";
 
+vi.mock("@/domains/billing/services/cancelDepositPaymentIntent", () => ({
+  cancelDepositPaymentIntent: vi.fn(),
+}));
 vi.mock("@/domains/billing/services/refundDeposit", () => ({
   refundDeposit: vi.fn(),
 }));
@@ -23,6 +27,8 @@ describe("cancelApprovedBookingAsArtist", () => {
 
   beforeEach(() => {
     vi.mocked(refundDeposit).mockReset();
+    vi.mocked(cancelDepositPaymentIntent).mockReset();
+    vi.mocked(cancelDepositPaymentIntent).mockResolvedValue(true);
     vi.mocked(releaseBookedTimeSlots).mockReset();
   });
 
@@ -30,13 +36,21 @@ describe("cancelApprovedBookingAsArtist", () => {
     vi.restoreAllMocks();
   });
 
-  function stubRequest(status: string, depositPaid = false): void {
+  function stubRequest(
+    status: string,
+    depositPaid = false,
+    stripePaymentIntentId: string | null = null
+  ): void {
     prismaMock.bookingRequest.findUnique.mockResolvedValue({
       id: requestId,
       status,
       depositPaid,
+      stripePaymentIntentId,
     } as never);
-    prismaMock.bookingRequest.update.mockResolvedValue({ depositPaid } as never);
+    prismaMock.bookingRequest.update.mockResolvedValue({
+      depositPaid,
+      stripePaymentIntentId,
+    } as never);
   }
 
   it("cancels an APPROVED booking and releases its slot", async () => {
@@ -49,7 +63,7 @@ describe("cancelApprovedBookingAsArtist", () => {
     expect(prismaMock.bookingRequest.update).toHaveBeenCalledWith({
       where: { id: requestId },
       data: { status: "CANCELLED_BY_ARTIST" },
-      select: { depositPaid: true },
+      select: { depositPaid: true, stripePaymentIntentId: true },
     });
   });
 
@@ -96,6 +110,58 @@ describe("cancelApprovedBookingAsArtist", () => {
     expect(refundDeposit).not.toHaveBeenCalled();
   });
 
+  it("cancels an unpaid booking's stored PaymentIntent and does not refund", async () => {
+    stubRequest("APPROVED", false, "pi_123");
+
+    const result = await cancelApprovedBookingAsArtist({ bookingRequestId: requestId });
+
+    expect(result).toEqual({ success: true });
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledTimes(1);
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledWith("pi_123");
+    expect(refundDeposit).not.toHaveBeenCalled();
+  });
+
+  it("refunds, and does not cancel, a paid booking's PaymentIntent", async () => {
+    stubRequest("APPROVED", true, "pi_123");
+    vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
+
+    await cancelApprovedBookingAsArtist({ bookingRequestId: requestId });
+
+    expect(refundDeposit).toHaveBeenCalledWith(requestId);
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("neither refunds nor cancels when no PaymentIntent was stored", async () => {
+    stubRequest("APPROVED");
+
+    await cancelApprovedBookingAsArtist({ bookingRequestId: requestId });
+
+    expect(refundDeposit).not.toHaveBeenCalled();
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("cancels a PaymentIntent stored after the pre-read, from the status update's own read-back", async () => {
+    stubRequest("APPROVED", false, "pi_old");
+    prismaMock.bookingRequest.update.mockResolvedValue({
+      depositPaid: false,
+      stripePaymentIntentId: "pi_new",
+    } as never);
+
+    await cancelApprovedBookingAsArtist({ bookingRequestId: requestId });
+
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledTimes(1);
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledWith("pi_new");
+  });
+
+  it("still reports success when the PaymentIntent cancel fails", async () => {
+    stubRequest("APPROVED", false, "pi_123");
+    vi.mocked(cancelDepositPaymentIntent).mockResolvedValue(false);
+
+    const result = await cancelApprovedBookingAsArtist({ bookingRequestId: requestId });
+
+    expect(result).toEqual({ success: true });
+  });
+
   it("never applies a cancellation strike to the client", async () => {
     stubRequest("APPROVED");
 
@@ -115,6 +181,7 @@ describe("cancelApprovedBookingAsArtist", () => {
     });
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
     expect(refundDeposit).not.toHaveBeenCalled();
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
   });
 
   it("rejects a request id that does not exist", async () => {

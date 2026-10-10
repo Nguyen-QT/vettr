@@ -26,11 +26,15 @@ import { updatePendingBookingRequest } from "./updatePendingBookingRequest";
 // Stripe has no network access (or secrets) in the integration CI job, so the
 // SDK stays mocked. The late-payment cases (56.2) count refunds.create calls
 // per booking; every other fixture keeps depositPaid false and never reaches
-// it.
+// it. paymentIntents.cancel is the cancel paths' after-commit cancel of an
+// unpaid booking's PaymentIntent (56.4). They ignore its result, so the
+// late-payment cases still prove 56.2's refund, the guarantee for when that
+// cancel never reaches Stripe.
 const refundsCreateMock = vi.fn();
 vi.mock("@/lib/stripe", () => ({
   stripe: {
     refunds: { create: (...args: unknown[]) => refundsCreateMock(...args) },
+    paymentIntents: { cancel: async () => ({ status: "canceled" }) },
   },
 }));
 
