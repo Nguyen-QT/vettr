@@ -418,13 +418,37 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - Unit tests: unpaid with a PaymentIntent → cancelled; paid → refunded, not cancelled; no PaymentIntent → neither.
     - [x] **56.4.2.5** Domain Service — billing: `confirmDepositPayment` takes the event's `metadata.bookingRequestId` (optional) and logs an unmatched PaymentIntent as above (+ unit tests).
     - [x] **56.4.3.1** Controller/Action — the webhook route passes `metadata.bookingRequestId` and still answers 200 when no booking matches (+ route unit tests).
-- [ ] **56.5: Deposit Creation Lockout and Uncaught Stripe Errors** — *unscoped.*
+- [ ] **56.5: Deposit Creation Lockout and Uncaught Stripe Errors**
   - Reusing the fixed key with different parameters makes Stripe reject the call with an idempotency error for up to 24h. The parameters change when the artist edits the tier deposit, when the client is flagged for precharge, or when the artist's Connect `chargesEnabled` flips `on_behalf_of`/`transfer_data`.
   - `stripe.paymentIntents.create` has no try/catch (architecture.md §6.1, §8.B). Nor do `createDepositPaymentIntentAction` or `useDepositPayment`, so the rejection escapes uncaught and the hook's `isLoading` never resets (a stuck spinner).
   - Fix:
     - Make the key vary with the parameters that can change, or reuse the PaymentIntent per 56.4.
     - Wrap the Stripe call and return a generic retryable error, logging ids only.
     - Reset the hook's state on rejection.
+  - **Design (confirmed 2026-10-10):**
+    - After 56.4, the lockout needs a create that reached Stripe but handed out no secret (a lost response, or a record write that threw or lost), then a parameter change within 24h. The retry reuses `deposit-intent:<bookingRequestId>:<replaced id | "initial">` with new parameters.
+    - Key: append the amount in pence and the routing: `deposit-intent:<bookingRequestId>:<replaced id | "initial">:<amount>:<connect account id | "platform">`. These are the only create parameters that change at runtime (tier edit, precharge flag or estimate, Connect `chargesEnabled`). A new runtime parameter must join the key.
+      - Same parameters still share a key, so a retry or a concurrent tab gets the same PaymentIntent.
+      - Different parameters get different PaymentIntents. 56.4's compare-and-set commits one. The rest never hand out a secret, so they can't be paid.
+    - The create call gets its own try/catch (architecture.md §6.1). On failure it returns `DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE` and logs ids only (`stripe_create_failed`, like the retrieve). Whether Stripe made a PaymentIntent is unknown. No secret goes out either way, and a retry with the same parameters replays the same key. This also covers Stripe's 409 for two in-flight requests on one key.
+    - The record write gets a separate try/catch (§6.2: the call worked, the local write failed). It logs `record_failed` with the PaymentIntent id and the Prisma code, and returns the same error with no secret. No webhook backstop is needed: without a secret nobody can pay, so `payment_intent.succeeded` can't arrive.
+    - Action: a try/catch around the session lookup and the service call returns the same error for anything else (the service's DB reads, the session). It logs the Prisma code only. The client-supplied `bookingRequestId` stays out of the log.
+    - Hook: a rejected action call (network, a deploy mid-session) gets the same message, and `isLoading` resets in `finally`.
+    - Card: `DepositPaymentCard` drops its `started` flag and renders from the hook's state. Until there's a secret it shows "Pay deposit" (disabled, "Loading…" while in flight), so every error leaves a retry button. Today it shows "Loading payment form…" forever after any error, 56.4's refusal included.
+  - **Flagged, not fixed:**
+    - A PaymentIntent created but never recorded stays open on Stripe. Nobody can pay it, but nothing cancels it either. 56.4's flagged sweep could find these by `metadata.bookingRequestId`.
+    - Stripe saves a 500 on create against its key for 24h. A retry with the same parameters gets the same 500 until the window passes or a parameter changes.
+  - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **56.5.1.1 / 56.5.4.1** Data/UI — N/A. No schema change. The card is a container (View, per 54.8's split), and no primitive changes.
+    - [ ] **56.5.2.1** Domain Service — billing: `createDepositPaymentIntent` keys a create by amount and routing as above.
+      - Unit tests: the key carries the amount and routing, and a changed amount gets a new key.
+      - Stripe-tier case in `depositPaymentIntentLifecycle.stripe-integration.test.ts`: clear the stored id after a create. A retry with the same parameters gets the same PaymentIntent. Clear it again and change the tier amount: the next call creates a new one instead of hitting an idempotency error.
+    - [ ] **56.5.2.2** Domain Service — billing: `createDepositPaymentIntent` catches the create and the record write separately, as above (+ unit tests per failure: generic error, no secret, the exact log).
+    - [ ] **56.5.3.1** Controller/Action — `createDepositPaymentIntentAction` catches anything the session lookup or the service throws (+ `billing/actions.test.ts` cases).
+    - [ ] **56.5.5.1** Domain Hook — `useDepositPayment` catches a rejection and resets `isLoading` (+ new `useDepositPayment.test.ts`, jsdom).
+    - [ ] **56.5.6.1** View & Route — `DepositPaymentCard` drops `started`.
+      - `deposit-payment.spec`: abort the first action request, then expect the error and "Pay deposit". Retry and expect "Confirm payment".
+      - That describe runs serially: both its tests pay the same booking, and `fullyParallel` could race them onto one key.
 - [ ] **56.6: Refund Status Lifecycle (Pending / Failed)** — *unscoped.*
   - `refundDeposit` sets `depositRefunded = true` as soon as `refunds.create` returns, even when the refund is still `pending`. Nothing handles a refund that later fails, so the booking reads as refunded while the client never got the money.
   - Record a refund intent as `PENDING` before calling Stripe (architecture.md §6.2). Move it to `SUCCEEDED`/`FAILED` from the events 56.1 identifies. `depositRefunded` becomes a derived view of that status.
