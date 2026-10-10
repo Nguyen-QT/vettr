@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
 import { recordDepositPaymentIntent } from "@/domains/booking/services/recordDepositPaymentIntent";
 import type { BookingRequestDepositView } from "@/domains/booking/types";
+import { Prisma } from "@/generated/prisma/client";
 
 import {
   DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE,
@@ -383,6 +384,82 @@ describe("createDepositPaymentIntent", () => {
       paymentIntentId: "pi_old",
     });
   });
+
+  it.each([
+    {
+      stored: "none stored",
+      arrange: (): void => {
+        vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
+      },
+      replacedPaymentIntentId: null,
+    },
+    {
+      stored: "a cancelled one stored",
+      arrange: (): void => storePaymentIntent({ status: "canceled" }),
+      replacedPaymentIntentId: "pi_old",
+    },
+  ])(
+    "returns the generic error and logs ids only when the create fails ($stored)",
+    async ({ arrange, replacedPaymentIntentId }) => {
+      arrange();
+      configureDeposit(20);
+      createPaymentIntentMock.mockRejectedValue(new Error("Stripe is unreachable"));
+
+      const result = await createDepositPaymentIntent(input);
+
+      expect(result).toEqual({ success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE });
+      expect(recordDepositPaymentIntent).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith({
+        operation: "createDepositPaymentIntent",
+        reason: "stripe_create_failed",
+        severity: "warning",
+        bookingRequestId,
+        replacedPaymentIntentId,
+      });
+    }
+  );
+
+  it.each([
+    {
+      error: "a Prisma error",
+      // The message echoes ids, so the log assertion proves it's never logged.
+      thrown: new Prisma.PrismaClientKnownRequestError(
+        `Timed out writing ${bookingRequestId} / pi_123`,
+        { code: "P1008", clientVersion: "test" }
+      ),
+      errorCode: "P1008",
+    },
+    {
+      error: "any other error",
+      thrown: new Error(`Connection lost writing ${bookingRequestId} / pi_123`),
+      errorCode: undefined,
+    },
+  ])(
+    "returns no secret and logs the Prisma code only when the write throws $error",
+    async ({ thrown, errorCode }) => {
+      vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
+      configureDeposit(20);
+      createPaymentIntentMock.mockResolvedValue({
+        id: "pi_123",
+        client_secret: "secret_123",
+      });
+      vi.mocked(recordDepositPaymentIntent).mockRejectedValue(thrown);
+
+      const result = await createDepositPaymentIntent(input);
+
+      expect(result).toEqual({ success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE });
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith({
+        operation: "createDepositPaymentIntent",
+        reason: "record_failed",
+        severity: "warning",
+        bookingRequestId,
+        paymentIntentId: "pi_123",
+        errorCode,
+      });
+    }
+  );
 
   it("never replaces a stored PaymentIntent whose status it doesn't know", async () => {
     storePaymentIntent({ status: "requires_something_new" });

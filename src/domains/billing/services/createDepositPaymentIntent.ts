@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 
 import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
 import { recordDepositPaymentIntent } from "@/domains/booking/services/recordDepositPaymentIntent";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 
@@ -76,6 +77,9 @@ function matchesDepositParams(
 // lost write returns no secret, so the PaymentIntent left behind can't be
 // paid, and payment_intent.succeeded can never arrive before the write
 // the webhook's lookup depends on.
+// The create and the record write are each caught separately
+// (architecture.md §6.1, §6.2, 56.5): either failing returns the generic
+// retryable error with no secret.
 // Reads/writes BookingRequest through booking's narrow deposit functions
 // (7.2.3) rather than prisma.bookingRequest directly -- billing never
 // queries booking's table (CLAUDE.md's Domain Boundary Isolation rule).
@@ -182,51 +186,85 @@ export async function createDepositPaymentIntent(
     }
   }
 
-  paymentIntent ??= await stripe.paymentIntents.create(
-    {
-      amount,
-      currency: "gbp",
-      metadata: { bookingRequestId: request.id },
-      // Restricts to payment methods that never redirect off-page, since
-      // this app's Stripe Elements integration (CLAUDE.md 7.1) stays
-      // embedded and in-app rather than sending the client to a
-      // Stripe-hosted page. Without this, Stripe defaults to whatever's
-      // enabled in the Dashboard, which can include redirect-based
-      // methods -- those require a return_url this app never provides,
-      // and confirming without one fails outright. Caught by the real,
-      // unmocked Stripe test-mode call in 14.1.2's integration test; the
-      // mocked unit suite can't see this since it stubs the API entirely.
-      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
-      ...(artistConnectAccountId
-        ? {
-            on_behalf_of: artistConnectAccountId,
-            transfer_data: { destination: artistConnectAccountId },
-          }
-        : {}),
-    },
-    {
-      // Idempotency Keys on Deposit/Refund Calls (CLAUDE.md 15.1, 56.4,
-      // 56.5): keyed by the PaymentIntent this replaces, so a dropped
-      // response or a concurrent tab replacing the same one gets the same
-      // new PaymentIntent instead of a second payable one. The amount and
-      // routing are the only create parameters that change at runtime
-      // (tier edit, precharge, Connect chargesEnabled), so they join the
-      // key: a retry with changed parameters gets a new key instead of
-      // Stripe's idempotency error for 24h. A new runtime parameter must
-      // join the key too.
-      idempotencyKey: `${DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX}:${request.id}:${storedPaymentIntentId ?? "initial"}:${amount}:${artistConnectAccountId ?? "platform"}`,
+  if (paymentIntent === null) {
+    try {
+      paymentIntent = await stripe.paymentIntents.create(
+        {
+          amount,
+          currency: "gbp",
+          metadata: { bookingRequestId: request.id },
+          // Restricts to payment methods that never redirect off-page, since
+          // this app's Stripe Elements integration (CLAUDE.md 7.1) stays
+          // embedded and in-app rather than sending the client to a
+          // Stripe-hosted page. Without this, Stripe defaults to whatever's
+          // enabled in the Dashboard, which can include redirect-based
+          // methods -- those require a return_url this app never provides,
+          // and confirming without one fails outright. Caught by the real,
+          // unmocked Stripe test-mode call in 14.1.2's integration test; the
+          // mocked unit suite can't see this since it stubs the API entirely.
+          automatic_payment_methods: { enabled: true, allow_redirects: "never" },
+          ...(artistConnectAccountId
+            ? {
+                on_behalf_of: artistConnectAccountId,
+                transfer_data: { destination: artistConnectAccountId },
+              }
+            : {}),
+        },
+        {
+          // Idempotency Keys on Deposit/Refund Calls (CLAUDE.md 15.1, 56.4,
+          // 56.5): keyed by the PaymentIntent this replaces, so a dropped
+          // response or a concurrent tab replacing the same one gets the same
+          // new PaymentIntent instead of a second payable one. The amount and
+          // routing are the only create parameters that change at runtime
+          // (tier edit, precharge, Connect chargesEnabled), so they join the
+          // key: a retry with changed parameters gets a new key instead of
+          // Stripe's idempotency error for 24h. A new runtime parameter must
+          // join the key too.
+          idempotencyKey: `${DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX}:${request.id}:${storedPaymentIntentId ?? "initial"}:${amount}:${artistConnectAccountId ?? "platform"}`,
+        }
+      );
+    } catch {
+      // Ids only, as for the retrieve. Whether Stripe made a PaymentIntent
+      // is unknown, but no secret goes out either way, and a retry with the
+      // same parameters replays the same key. This also covers Stripe's 409
+      // for two in-flight requests on one key.
+      console.error({
+        operation: "createDepositPaymentIntent",
+        reason: "stripe_create_failed",
+        severity: "warning",
+        bookingRequestId: request.id,
+        replacedPaymentIntentId: storedPaymentIntentId,
+      });
+      return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
     }
-  );
+  }
 
   if (!paymentIntent.client_secret) {
     return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
   }
 
-  const recorded = await recordDepositPaymentIntent(request.id, {
-    depositAmount,
-    stripePaymentIntentId: paymentIntent.id,
-    replacedPaymentIntentId: storedPaymentIntentId,
-  });
+  let recorded: boolean;
+  try {
+    recorded = await recordDepositPaymentIntent(request.id, {
+      depositAmount,
+      stripePaymentIntentId: paymentIntent.id,
+      replacedPaymentIntentId: storedPaymentIntentId,
+    });
+  } catch (error) {
+    // The call worked but the local write failed (architecture.md §6.2).
+    // No webhook backstop is needed: without a secret nobody can pay, so
+    // payment_intent.succeeded can't arrive. The typed Prisma code only,
+    // never its message.
+    console.error({
+      operation: "createDepositPaymentIntent",
+      reason: "record_failed",
+      severity: "warning",
+      bookingRequestId: request.id,
+      paymentIntentId: paymentIntent.id,
+      errorCode: error instanceof Prisma.PrismaClientKnownRequestError ? error.code : undefined,
+    });
+    return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
+  }
 
   if (!recorded) {
     return { success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE };
