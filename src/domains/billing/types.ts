@@ -45,6 +45,25 @@ export type ConfirmDepositPaymentResult =
 // critical log for manual reconciliation.
 export type DepositPaymentAction = "RECORD" | "REFUND" | "ALERT";
 
+// Stripe's PaymentIntent statuses (56.4). Declared here rather than taken
+// from Stripe.PaymentIntent.Status, which also admits any string and so
+// can't key an exhaustive Record.
+export type DepositPaymentIntentStatus =
+  | "requires_payment_method"
+  | "requires_confirmation"
+  | "requires_action"
+  | "processing"
+  | "requires_capture"
+  | "succeeded"
+  | "canceled";
+
+// What createDepositPaymentIntent does with the booking's stored
+// PaymentIntent, by its status (56.4): REUSE keeps it if its amount and
+// routing still match what would be created now (otherwise cancels it,
+// then replaces it), REFUSE leaves a payment in flight to the webhook,
+// REPLACE creates a new one in place of a cancelled one.
+export type StoredDepositPaymentIntentAction = "REUSE" | "REFUSE" | "REPLACE";
+
 export type RefundDepositResult =
   | { success: true }
   | { success: false; error: string };

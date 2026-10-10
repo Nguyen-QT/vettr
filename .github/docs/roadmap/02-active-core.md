@@ -411,7 +411,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.4.2.2** Domain Service — booking: `recordDepositPaymentIntent` becomes the compare-and-set above (`updateMany`) and returns whether it wrote.
       - Tests: unit tests, plus an integration case in `booking.deposits-and-strikes.integration.test.ts` (a stale write loses to a newer PaymentIntent, a write on a cancelled booking is refused, and a duplicate write of the same id succeeds).
       - Compile-forced caller edit: `createDepositPaymentIntent` passes the id it read.
-    - [ ] **56.4.2.3** Domain Service — billing: `createDepositPaymentIntent` reuses, replaces or refuses by status, uses the new keys, and keeps the secret-after-commit rule.
+    - [x] **56.4.2.3** Domain Service — billing: `createDepositPaymentIntent` reuses, replaces or refuses by status, uses the new keys, and keeps the secret-after-commit rule.
       - Tests: unit tests per status and path, including that a lost write returns no secret.
       - Stripe-tier case in `depositPaymentIntentLifecycle.stripe-integration.test.ts`: a second call reuses the same PaymentIntent, and after the tier amount changes the old one is cancelled and can't be confirmed.
     - [ ] **56.4.2.4** Domain Service — booking: `cancelBookingRequest` and `cancelApprovedBookingAsArtist` read `stripePaymentIntentId` back from their status update and cancel an unpaid booking's PaymentIntent after commit.

@@ -1,14 +1,20 @@
 import { prismaMock } from "@/testUtils/prismaMock";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
 import { recordDepositPaymentIntent } from "@/domains/booking/services/recordDepositPaymentIntent";
 import type { BookingRequestDepositView } from "@/domains/booking/types";
 
+import {
+  DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE,
+  DEPOSIT_PAYMENT_PROCESSING_ERROR_MESSAGE,
+} from "../constants";
+import { cancelDepositPaymentIntent } from "./cancelDepositPaymentIntent";
 import { createDepositPaymentIntent } from "./createDepositPaymentIntent";
 
 const createPaymentIntentMock = vi.fn();
+const retrievePaymentIntentMock = vi.fn();
 
 // vi.mock calls are hoisted above imports by vitest's transform, so
 // this replaces the real Stripe client before createDepositPaymentIntent
@@ -17,6 +23,7 @@ vi.mock("@/lib/stripe", () => ({
   stripe: {
     paymentIntents: {
       create: (...args: unknown[]) => createPaymentIntentMock(...args),
+      retrieve: (...args: unknown[]) => retrievePaymentIntentMock(...args),
     },
   },
 }));
@@ -26,16 +33,21 @@ vi.mock("@/domains/booking/services/getBookingRequestForDeposit", () => ({
 vi.mock("@/domains/booking/services/recordDepositPaymentIntent", () => ({
   recordDepositPaymentIntent: vi.fn(),
 }));
+vi.mock("./cancelDepositPaymentIntent", () => ({
+  cancelDepositPaymentIntent: vi.fn(),
+}));
 
-// Mocked-Prisma unit test (architecture.md §7): Stripe and booking's
-// deposit read/write are mocked at their boundaries; billing's own
-// ArtistDepositSetting (via the real sibling getArtistDepositSettings)
-// and Artist Connect lookups go through prismaMock.
+// Mocked-Prisma unit test (architecture.md §7): Stripe, booking's
+// deposit read/write and the sibling cancelDepositPaymentIntent are
+// mocked at their boundaries; billing's own ArtistDepositSetting (via the
+// real sibling getArtistDepositSettings) and Artist Connect lookups go
+// through prismaMock.
 describe("createDepositPaymentIntent", () => {
   const artistId = "artist-1";
   const clientId = "client-1";
   const bookingRequestId = "request-1";
   const input = { bookingRequestId, clientProfileId: clientId };
+  let consoleErrorSpy: MockInstance<typeof console.error>;
 
   function depositView(
     overrides: Partial<BookingRequestDepositView> = {}
@@ -73,6 +85,23 @@ describe("createDepositPaymentIntent", () => {
     } as never);
   }
 
+  // The booking already stores pi_old, which Stripe returns with these
+  // fields (platform-only £20 unless overridden).
+  function storePaymentIntent(overrides: Record<string, unknown> = {}): void {
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
+      depositView({ stripePaymentIntentId: "pi_old" })
+    );
+    retrievePaymentIntentMock.mockResolvedValue({
+      id: "pi_old",
+      status: "requires_payment_method",
+      amount: 2000,
+      on_behalf_of: null,
+      transfer_data: null,
+      client_secret: "secret_old",
+      ...overrides,
+    });
+  }
+
   function intentParams(
     amount: number,
     extra: Record<string, unknown> = {}
@@ -86,16 +115,28 @@ describe("createDepositPaymentIntent", () => {
     };
   }
 
-  const idempotencyOptions = { idempotencyKey: `deposit-intent:${bookingRequestId}` };
+  const idempotencyOptions = { idempotencyKey: `deposit-intent:${bookingRequestId}:initial` };
+  const replaceIdempotencyOptions = {
+    idempotencyKey: `deposit-intent:${bookingRequestId}:pi_old`,
+  };
 
   beforeEach(() => {
     createPaymentIntentMock.mockReset();
+    retrievePaymentIntentMock.mockReset();
     vi.mocked(getBookingRequestForDeposit).mockReset();
     vi.mocked(recordDepositPaymentIntent).mockReset();
+    vi.mocked(recordDepositPaymentIntent).mockResolvedValue(true);
+    vi.mocked(cancelDepositPaymentIntent).mockReset();
+    vi.mocked(cancelDepositPaymentIntent).mockResolvedValue(true);
     configureConnect(null, false);
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  it("creates a PaymentIntent and snapshots the amount/id when everything is valid", async () => {
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("creates a PaymentIntent and snapshots the amount/id when none is stored", async () => {
     vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
     configureDeposit(20);
     createPaymentIntentMock.mockResolvedValue({
@@ -106,6 +147,7 @@ describe("createDepositPaymentIntent", () => {
     const result = await createDepositPaymentIntent(input);
 
     expect(result).toEqual({ success: true, clientSecret: "secret_123" });
+    expect(retrievePaymentIntentMock).not.toHaveBeenCalled();
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(2000),
       idempotencyOptions
@@ -117,22 +159,205 @@ describe("createDepositPaymentIntent", () => {
     });
   });
 
-  it("passes the stored PaymentIntent id it read as the one being replaced", async () => {
-    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
-      depositView({ stripePaymentIntentId: "pi_old" })
+  it("returns no secret when the new PaymentIntent's write loses", async () => {
+    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
+    configureDeposit(20);
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_123",
+      client_secret: "secret_123",
+    });
+    vi.mocked(recordDepositPaymentIntent).mockResolvedValue(false);
+
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result).toEqual({ success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE });
+  });
+
+  it.each(["requires_payment_method", "requires_confirmation", "requires_action"])(
+    "reuses a stored %s PaymentIntent whose amount and routing still match",
+    async (status) => {
+      storePaymentIntent({ status });
+      configureDeposit(20);
+
+      const result = await createDepositPaymentIntent(input);
+
+      expect(result).toEqual({ success: true, clientSecret: "secret_old" });
+      expect(retrievePaymentIntentMock).toHaveBeenCalledWith("pi_old");
+      expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+      expect(createPaymentIntentMock).not.toHaveBeenCalled();
+      // Re-committed through the compare-and-set before its secret is
+      // handed out.
+      expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
+        depositAmount: 20,
+        stripePaymentIntentId: "pi_old",
+        replacedPaymentIntentId: "pi_old",
+      });
+    }
+  );
+
+  it("reuses a stored PaymentIntent whose Connect routing still matches", async () => {
+    storePaymentIntent({
+      on_behalf_of: "acct_connected",
+      transfer_data: { destination: "acct_connected" },
+    });
+    configureDeposit(20);
+    configureConnect("acct_connected", true);
+
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result).toEqual({ success: true, clientSecret: "secret_old" });
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+    expect(createPaymentIntentMock).not.toHaveBeenCalled();
+  });
+
+  it("returns no secret for a reused PaymentIntent whose write loses", async () => {
+    // e.g. the booking was cancelled after the read.
+    storePaymentIntent();
+    configureDeposit(20);
+    vi.mocked(recordDepositPaymentIntent).mockResolvedValue(false);
+
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result).toEqual({ success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE });
+  });
+
+  it("cancels and replaces a stored open PaymentIntent whose amount changed", async () => {
+    storePaymentIntent();
+    configureDeposit(30);
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_new",
+      client_secret: "secret_new",
+    });
+
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result).toEqual({ success: true, clientSecret: "secret_new" });
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledWith("pi_old");
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      intentParams(3000),
+      replaceIdempotencyOptions
     );
+    expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
+      depositAmount: 30,
+      stripePaymentIntentId: "pi_new",
+      replacedPaymentIntentId: "pi_old",
+    });
+  });
+
+  it("cancels and replaces a stored open PaymentIntent whose routing changed", async () => {
+    // Stored platform-only; the artist's account is now charges-enabled.
+    storePaymentIntent();
+    configureDeposit(20);
+    configureConnect("acct_connected", true);
+    createPaymentIntentMock.mockResolvedValue({
+      id: "pi_new",
+      client_secret: "secret_new",
+    });
+
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result).toEqual({ success: true, clientSecret: "secret_new" });
+    expect(cancelDepositPaymentIntent).toHaveBeenCalledWith("pi_old");
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      intentParams(2000, {
+        on_behalf_of: "acct_connected",
+        transfer_data: { destination: "acct_connected" },
+      }),
+      replaceIdempotencyOptions
+    );
+  });
+
+  it("does not replace a stored PaymentIntent that Stripe refuses to cancel", async () => {
+    storePaymentIntent();
+    configureDeposit(30);
+    vi.mocked(cancelDepositPaymentIntent).mockResolvedValue(false);
+
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result).toEqual({ success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE });
+    expect(createPaymentIntentMock).not.toHaveBeenCalled();
+    expect(recordDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it.each(["processing", "succeeded", "requires_capture"])(
+    "refuses while the stored PaymentIntent is %s",
+    async (status) => {
+      storePaymentIntent({ status });
+      configureDeposit(30);
+
+      const result = await createDepositPaymentIntent(input);
+
+      expect(result).toEqual({
+        success: false,
+        error: DEPOSIT_PAYMENT_PROCESSING_ERROR_MESSAGE,
+      });
+      expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+      expect(createPaymentIntentMock).not.toHaveBeenCalled();
+      expect(recordDepositPaymentIntent).not.toHaveBeenCalled();
+    }
+  );
+
+  it("replaces a stored PaymentIntent that is already cancelled", async () => {
+    storePaymentIntent({ status: "canceled" });
     configureDeposit(20);
     createPaymentIntentMock.mockResolvedValue({
       id: "pi_new",
       client_secret: "secret_new",
     });
 
-    await createDepositPaymentIntent(input);
+    const result = await createDepositPaymentIntent(input);
 
+    expect(result).toEqual({ success: true, clientSecret: "secret_new" });
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+    expect(createPaymentIntentMock).toHaveBeenCalledWith(
+      intentParams(2000),
+      replaceIdempotencyOptions
+    );
     expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
       depositAmount: 20,
       stripePaymentIntentId: "pi_new",
       replacedPaymentIntentId: "pi_old",
+    });
+  });
+
+  it("returns the generic error and logs ids only when the retrieve fails", async () => {
+    storePaymentIntent();
+    configureDeposit(20);
+    retrievePaymentIntentMock.mockRejectedValue(new Error("Stripe is unreachable"));
+
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result).toEqual({ success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE });
+    expect(createPaymentIntentMock).not.toHaveBeenCalled();
+    expect(recordDepositPaymentIntent).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith({
+      operation: "createDepositPaymentIntent",
+      reason: "stripe_retrieve_failed",
+      severity: "warning",
+      bookingRequestId,
+      paymentIntentId: "pi_old",
+    });
+  });
+
+  it("never replaces a stored PaymentIntent whose status it doesn't know", async () => {
+    storePaymentIntent({ status: "requires_something_new" });
+    configureDeposit(30);
+
+    const result = await createDepositPaymentIntent(input);
+
+    expect(result).toEqual({ success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE });
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+    expect(createPaymentIntentMock).not.toHaveBeenCalled();
+    expect(recordDepositPaymentIntent).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith({
+      operation: "createDepositPaymentIntent",
+      reason: "unknown_payment_intent_status",
+      severity: "warning",
+      bookingRequestId,
+      paymentIntentId: "pi_old",
+      status: "requires_something_new",
     });
   });
 
