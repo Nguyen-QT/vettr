@@ -161,7 +161,9 @@ describe("booking deposits-and-strikes integration", () => {
     strikeControl.failNext = false;
     raceControl.lookupHoldMs = 0;
     refundsCreateMock.mockReset();
-    refundsCreateMock.mockResolvedValue({ id: "re_it" });
+    // A fresh id per call: stripeRefundId is unique (56.3), and the race
+    // cases refund several bookings in one test.
+    refundsCreateMock.mockImplementation(async () => ({ id: `re_it_${uniqueSuffix()}` }));
     await tracker.wipe();
   });
 
@@ -329,7 +331,7 @@ describe("booking deposits-and-strikes integration", () => {
         status: "CANCELLED_BY_CLIENT",
         depositPaid: true,
         depositRefunded: true,
-        stripeRefundId: "re_it",
+        stripeRefundId: expect.stringMatching(/^re_it_/),
       });
     });
 

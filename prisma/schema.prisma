@@ -305,9 +305,10 @@ model BookingRequest {
   // change to the artist's per-tier amount never retroactively alters
   // an in-flight or already-paid request. stripePaymentIntentId is set
   // at the same time; depositPaid above flips true once the webhook
-  // confirms the PaymentIntent succeeded.
+  // confirms the PaymentIntent succeeded. Unique (56.3) so the webhook's
+  // PaymentIntent lookup resolves to at most one request.
   depositAmount         Decimal? @db.Decimal(10, 2)
-  stripePaymentIntentId String?
+  stripePaymentIntentId String?  @unique
 
   // Deposit forfeiture/refund (CLAUDE.md 7.3). A client-initiated
   // cancellation (only ever reachable outside the existing 48-hour
@@ -316,8 +317,10 @@ model BookingRequest {
   // needs no field here -- forfeiture is just the absence of a refund,
   // not an active state. depositRefunded guards refundDeposit's
   // idempotency the same way depositPaid guards confirmDepositPayment's.
+  // stripeRefundId is unique (56.3): a Stripe refund belongs to exactly
+  // one deposit.
   depositRefunded Boolean @default(false)
-  stripeRefundId  String?
+  stripeRefundId  String? @unique
 
   clientNotes String?
 
