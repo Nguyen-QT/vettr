@@ -406,9 +406,9 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - A crash between a booking cancel's commit and its PaymentIntent cancel leaves the PaymentIntent open. 56.2 refunds any payment made on it. A durable sweep for cancelled bookings with an open PaymentIntent would fit 56.7's retry cron.
     - `getPayableDeposits` shows the artist's tier amount and ignores precharge. A flagged client's card therefore shows less than the PaymentIntent charges. A flagged client whose artist has no amount set for that tier never sees the card at all.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **56.4.1.1 / 56.4.4.1–56.4.6.1** Data/UI/Hook/View — N/A. No schema change (the stored `stripePaymentIntentId` is already unique, 56.3). The new refusal surfaces through `useDepositPayment`'s existing error path.
-    - [ ] **56.4.2.1** Domain Service — billing: new `cancelDepositPaymentIntent(paymentIntentId)`. It cancels with the per-PaymentIntent key and returns whether it worked, logging ids only on failure (+ unit tests).
-    - [ ] **56.4.2.2** Domain Service — booking: `recordDepositPaymentIntent` becomes the compare-and-set above (`updateMany`) and returns whether it wrote.
+    - [x] **56.4.1.1 / 56.4.4.1–56.4.6.1** Data/UI/Hook/View — N/A. No schema change (the stored `stripePaymentIntentId` is already unique, 56.3). The new refusal surfaces through `useDepositPayment`'s existing error path.
+    - [x] **56.4.2.1** Domain Service — billing: new `cancelDepositPaymentIntent(paymentIntentId)`. It cancels with the per-PaymentIntent key and returns whether it worked, logging ids only on failure (+ unit tests).
+    - [x] **56.4.2.2** Domain Service — booking: `recordDepositPaymentIntent` becomes the compare-and-set above (`updateMany`) and returns whether it wrote.
       - Tests: unit tests, plus an integration case in `booking.deposits-and-strikes.integration.test.ts` (a stale write loses to a newer PaymentIntent, a write on a cancelled booking is refused, and a duplicate write of the same id succeeds).
       - Compile-forced caller edit: `createDepositPaymentIntent` passes the id it read.
     - [ ] **56.4.2.3** Domain Service — billing: `createDepositPaymentIntent` reuses, replaces or refuses by status, uses the new keys, and keeps the secret-after-commit rule.
