@@ -4,15 +4,12 @@ import type { BookingRequestDepositView } from "../types";
 
 // Narrow cross-domain read (CLAUDE.md 7.2.3) -- exposes only what
 // billing's confirmDepositPayment needs when the Stripe webhook
-// reports a PaymentIntent id. stripePaymentIntentId isn't a DB-level
-// unique constraint (CLAUDE.md 7.1.1), so this uses findFirst rather
-// than findUnique -- Stripe's PaymentIntent ids are globally unique
-// and recordDepositPaymentIntent only ever sets this field once per
-// request, so this is safe in practice.
+// reports a PaymentIntent id. stripePaymentIntentId is unique (56.3),
+// so this resolves to at most one request.
 export async function getBookingRequestByPaymentIntentId(
   stripePaymentIntentId: string
 ): Promise<BookingRequestDepositView | null> {
-  const request = await prisma.bookingRequest.findFirst({
+  const request = await prisma.bookingRequest.findUnique({
     where: { stripePaymentIntentId },
     select: {
       id: true,
