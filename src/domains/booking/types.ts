@@ -429,6 +429,19 @@ export type CancelApprovedBookingAsArtistResult =
   | { success: true }
   | { success: false; error: string };
 
+// Write command (56.2): artist declines a request that hasn't been
+// approved yet. No artistId -- ownership-checked at the Controller/Action
+// layer, same as CancelApprovedBookingAsArtistInput above. The success
+// shape matches the action's RequestActionResult, so the action can pass
+// it straight through.
+export interface DeclineBookingRequestInput {
+  bookingRequestId: string;
+}
+
+export type DeclineBookingRequestResult =
+  | { success: true; responseMessage: string }
+  | { success: false; error: string };
+
 // Write command (CLAUDE.md 5.6): artist marks a past-dated APPROVED
 // appointment as a no-show. Same ownership-check posture as above.
 export interface MarkAppointmentNoShowInput {
