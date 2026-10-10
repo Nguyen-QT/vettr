@@ -205,11 +205,16 @@ export async function createDepositPaymentIntent(
         : {}),
     },
     {
-      // Idempotency Keys on Deposit/Refund Calls (CLAUDE.md 15.1, 56.4):
-      // keyed by the PaymentIntent this replaces, so a dropped response
-      // or a concurrent tab replacing the same one gets the same new
-      // PaymentIntent instead of a second payable one.
-      idempotencyKey: `${DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX}:${request.id}:${storedPaymentIntentId ?? "initial"}`,
+      // Idempotency Keys on Deposit/Refund Calls (CLAUDE.md 15.1, 56.4,
+      // 56.5): keyed by the PaymentIntent this replaces, so a dropped
+      // response or a concurrent tab replacing the same one gets the same
+      // new PaymentIntent instead of a second payable one. The amount and
+      // routing are the only create parameters that change at runtime
+      // (tier edit, precharge, Connect chargesEnabled), so they join the
+      // key: a retry with changed parameters gets a new key instead of
+      // Stripe's idempotency error for 24h. A new runtime parameter must
+      // join the key too.
+      idempotencyKey: `${DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX}:${request.id}:${storedPaymentIntentId ?? "initial"}:${amount}:${artistConnectAccountId ?? "platform"}`,
     }
   );
 

@@ -33,11 +33,14 @@ export const PRECHARGE_PERCENTAGE = 0.5;
 // per call, so a genuine retry of the *same* operation reuses Stripe's
 // cached result instead of duplicating the side effect. The refund key is
 // per booking. A PaymentIntent create is keyed per booking + the
-// PaymentIntent it replaces, or "initial" (56.4):
-// `deposit-intent:<bookingRequestId>:<replaced id | "initial">`. So
-// concurrent tabs replacing the same PaymentIntent with the same
-// parameters get the same new one, and a visit after Stripe's 24h key
-// window reuses the stored PaymentIntent instead of keying a new create.
+// PaymentIntent it replaces, or "initial" (56.4), + the amount in pence
+// and the routing (56.5):
+// `deposit-intent:<bookingRequestId>:<replaced id | "initial">:<amount>:<connect account id | "platform">`.
+// So concurrent tabs replacing the same PaymentIntent with the same
+// parameters get the same new one, a visit after Stripe's 24h key window
+// reuses the stored PaymentIntent instead of keying a new create, and a
+// retry after a parameter change gets a new key instead of Stripe's
+// idempotency error.
 export const DEPOSIT_PAYMENT_INTENT_IDEMPOTENCY_KEY_PREFIX = "deposit-intent";
 export const DEPOSIT_REFUND_IDEMPOTENCY_KEY_PREFIX = "deposit-refund";
 // Keyed per PaymentIntent rather than per booking (56.4): every caller

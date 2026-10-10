@@ -115,10 +115,16 @@ describe("createDepositPaymentIntent", () => {
     };
   }
 
-  const idempotencyOptions = { idempotencyKey: `deposit-intent:${bookingRequestId}:initial` };
-  const replaceIdempotencyOptions = {
-    idempotencyKey: `deposit-intent:${bookingRequestId}:pi_old`,
-  };
+  // deposit-intent:<booking>:<replaced id | "initial">:<amount>:<routing>
+  function idempotencyOptions(
+    replaced: string,
+    amount: number,
+    routing = "platform"
+  ): { idempotencyKey: string } {
+    return {
+      idempotencyKey: `deposit-intent:${bookingRequestId}:${replaced}:${amount}:${routing}`,
+    };
+  }
 
   beforeEach(() => {
     createPaymentIntentMock.mockReset();
@@ -150,7 +156,7 @@ describe("createDepositPaymentIntent", () => {
     expect(retrievePaymentIntentMock).not.toHaveBeenCalled();
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(2000),
-      idempotencyOptions
+      idempotencyOptions("initial", 2000)
     );
     expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
       depositAmount: 20,
@@ -172,6 +178,44 @@ describe("createDepositPaymentIntent", () => {
 
     expect(result).toEqual({ success: false, error: DEPOSIT_PAYMENT_INIT_ERROR_MESSAGE });
   });
+
+  // A create that reached Stripe but wasn't recorded leaves no stored id,
+  // so the retry keys from "initial" again. A changed parameter must
+  // change the key, or Stripe rejects the retry for 24h (56.5).
+  it.each([
+    {
+      change: "amount",
+      apply: (): void => configureDeposit(30),
+      retryOptions: idempotencyOptions("initial", 3000),
+    },
+    {
+      change: "routing",
+      apply: (): void => configureConnect("acct_connected", true),
+      retryOptions: idempotencyOptions("initial", 2000, "acct_connected"),
+    },
+  ])(
+    "keys a retry with a changed $change apart from the unrecorded create",
+    async ({ apply, retryOptions }) => {
+      vi.mocked(getBookingRequestForDeposit).mockResolvedValue(depositView());
+      configureDeposit(20);
+      createPaymentIntentMock.mockResolvedValue({
+        id: "pi_123",
+        client_secret: "secret_123",
+      });
+      vi.mocked(recordDepositPaymentIntent).mockResolvedValue(false);
+
+      await createDepositPaymentIntent(input);
+      apply();
+      await createDepositPaymentIntent(input);
+
+      expect(createPaymentIntentMock).toHaveBeenNthCalledWith(
+        1,
+        expect.anything(),
+        idempotencyOptions("initial", 2000)
+      );
+      expect(createPaymentIntentMock).toHaveBeenNthCalledWith(2, expect.anything(), retryOptions);
+    }
+  );
 
   it.each(["requires_payment_method", "requires_confirmation", "requires_action"])(
     "reuses a stored %s PaymentIntent whose amount and routing still match",
@@ -235,7 +279,7 @@ describe("createDepositPaymentIntent", () => {
     expect(cancelDepositPaymentIntent).toHaveBeenCalledWith("pi_old");
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(3000),
-      replaceIdempotencyOptions
+      idempotencyOptions("pi_old", 3000)
     );
     expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
       depositAmount: 30,
@@ -263,7 +307,7 @@ describe("createDepositPaymentIntent", () => {
         on_behalf_of: "acct_connected",
         transfer_data: { destination: "acct_connected" },
       }),
-      replaceIdempotencyOptions
+      idempotencyOptions("pi_old", 2000, "acct_connected")
     );
   });
 
@@ -311,7 +355,7 @@ describe("createDepositPaymentIntent", () => {
     expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(2000),
-      replaceIdempotencyOptions
+      idempotencyOptions("pi_old", 2000)
     );
     expect(recordDepositPaymentIntent).toHaveBeenCalledWith(bookingRequestId, {
       depositAmount: 20,
@@ -433,7 +477,7 @@ describe("createDepositPaymentIntent", () => {
     // 50% of £200 = £100
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(10_000),
-      idempotencyOptions
+      idempotencyOptions("initial", 10_000)
     );
   });
 
@@ -452,7 +496,7 @@ describe("createDepositPaymentIntent", () => {
     // 50% of £200 = £100, greater than the configured £20
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(10_000),
-      idempotencyOptions
+      idempotencyOptions("initial", 10_000)
     );
   });
 
@@ -471,7 +515,7 @@ describe("createDepositPaymentIntent", () => {
     // configured £90, greater than 50% of £100 = £50
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(9_000),
-      idempotencyOptions
+      idempotencyOptions("initial", 9_000)
     );
   });
 
@@ -491,7 +535,7 @@ describe("createDepositPaymentIntent", () => {
         on_behalf_of: "acct_connected",
         transfer_data: { destination: "acct_connected" },
       }),
-      idempotencyOptions
+      idempotencyOptions("initial", 2000, "acct_connected")
     );
   });
 
@@ -508,7 +552,7 @@ describe("createDepositPaymentIntent", () => {
 
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(2000),
-      idempotencyOptions
+      idempotencyOptions("initial", 2000)
     );
   });
 
@@ -527,7 +571,7 @@ describe("createDepositPaymentIntent", () => {
     // stays at the configured £20, precharge never applies
     expect(createPaymentIntentMock).toHaveBeenCalledWith(
       intentParams(2_000),
-      idempotencyOptions
+      idempotencyOptions("initial", 2_000)
     );
   });
 });
