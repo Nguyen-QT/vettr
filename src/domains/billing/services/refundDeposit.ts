@@ -16,7 +16,9 @@ import type { RefundDepositResult } from "../types";
 // cancelApprovedBookingAsArtist, 7.3.4) both refund in full regardless
 // of cancellation timing -- self-cancel is only ever reachable outside
 // the existing 48-hour window, and an artist-cancel is never the
-// client's fault -- so there's no partial-refund calculation here. A
+// client's fault -- so there's no partial-refund calculation here.
+// confirmDepositPayment also calls this for a payment that lands on an
+// already cancelled or declined booking (56.2). A
 // no-show forfeits the deposit simply by never calling this function.
 // Idempotent: depositRefunded already true returns success without a
 // second Stripe call. Reads/writes BookingRequest through booking's

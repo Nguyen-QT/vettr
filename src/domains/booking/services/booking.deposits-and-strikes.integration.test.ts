@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { confirmDepositPayment } from "@/domains/billing/services/confirmDepositPayment";
 import { SLOT_CONFLICT_ERROR_MESSAGE } from "@/domains/scheduling/constants";
 import { prisma } from "@/lib/prisma";
 import { createBookingRequest, createIntegrationTracker, uniqueSuffix } from "@/testUtils/integrationDb";
@@ -9,6 +10,7 @@ import {
   APPOINTMENT_NOT_YET_DUE_ERROR_MESSAGE,
   INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE,
 } from "../constants";
+import type { RequestStatus } from "../types";
 import { cancelApprovedBookingAsArtist } from "./cancelApprovedBookingAsArtist";
 import { cancelBookingRequest } from "./cancelBookingRequest";
 import { getPendingBookingRequests } from "./getPendingBookingRequests";
@@ -17,12 +19,15 @@ import { rescheduleApprovedBooking } from "./rescheduleApprovedBooking";
 import { updateClientProfile } from "./updateClientProfile";
 import { updatePendingBookingRequest } from "./updatePendingBookingRequest";
 
-// Stripe has no network access (or secrets) in the integration CI job; the
-// refund path is covered by billing's own integration tests (28.3.2.5.1) and
-// these fixtures keep depositPaid false, so the SDK is only mocked to keep the
-// import graph free of secrets.
+// Stripe has no network access (or secrets) in the integration CI job, so the
+// SDK stays mocked. The late-payment cases (56.2) count refunds.create calls
+// per booking; every other fixture keeps depositPaid false and never reaches
+// it.
+const refundsCreateMock = vi.fn();
 vi.mock("@/lib/stripe", () => ({
-  stripe: { refunds: { create: vi.fn() } },
+  stripe: {
+    refunds: { create: (...args: unknown[]) => refundsCreateMock(...args) },
+  },
 }));
 
 // Lets one test force the strike step to fail inside the real transaction;
@@ -42,6 +47,24 @@ vi.mock("./applyCancellationStrike", async () => {
         throw new Error("forced strike failure");
       }
       return actual.applyCancellationStrike(...args);
+    },
+  };
+});
+
+// Lets the race cases hold the webhook between its booking lookup and its
+// depositPaid write, so a cancel can commit in that gap; 0 everywhere else.
+const raceControl = vi.hoisted(() => ({ lookupHoldMs: 0 }));
+vi.mock("./getBookingRequestByPaymentIntentId", async () => {
+  const actual = await vi.importActual<typeof import("./getBookingRequestByPaymentIntentId")>(
+    "./getBookingRequestByPaymentIntentId"
+  );
+  return {
+    getBookingRequestByPaymentIntentId: async (
+      ...args: Parameters<typeof actual.getBookingRequestByPaymentIntentId>
+    ): ReturnType<typeof actual.getBookingRequestByPaymentIntentId> => {
+      const request = await actual.getBookingRequestByPaymentIntentId(...args);
+      await new Promise((resolve) => setTimeout(resolve, raceControl.lookupHoldMs));
+      return request;
     },
   };
 });
@@ -74,13 +97,15 @@ async function createApprovedWithSlot(
   artistId: string,
   clientId: string,
   start: Date,
-  minutes = 180
+  minutes = 180,
+  stripePaymentIntentId?: string
 ): Promise<{ id: string }> {
   const request = await createBookingRequest({
     artistId,
     clientId,
     requestedStartTime: start,
     status: "APPROVED",
+    stripePaymentIntentId,
   });
   await prisma.timeSlot.create({
     data: {
@@ -98,9 +123,42 @@ async function getClient(id: string) {
   return prisma.clientProfile.findUniqueOrThrow({ where: { id } });
 }
 
+function paymentIntentId(): string {
+  return `pi_it_${uniqueSuffix()}`;
+}
+
+// One two-party race per entry, each holding the webhook after its lookup
+// for that long. With no hold the webhook's single update usually commits
+// before the cancel's transaction does; the longer holds let the cancel
+// commit between the webhook's lookup and its write, the order only the
+// status read back from markDepositPaid catches. The ones in between
+// contend for the row lock.
+const RACE_LOOKUP_HOLDS_MS = [0, 0, 0, 5, 5, 10, 20, 50, 100, 200];
+
+const CANCEL_PATHS: Array<{
+  name: string;
+  cancelledStatus: RequestStatus;
+  cancel: (bookingRequestId: string, clientId: string) => Promise<{ success: boolean }>;
+}> = [
+  {
+    name: "cancelBookingRequest",
+    cancelledStatus: "CANCELLED_BY_CLIENT",
+    cancel: (bookingRequestId, clientId) =>
+      cancelBookingRequest({ bookingRequestId, clientProfileId: clientId }),
+  },
+  {
+    name: "cancelApprovedBookingAsArtist",
+    cancelledStatus: "CANCELLED_BY_ARTIST",
+    cancel: (bookingRequestId) => cancelApprovedBookingAsArtist({ bookingRequestId }),
+  },
+];
+
 describe("booking deposits-and-strikes integration", () => {
   beforeEach(async () => {
     strikeControl.failNext = false;
+    raceControl.lookupHoldMs = 0;
+    refundsCreateMock.mockReset();
+    refundsCreateMock.mockResolvedValue({ id: "re_it" });
     await tracker.wipe();
   });
 
@@ -238,6 +296,102 @@ describe("booking deposits-and-strikes integration", () => {
       const client = await getClient(clientId);
       expect(client.cancellationCount).toBe(0);
       expect(client.enforcePrecharge).toBe(false);
+    });
+  });
+
+  describe("late deposit payment (56.2)", () => {
+    it("a payment confirmed after a client cancel ends refunded, once", async () => {
+      const { artistId, clientId } = await setup();
+      const intent = paymentIntentId();
+      const request = await createApprovedWithSlot(artistId, clientId, futureStart(), 180, intent);
+
+      const cancelResult = await cancelBookingRequest({
+        bookingRequestId: request.id,
+        clientProfileId: clientId,
+      });
+      expect(cancelResult).toEqual({ success: true });
+      expect(refundsCreateMock).not.toHaveBeenCalled();
+
+      expect(await confirmDepositPayment(intent)).toEqual({ success: true });
+      // A redelivery of the same event finds the refund recorded.
+      expect(await confirmDepositPayment(intent)).toEqual({ success: true });
+
+      expect(refundsCreateMock).toHaveBeenCalledTimes(1);
+      expect(refundsCreateMock).toHaveBeenCalledWith(
+        { payment_intent: intent },
+        { idempotencyKey: `deposit-refund:${request.id}` }
+      );
+      const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
+      expect(after).toMatchObject({
+        status: "CANCELLED_BY_CLIENT",
+        depositPaid: true,
+        depositRefunded: true,
+        stripeRefundId: "re_it",
+      });
+    });
+
+    it.each(CANCEL_PATHS)(
+      "$name racing the confirmation makes exactly one refund per booking",
+      async ({ cancelledStatus, cancel }) => {
+        const { artistId, clientId } = await setup();
+
+        for (const [run, holdMs] of RACE_LOOKUP_HOLDS_MS.entries()) {
+          const intent = paymentIntentId();
+          const request = await createApprovedWithSlot(
+            artistId,
+            clientId,
+            futureStart(run),
+            180,
+            intent
+          );
+          refundsCreateMock.mockClear();
+          raceControl.lookupHoldMs = holdMs;
+
+          const [cancelResult, confirmResult] = await Promise.all([
+            cancel(request.id, clientId),
+            confirmDepositPayment(intent),
+          ]);
+
+          expect(cancelResult).toEqual({ success: true });
+          expect(confirmResult).toEqual({ success: true });
+          expect(refundsCreateMock).toHaveBeenCalledTimes(1);
+          expect(refundsCreateMock).toHaveBeenCalledWith(
+            { payment_intent: intent },
+            { idempotencyKey: `deposit-refund:${request.id}` }
+          );
+          const after = await prisma.bookingRequest.findUniqueOrThrow({
+            where: { id: request.id },
+          });
+          expect(after).toMatchObject({
+            status: cancelledStatus,
+            depositPaid: true,
+            depositRefunded: true,
+          });
+        }
+      }
+    );
+
+    it("a late payment on a COMPLETED booking is recorded, alerted and not refunded", async () => {
+      const { artistId, clientId } = await setup();
+      const intent = paymentIntentId();
+      const request = await createBookingRequest({
+        artistId,
+        clientId,
+        requestedStartTime: futureStart(),
+        status: "COMPLETED",
+        stripePaymentIntentId: intent,
+      });
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      const result = await confirmDepositPayment(intent);
+      const alerts = consoleErrorSpy.mock.calls.length;
+      consoleErrorSpy.mockRestore();
+
+      expect(result).toEqual({ success: true });
+      expect(alerts).toBe(1);
+      expect(refundsCreateMock).not.toHaveBeenCalled();
+      const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
+      expect(after).toMatchObject({ depositPaid: true, depositRefunded: false, stripeRefundId: null });
     });
   });
 
