@@ -4,6 +4,7 @@ import path from "node:path";
 import { config } from "dotenv";
 import { Client } from "pg";
 
+import { assertSafeDatabaseUrl } from "../src/testUtils/assertSafeDatabaseUrl";
 import { EMAIL_CAPTURE_SINK_PATH } from "./authHelpers";
 import { E2E_FIXTURE_EMAIL_PATTERN, type E2eFixture } from "./global-setup";
 
@@ -11,6 +12,8 @@ const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 
 export default async function globalTeardown() {
   config();
+  // Same guard as global-setup.ts -- everything below deletes rows.
+  assertSafeDatabaseUrl(process.env.DATABASE_URL);
 
   await rm(EMAIL_CAPTURE_SINK_PATH, { force: true });
 
