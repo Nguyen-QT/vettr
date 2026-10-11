@@ -532,7 +532,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - Delete booking's `recordDepositRefund` and billing's `confirmDepositRefund` (+ tests). This ends the mirror.
       - Drop `depositRefunded` from `BookingRequestDepositView`, `ClientBookingSummary` and their reads.
       - Point `depositRefundLifecycle.stripe-integration.test.ts` at `syncDepositRefundStatus`, and repoint the cancel-path comments.
-    - [ ] **56.6.1.2** Data Gateway — drop `BookingRequest.depositRefunded` and `stripeRefundId` + migration.
+    - [x] **56.6.1.2** Data Gateway — drop `BookingRequest.depositRefunded` and `stripeRefundId` + migration.
       - Fixture-only edits forced by the drop: the `global-setup` insert and the integration assertions on the dropped columns.
 - [ ] **56.7: Retry Refunds Whose Stripe Call Failed** — *unscoped.*
   - If `stripe.refunds.create` itself fails, no refund exists on Stripe, so no webhook will ever arrive.
