@@ -521,7 +521,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.6.2.3** Domain Service — billing: new `syncDepositRefundStatus`, as above.
       - Unit tests per match path and status.
       - Integration case: a stale `refund.updated` (`succeeded`) after `refund.failed` leaves `FAILED`.
-    - [ ] **56.6.3.1** Controller/Action — the webhook route sends `refund.created`/`refund.updated`/`refund.failed`, whatever their status, to `syncDepositRefundStatus`, and its header lists `refund.failed`.
+    - [x] **56.6.3.1** Controller/Action — the webhook route sends `refund.created`/`refund.updated`/`refund.failed`, whatever their status, to `syncDepositRefundStatus`, and its header lists `refund.failed`.
       - Route unit tests.
       - The Stripe-tier `refund.created` replay records the intent first and refunds with the same metadata, then asserts the row.
     - [ ] **56.6.2.4** Domain Service — billing: `getDepositRefundStatuses` (+ unit tests).

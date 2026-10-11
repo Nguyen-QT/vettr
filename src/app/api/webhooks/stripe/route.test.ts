@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE } from "@/domains/billing/constants";
 import { confirmDepositPayment } from "@/domains/billing/services/confirmDepositPayment";
-import { confirmDepositRefund } from "@/domains/billing/services/confirmDepositRefund";
+import { syncDepositRefundStatus } from "@/domains/billing/services/syncDepositRefundStatus";
 import { stripe } from "@/lib/stripe";
 
 import { POST } from "./route";
@@ -12,8 +12,8 @@ vi.mock("@/domains/billing/services/confirmDepositPayment", () => ({
   confirmDepositPayment: vi.fn(),
 }));
 
-vi.mock("@/domains/billing/services/confirmDepositRefund", () => ({
-  confirmDepositRefund: vi.fn(),
+vi.mock("@/domains/billing/services/syncDepositRefundStatus", () => ({
+  syncDepositRefundStatus: vi.fn(),
 }));
 
 vi.mock("@/domains/billing/services/syncArtistConnectAccountStatus", () => ({
@@ -58,13 +58,15 @@ function refund(overrides: Record<string, unknown> = {}): Record<string, unknown
     object: "refund",
     status: "succeeded",
     payment_intent: "pi_123",
+    metadata: { bookingRequestId: "request-1" },
     ...overrides,
   };
 }
 
-// Route-handler unit test (56.1.3.1, 56.4.3.1): payment_intent.succeeded
-// and refund event dispatch only. Signature verification is covered
-// against real Stripe signing in route.stripe-integration.test.ts.
+// Route-handler unit test (56.1.3.1, 56.4.3.1, 56.6.3.1):
+// payment_intent.succeeded and refund event dispatch only. Signature
+// verification is covered against real Stripe signing in
+// route.stripe-integration.test.ts.
 describe("POST /api/webhooks/stripe -- payment_intent.succeeded", () => {
   beforeEach(() => {
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET);
@@ -121,8 +123,8 @@ describe("POST /api/webhooks/stripe -- payment_intent.succeeded", () => {
 describe("POST /api/webhooks/stripe -- refund events", () => {
   beforeEach(() => {
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET);
-    vi.mocked(confirmDepositRefund).mockReset();
-    vi.mocked(confirmDepositRefund).mockResolvedValue({ success: true });
+    vi.mocked(syncDepositRefundStatus).mockReset();
+    vi.mocked(syncDepositRefundStatus).mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -130,40 +132,78 @@ describe("POST /api/webhooks/stripe -- refund events", () => {
     vi.restoreAllMocks();
   });
 
-  it("confirms a refund that refund.created reports as already succeeded", async () => {
-    const response = await POST(buildSignedRequest("refund.created", refund()));
+  it.each(["refund.created", "refund.updated", "refund.failed"])(
+    "sends %s to syncDepositRefundStatus with the refund's own fields",
+    async (type) => {
+      const response = await POST(buildSignedRequest(type, refund()));
+
+      expect(response.status).toBe(200);
+      expect(syncDepositRefundStatus).toHaveBeenCalledTimes(1);
+      expect(syncDepositRefundStatus).toHaveBeenCalledWith({
+        stripeRefundId: "re_123",
+        stripePaymentIntentId: "pi_123",
+        metadataBookingRequestId: "request-1",
+        stripeStatus: "succeeded",
+        failureReason: undefined,
+      });
+    }
+  );
+
+  it.each([
+    { status: "pending", failure_reason: undefined },
+    { status: "requires_action", failure_reason: undefined },
+    { status: "succeeded", failure_reason: undefined },
+    { status: "failed", failure_reason: "expired_or_canceled_card" },
+    { status: "canceled", failure_reason: undefined },
+    { status: null, failure_reason: undefined },
+    { status: "some_future_status", failure_reason: undefined },
+  ])(
+    "passes Stripe's $status status and failure reason through unmapped",
+    async ({ status, failure_reason }) => {
+      const response = await POST(
+        buildSignedRequest("refund.updated", refund({ status, failure_reason }))
+      );
+
+      expect(response.status).toBe(200);
+      expect(syncDepositRefundStatus).toHaveBeenCalledWith(
+        expect.objectContaining({ stripeStatus: status, failureReason: failure_reason })
+      );
+    }
+  );
+
+  it.each([
+    ["metadata without a bookingRequestId", { metadata: {} }],
+    ["null metadata", { metadata: null }],
+  ])("passes no booking id for a refund with %s", async (_, overrides) => {
+    const response = await POST(buildSignedRequest("refund.created", refund(overrides)));
 
     expect(response.status).toBe(200);
-    expect(confirmDepositRefund).toHaveBeenCalledWith("pi_123", "re_123");
-  });
-
-  it("does not confirm a refund that refund.created reports as pending", async () => {
-    const response = await POST(
-      buildSignedRequest("refund.created", refund({ status: "pending" }))
+    expect(syncDepositRefundStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ metadataBookingRequestId: undefined })
     );
-
-    expect(response.status).toBe(200);
-    expect(confirmDepositRefund).not.toHaveBeenCalled();
   });
 
-  it("confirms a refund once refund.updated reports it succeeded", async () => {
-    const response = await POST(buildSignedRequest("refund.updated", refund()));
-
-    expect(response.status).toBe(200);
-    expect(confirmDepositRefund).toHaveBeenCalledWith("pi_123", "re_123");
-  });
-
-  it("ignores a succeeded refund with no PaymentIntent", async () => {
+  it("still sends a refund with no PaymentIntent, so its stored refund id can match", async () => {
     const response = await POST(
       buildSignedRequest("refund.created", refund({ payment_intent: null }))
     );
 
     expect(response.status).toBe(200);
-    expect(confirmDepositRefund).not.toHaveBeenCalled();
+    expect(syncDepositRefundStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ stripeRefundId: "re_123", stripePaymentIntentId: null })
+    );
   });
 
-  it("returns 500 so Stripe retries when confirming the refund throws", async () => {
-    vi.mocked(confirmDepositRefund).mockRejectedValue(new Error("db down"));
+  it("still answers 200 when nothing is written, since a retry can't change the outcome", async () => {
+    vi.mocked(syncDepositRefundStatus).mockResolvedValue(false);
+
+    const response = await POST(buildSignedRequest("refund.failed", refund()));
+
+    expect(response.status).toBe(200);
+  });
+
+  it("returns 500 so Stripe retries when syncing the refund throws", async () => {
+    vi.mocked(syncDepositRefundStatus).mockRejectedValue(new Error("db down"));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await POST(buildSignedRequest("refund.created", refund()));
