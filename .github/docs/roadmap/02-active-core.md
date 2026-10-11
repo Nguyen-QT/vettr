@@ -489,11 +489,11 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - The `FAILED` alert is logged after `advanceDepositRefundStatus` commits. A crash between the two loses it, and a redelivered `refund.failed` writes nothing, so nothing alerts again. The row still reads `FAILED` and the client sees "Contact support". A durable alert (an outbox, for example) belongs to 53.7 or Phase 57's ledger.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **56.6.4.1 / 56.6.5.1** UI/Hook — N/A. `ClientBookingCard` composes containers (View, per 54.8's split), and the dashboard is server-rendered.
-    - [x] **56.6.1.1** Data Gateway — `DepositRefund` + `DepositRefundStatus` enum + migration with the backfill above. No app code. Integration `wipe()` needs no change (it cascades from `BookingRequest`).
-    - [x] **56.6.2.1** Domain Service — billing: the status types, the Stripe-status `Record` and `advanceDepositRefundStatus` (the conditional write above).
+    - [X] **56.6.1.1** Data Gateway — `DepositRefund` + `DepositRefundStatus` enum + migration with the backfill above. No app code. Integration `wipe()` needs no change (it cascades from `BookingRequest`).
+    - [X] **56.6.2.1** Domain Service — billing: the status types, the Stripe-status `Record` and `advanceDepositRefundStatus` (the conditional write above).
       - Unit tests.
       - `billing.integration.test.ts` cases: a stale `SUCCEEDED` after `FAILED` writes nothing; a redelivered `FAILED` writes and alerts once; a different refund id never replaces the stored one.
-    - [ ] **56.6.2.2** Domain Service — billing: `refundDeposit` records the intent first (new `recordDepositRefundIntent`), sets `metadata.bookingRequestId`, catches each step as above and writes the returned status through 2.1.
+    - [X] **56.6.2.2** Domain Service — billing: `refundDeposit` records the intent first (new `recordDepositRefundIntent`), sets `metadata.bookingRequestId`, catches each step as above and writes the returned status through 2.1.
       - Keeps the legacy mirror, and updates `confirmDepositPayment`'s comment.
       - Unit tests per path.
       - Integration cases assert the `DepositRefund` row. The 56.2 race case also asserts exactly one row per booking.
