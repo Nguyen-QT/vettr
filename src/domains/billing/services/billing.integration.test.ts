@@ -381,27 +381,55 @@ describe("billing integration", () => {
     });
   });
 
+  // The refund intent (56.6) on real rows: the intent insert's ON CONFLICT
+  // under concurrent callers, and the DepositRefund row each path leaves.
   describe("refundDeposit", () => {
-    it("persists depositRefunded and stripeRefundId, and a re-run makes no second Stripe call", async () => {
+    async function createPaidRequest(): Promise<{ id: string; intent: string }> {
       const { artistId, clientId } = await setup();
+      const intent = paymentIntentId();
       const request = await createBookingRequest({
         artistId,
         clientId,
         depositPaid: true,
-        stripePaymentIntentId: paymentIntentId(),
+        stripePaymentIntentId: intent,
       });
-      refundsCreateMock.mockResolvedValue({ id: "re_it_1" });
+      return { id: request.id, intent };
+    }
+
+    interface RefundRow {
+      status: DepositRefundStatus;
+      stripePaymentIntentId: string;
+      stripeRefundId: string | null;
+    }
+
+    function readRefundRows(bookingRequestId: string): Promise<RefundRow[]> {
+      return prisma.depositRefund.findMany({
+        where: { bookingRequestId },
+        select: { status: true, stripePaymentIntentId: true, stripeRefundId: true },
+      });
+    }
+
+    it("records a SUCCEEDED refund row and the legacy flag, and a re-run makes no second Stripe call", async () => {
+      const request = await createPaidRequest();
+      refundsCreateMock.mockResolvedValue({ id: "re_it_1", status: "succeeded" });
 
       expect(await refundDeposit(request.id)).toEqual({ success: true });
       expect(await refundDeposit(request.id)).toEqual({ success: true });
 
+      expect(refundsCreateMock).toHaveBeenCalledTimes(1);
+      expect(refundsCreateMock).toHaveBeenCalledWith(
+        { payment_intent: request.intent, metadata: { bookingRequestId: request.id } },
+        { idempotencyKey: `deposit-refund:${request.id}` }
+      );
+      expect(await readRefundRows(request.id)).toEqual([
+        { status: "SUCCEEDED", stripePaymentIntentId: request.intent, stripeRefundId: "re_it_1" },
+      ]);
       const row = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
       expect(row.depositRefunded).toBe(true);
       expect(row.stripeRefundId).toBe("re_it_1");
-      expect(refundsCreateMock).toHaveBeenCalledTimes(1);
     });
 
-    it("rejects an unpaid deposit without calling Stripe or changing the row", async () => {
+    it("rejects an unpaid deposit without calling Stripe, recording an intent or changing the row", async () => {
       const { artistId, clientId } = await setup();
       const request = await createBookingRequest({ artistId, clientId });
 
@@ -409,27 +437,76 @@ describe("billing integration", () => {
 
       expect(result).toEqual({ success: false, error: DEPOSIT_REFUND_NOT_PAID_ERROR_MESSAGE });
       expect(refundsCreateMock).not.toHaveBeenCalled();
+      expect(await readRefundRows(request.id)).toEqual([]);
       const row = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
       expect(row.depositRefunded).toBe(false);
       expect(row.stripeRefundId).toBeNull();
     });
 
-    it("leaves the row untouched and returns a generic error when Stripe rejects", async () => {
-      const { artistId, clientId } = await setup();
-      const request = await createBookingRequest({
-        artistId,
-        clientId,
-        depositPaid: true,
-        stripePaymentIntentId: paymentIntentId(),
-      });
-      refundsCreateMock.mockRejectedValue(new Error("stripe down"));
+    it("leaves a PENDING intent with no refund id when Stripe rejects, and a retry refunds through it", async () => {
+      const request = await createPaidRequest();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      refundsCreateMock.mockRejectedValueOnce(new Error("stripe down"));
 
-      const result = await refundDeposit(request.id);
+      const failed = await refundDeposit(request.id);
+      consoleErrorSpy.mockRestore();
 
-      expect(result).toEqual({ success: false, error: DEPOSIT_REFUND_INIT_ERROR_MESSAGE });
+      expect(failed).toEqual({ success: false, error: DEPOSIT_REFUND_INIT_ERROR_MESSAGE });
+      expect(await readRefundRows(request.id)).toEqual([
+        { status: "PENDING", stripePaymentIntentId: request.intent, stripeRefundId: null },
+      ]);
       const row = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
       expect(row.depositRefunded).toBe(false);
       expect(row.stripeRefundId).toBeNull();
+
+      refundsCreateMock.mockResolvedValueOnce({ id: "re_it_retry", status: "succeeded" });
+
+      expect(await refundDeposit(request.id)).toEqual({ success: true });
+      // Same key, same parameters on both attempts.
+      expect(refundsCreateMock.mock.calls[1]).toEqual(refundsCreateMock.mock.calls[0]);
+      expect(await readRefundRows(request.id)).toEqual([
+        { status: "SUCCEEDED", stripePaymentIntentId: request.intent, stripeRefundId: "re_it_retry" },
+      ]);
+    });
+
+    it("never re-issues a refund whose row already holds a refund id, even FAILED", async () => {
+      const request = await createPaidRequest();
+      await prisma.depositRefund.create({
+        data: {
+          bookingRequestId: request.id,
+          stripePaymentIntentId: request.intent,
+          status: "FAILED",
+          stripeRefundId: "re_it_failed",
+        },
+      });
+
+      expect(await refundDeposit(request.id)).toEqual({ success: true });
+
+      expect(refundsCreateMock).not.toHaveBeenCalled();
+      expect(await readRefundRows(request.id)).toEqual([
+        { status: "FAILED", stripePaymentIntentId: request.intent, stripeRefundId: "re_it_failed" },
+      ]);
+    });
+
+    it("concurrent calls on one booking share one intent row, over repeated runs", async () => {
+      for (let run = 0; run < 5; run++) {
+        const request = await createPaidRequest();
+        const stripeRefundId = `re_it_${uniqueSuffix()}`;
+        // Stripe's per-booking idempotency key returns the same refund to
+        // every caller.
+        refundsCreateMock.mockResolvedValue({ id: stripeRefundId, status: "succeeded" });
+
+        const results = await Promise.all([
+          refundDeposit(request.id),
+          refundDeposit(request.id),
+          refundDeposit(request.id),
+        ]);
+
+        expect(results).toEqual([{ success: true }, { success: true }, { success: true }]);
+        expect(await readRefundRows(request.id)).toEqual([
+          { status: "SUCCEEDED", stripePaymentIntentId: request.intent, stripeRefundId },
+        ]);
+      }
     });
   });
 
@@ -451,7 +528,8 @@ describe("billing integration", () => {
       return `re_it_${uniqueSuffix()}`;
     }
 
-    // 56.6.2.2's intent insert doesn't exist yet, so the row is created here.
+    // Created directly: recordDepositRefundIntent only inserts PENDING rows
+    // with no refund id.
     async function createRefundRow(
       status: DepositRefundStatus,
       stripeRefundId: string | null

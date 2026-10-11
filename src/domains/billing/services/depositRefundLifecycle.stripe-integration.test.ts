@@ -99,6 +99,20 @@ describe("deposit refund lifecycle (real Stripe test mode)", () => {
     // not just assumed from a successful `create` response.
     const refund = await stripe.refunds.retrieve(afterRefund!.stripeRefundId!);
     expect(refund.payment_intent).toBe(paymentIntentId);
+    expect(refund.metadata?.bookingRequestId).toBe(request.id);
+
+    // Billing's refund row (56.6): the intent recorded before the call,
+    // moved to the status Stripe's real response reported. An immediate
+    // card refund is created already succeeded (56.1).
+    const refundRow = await prisma.depositRefund.findUnique({
+      where: { bookingRequestId: request.id },
+      select: { status: true, stripePaymentIntentId: true, stripeRefundId: true },
+    });
+    expect(refundRow).toEqual({
+      status: "SUCCEEDED",
+      stripePaymentIntentId: paymentIntentId,
+      stripeRefundId: refund.id,
+    });
 
     // Stands in for the webhook's refund.created (and the
     // refund.updated that follows once the card's ARN arrives, 56.1)

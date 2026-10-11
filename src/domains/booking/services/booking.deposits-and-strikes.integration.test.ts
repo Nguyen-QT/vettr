@@ -168,7 +168,10 @@ describe("booking deposits-and-strikes integration", () => {
     refundsCreateMock.mockReset();
     // A fresh id per call: stripeRefundId is unique (56.3), and the race
     // cases refund several bookings in one test.
-    refundsCreateMock.mockImplementation(async () => ({ id: `re_it_${uniqueSuffix()}` }));
+    refundsCreateMock.mockImplementation(async () => ({
+      id: `re_it_${uniqueSuffix()}`,
+      status: "succeeded",
+    }));
     await tracker.wipe();
   });
 
@@ -328,7 +331,7 @@ describe("booking deposits-and-strikes integration", () => {
 
       expect(refundsCreateMock).toHaveBeenCalledTimes(1);
       expect(refundsCreateMock).toHaveBeenCalledWith(
-        { payment_intent: intent },
+        { payment_intent: intent, metadata: { bookingRequestId: request.id } },
         { idempotencyKey: `deposit-refund:${request.id}` }
       );
       const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
@@ -337,6 +340,15 @@ describe("booking deposits-and-strikes integration", () => {
         depositPaid: true,
         depositRefunded: true,
         stripeRefundId: expect.stringMatching(/^re_it_/),
+      });
+      // Billing's refund row (56.6) agrees with the legacy mirror.
+      const refundRow = await prisma.depositRefund.findUniqueOrThrow({
+        where: { bookingRequestId: request.id },
+      });
+      expect(refundRow).toMatchObject({
+        status: "SUCCEEDED",
+        stripePaymentIntentId: intent,
+        stripeRefundId: after.stripeRefundId,
       });
     });
 
@@ -366,7 +378,7 @@ describe("booking deposits-and-strikes integration", () => {
           expect(confirmResult).toEqual({ success: true });
           expect(refundsCreateMock).toHaveBeenCalledTimes(1);
           expect(refundsCreateMock).toHaveBeenCalledWith(
-            { payment_intent: intent },
+            { payment_intent: intent, metadata: { bookingRequestId: request.id } },
             { idempotencyKey: `deposit-refund:${request.id}` }
           );
           const after = await prisma.bookingRequest.findUniqueOrThrow({
@@ -376,6 +388,14 @@ describe("booking deposits-and-strikes integration", () => {
             status: cancelledStatus,
             depositPaid: true,
             depositRefunded: true,
+          });
+          const refundRows = await prisma.depositRefund.findMany({
+            where: { bookingRequestId: request.id },
+          });
+          expect(refundRows).toHaveLength(1);
+          expect(refundRows[0]).toMatchObject({
+            status: "SUCCEEDED",
+            stripeRefundId: after.stripeRefundId,
           });
         }
       }
@@ -402,6 +422,7 @@ describe("booking deposits-and-strikes integration", () => {
       expect(refundsCreateMock).not.toHaveBeenCalled();
       const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
       expect(after).toMatchObject({ depositPaid: true, depositRefunded: false, stripeRefundId: null });
+      expect(await prisma.depositRefund.count({ where: { bookingRequestId: request.id } })).toBe(0);
     });
   });
 

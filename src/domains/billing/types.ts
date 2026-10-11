@@ -93,6 +93,13 @@ export interface AdvanceDepositRefundStatusInput {
   failureReason?: string;
 }
 
+// A booking's recorded refund intent (56.6), new or already there: the
+// PaymentIntent it refunds, and the Stripe refund id once one is stored.
+export interface DepositRefundIntent {
+  stripePaymentIntentId: string;
+  stripeRefundId: string | null;
+}
+
 export type ConfirmDepositRefundResult =
   | { success: true }
   | { success: false; error: string };
