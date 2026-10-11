@@ -524,8 +524,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.6.3.1** Controller/Action — the webhook route sends `refund.created`/`refund.updated`/`refund.failed`, whatever their status, to `syncDepositRefundStatus`, and its header lists `refund.failed`.
       - Route unit tests.
       - The Stripe-tier `refund.created` replay records the intent first and refunds with the same metadata, then asserts the row.
-    - [ ] **56.6.2.4** Domain Service — billing: `getDepositRefundStatuses` (+ unit tests).
-    - [ ] **56.6.6.1** View & Route — the client dashboard passes each booking's refund status to `ClientBookingCard`, which labels from it.
+    - [x] **56.6.2.4** Domain Service — billing: `getDepositRefundStatuses` (+ unit tests).
+    - [x] **56.6.6.1** View & Route — the client dashboard passes each booking's refund status to `ClientBookingCard`, which labels from it.
       - `global-setup` gives the refunded fixture a `SUCCEEDED` row and adds `PENDING` and `FAILED` fixtures.
       - `deposit-payment.spec` asserts each label.
     - [ ] **56.6.2.5** Domain Service — booking + billing: retire the flag.
