@@ -122,6 +122,12 @@ export type ConfirmDepositRefundResult =
 // ArtistDepositSettings' every-tier-present shape above.
 export type PayableDeposits = Record<string, number>;
 
+// Keyed by bookingRequestId (56.6), like PayableDeposits. A booking with
+// no DepositRefund row is absent, never a "no refund" entry: the card
+// keeps its existing labels for it. An id-less PENDING row (a refund
+// whose Stripe call failed, which 56.7 will retry) is reported as PENDING.
+export type DepositRefundStatuses = Record<string, DepositRefundStatus>;
+
 // Day-of checkout flow (CLAUDE.md 7.5). artistId on every input below
 // is the trusted session's own id, checked against the owning artist
 // via booking's narrow checkout read (7.5.2) inside each service --
