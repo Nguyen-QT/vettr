@@ -577,8 +577,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - The new workflow fails every run until 53.2.1.3 adds `APP_URL` and `CRON_SECRET`, like session-cleanup.
     - The 56.4/56.5 PaymentIntent sweeps (open PaymentIntents on cancelled bookings, created-but-unrecorded ones) stay out of 56.7. They aren't refunds, and 56.2 refunds any payment made on them.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **56.7.4.1 / 56.7.5.1** UI/Hook — N/A. "Refund pending" already covers an id-less row.
-    - [ ] **56.7.1.1** Data Gateway — `DepositRefund.retryAttempts Int @default(0)` and `@@index([status, updatedAt])` + migration with the backfill above. No app code.
+    - [x] **56.7.4.1 / 56.7.5.1** UI/Hook — N/A. "Refund pending" already covers an id-less row.
+    - [x] **56.7.1.1** Data Gateway — `DepositRefund.retryAttempts Int @default(0)` and `@@index([status, updatedAt])` + migration with the backfill above. No app code.
     - [ ] **56.7.2.1** Domain Service — billing: new transaction-composable `insertDepositRefundIntent(tx, …)`, which `recordDepositRefundIntent` uses (+ unit tests).
     - [ ] **56.7.2.2** Domain Service — booking: both cancel paths insert the intent inside their transaction, and their comments and refund logs change as above.
       - Unit tests: a paid booking inserts with the transaction client; an unpaid one doesn't.
