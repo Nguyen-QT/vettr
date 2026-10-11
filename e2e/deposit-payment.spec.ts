@@ -46,7 +46,12 @@ test.describe("deposit amounts (artist settings)", () => {
   });
 });
 
+// Serial: both tests pay the same TIER_4 booking. In parallel, their
+// creates could share one idempotency key while both are in flight, and
+// Stripe would 409 the second, surfacing as the generic error (56.5).
 test.describe("deposit payment (client dashboard)", () => {
+  test.describe.configure({ mode: "serial" });
+
   // Only asserts the payment form loads (clientSecret fetched, Stripe
   // Elements mounted) -- actual card entry/submission happens inside a
   // Stripe-hosted iframe and needs the user's own manual click-through
@@ -62,6 +67,44 @@ test.describe("deposit payment (client dashboard)", () => {
 
     await card.getByRole("button", { name: "Pay deposit" }).click();
 
+    await expect(
+      card.getByRole("button", { name: "Confirm payment" })
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  // Aborts the server action's POST in the browser, so the server never
+  // sees it and the action call rejects (56.5.5.1). The card must fall
+  // back to "Pay deposit" with the error, not a stuck loading state.
+  test("shows the error and a retry button when the first request fails, then loads the form on retry", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await openClientDashboard(page, fixture.clientLoginSessionId);
+
+    await page.route("**/client", async (route) => {
+      const request = route.request();
+      if (request.method() === "POST" && request.headers()["next-action"]) {
+        await route.abort();
+        return;
+      }
+      await route.continue();
+    });
+
+    const card = page.locator("article", { hasText: "TIER_4" });
+    const payButton = card.getByRole("button", { name: "Pay deposit" });
+    const initError = card.getByText(
+      "Something went wrong starting your deposit payment. Please try again."
+    );
+
+    await payButton.click();
+
+    await expect(initError).toBeVisible();
+    await expect(payButton).toBeEnabled();
+
+    await page.unroute("**/client");
+    await payButton.click();
+
+    await expect(initError).toBeHidden();
     await expect(
       card.getByRole("button", { name: "Confirm payment" })
     ).toBeVisible({ timeout: 15_000 });
