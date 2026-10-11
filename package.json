@@ -12,6 +12,10 @@
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:local": "tsx scripts/test-db/with-test-db.ts test:integration",
+    "test:e2e:local": "tsx scripts/test-db/with-test-db.ts --require-free-port=3000 test:e2e",
+    "test:e2e:ui:local": "tsx scripts/test-db/with-test-db.ts --require-free-port=3000 test:e2e:ui",
+    "test:db:prune": "tsx scripts/test-db/prune-test-dbs.ts",
     "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
