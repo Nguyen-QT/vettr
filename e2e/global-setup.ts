@@ -5,6 +5,7 @@ import path from "node:path";
 import { config } from "dotenv";
 import { Client } from "pg";
 
+import { assertSafeDatabaseUrl } from "../src/testUtils/assertSafeDatabaseUrl";
 import { EMAIL_CAPTURE_SINK_PATH } from "./authHelpers";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -210,6 +211,9 @@ async function cleanupStaleE2eFixtures(client: Client) {
 // verification scripts used throughout Phase 3.
 export default async function globalSetup() {
   config();
+  // Refuse before any write unless DATABASE_URL names a test database
+  // (28.9) -- the cleanup below deletes rows.
+  assertSafeDatabaseUrl(process.env.DATABASE_URL);
 
   // A stale sink from an aborted run could hand specs an old code.
   await rm(EMAIL_CAPTURE_SINK_PATH, { force: true });

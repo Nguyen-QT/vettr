@@ -1,33 +1,28 @@
-const LOCAL_HOSTNAMES: readonly string[] = ["localhost", "127.0.0.1", "[::1]"];
-
-// Guard for the real-database integration tier (28.3): throws unless the
-// connection string targets a local Postgres or a database whose name
-// contains "test", so a mis-set DATABASE_URL can never point the
-// integration tier's wipe at a real environment. The error message never
-// echoes the URL -- it carries credentials.
+// Guard for every tier that writes to a real database -- the integration
+// tier (28.3) and E2E global setup/teardown: throws unless the connection
+// string's database name contains "test", so a mis-set DATABASE_URL can
+// never point a test wipe at a real environment. Localhost is not exempt
+// (28.9): `.env`'s dev database is local too. Only the URL path counts --
+// "test" in the host, user or query string does not. The error message
+// never echoes the URL -- it carries credentials.
 export function assertSafeDatabaseUrl(databaseUrl: string | undefined): void {
   if (!databaseUrl) {
-    throw new Error(
-      "Integration tests require DATABASE_URL to be set (refusing to run).",
-    );
+    throw new Error("Tests require DATABASE_URL to be set (refusing to run).");
   }
 
-  let parsed: URL;
+  let databaseName: string;
   try {
-    parsed = new URL(databaseUrl);
+    const parsed = new URL(databaseUrl);
+    databaseName = decodeURIComponent(parsed.pathname.replace(/^\//, ""));
   } catch {
     throw new Error(
-      "Integration tests require DATABASE_URL to be a valid connection string (refusing to run).",
+      "Tests require DATABASE_URL to be a valid connection string (refusing to run).",
     );
   }
 
-  const isLocalHost = LOCAL_HOSTNAMES.includes(parsed.hostname);
-  const databaseName = decodeURIComponent(parsed.pathname.replace(/^\//, ""));
-  const isTestDatabase = databaseName.toLowerCase().includes("test");
-
-  if (!isLocalHost && !isTestDatabase) {
+  if (!databaseName.toLowerCase().includes("test")) {
     throw new Error(
-      "Integration tests only run against a local database or one whose name contains 'test' (refusing to run).",
+      "Tests only run against a database whose name contains 'test' (refusing to run). Run DB-backed suites locally with the npm run *:local scripts.",
     );
   }
 }
