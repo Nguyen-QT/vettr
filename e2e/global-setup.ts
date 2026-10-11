@@ -111,6 +111,11 @@ export interface E2eFixture {
   clientLoginSessionId: string;
   onboardedClientSessionId: string;
   imageClientSessionId: string;
+  // A dedicated CLIENT Session (56.6.6.1) whose two cancelled bookings
+  // hold a PENDING (TIER_2) and a FAILED (TIER_3) deposit refund, for the
+  // dashboard's refund status labels. Kept off clientLoginProfileId for
+  // the same tier-collision reason as imageClientEmail.
+  refundStatusClientSessionId: string;
   // A dedicated CLIENT Account eligible for passwordless sign-in (54.3.6.1)
   // -- the only fixture client-auth.spec.ts drives the real OTP screen
   // with, so its EmailOtpChallenge row and the Sessions sign-in creates are
@@ -867,6 +872,13 @@ export default async function globalSetup() {
        ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'FREESTYLE', 50, 500, ARRAY[]::text[], ARRAY[]::text[], 250, true, 100, 'pi_e2e_refunded_deposit', true, 're_e2e_refunded_deposit', now())`,
     [refundedDepositRequestId, clientLoginProfileId, artistId]
   );
+  // Its refund (56.6), as the DepositRefund backfill records one. Raw SQL
+  // supplies id and updatedAt: cuid() and @updatedAt exist only in Prisma.
+  await client.query(
+    `INSERT INTO "DepositRefund" (id, status, "stripePaymentIntentId", "stripeRefundId", "bookingRequestId", "updatedAt")
+     VALUES ($1, 'SUCCEEDED', 'pi_e2e_refunded_deposit', 're_e2e_refunded_deposit', $2, now())`,
+    [randomUUID(), refundedDepositRequestId]
+  );
 
   const clientLoginAccountId = randomUUID();
   const clientLoginSessionId = randomUUID();
@@ -993,6 +1005,51 @@ export default async function globalSetup() {
     [imageClientSessionId, sessionExpiresAt, imageClientAccountId]
   );
 
+  // A fully separate client for the refund status labels (56.6.6.1), off
+  // clientLoginProfileId for reason 1 above. Both bookings are cancelled
+  // with a paid deposit and carry depositRefunded = true, which is what
+  // refundDeposit's legacy mirror writes as soon as Stripe accepts a
+  // refund. Only their DepositRefund rows differ (PENDING on TIER_2,
+  // FAILED on TIER_3), so the labels can only come from the refund status.
+  const refundStatusClientId = randomUUID();
+  const pendingRefundRequestId = randomUUID();
+  const failedRefundRequestId = randomUUID();
+  const refundStatusClientEmail = "e2e-client-refund-status@example.com";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [refundStatusClientId, "e2e_client_refund_status", refundStatusClientEmail]
+  );
+  await client.query(
+    `INSERT INTO "BookingRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "estimatedPrice", "depositPaid", "depositAmount", "stripePaymentIntentId", "depositRefunded", "stripeRefundId", "updatedAt")
+     VALUES
+       ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], 150, true, 50, 'pi_e2e_pending_refund', true, 're_e2e_pending_refund', now()),
+       ($4, 'CANCELLED_BY_CLIENT', $2, $3, 'TIER_3', 150, 300, ARRAY[]::text[], ARRAY[]::text[], 200, true, 50, 'pi_e2e_failed_refund', true, 're_e2e_failed_refund', now())`,
+    [pendingRefundRequestId, refundStatusClientId, artistId, failedRefundRequestId]
+  );
+  await client.query(
+    `INSERT INTO "DepositRefund" (id, status, "stripePaymentIntentId", "stripeRefundId", "bookingRequestId", "updatedAt")
+     VALUES
+       ($1, 'PENDING', 'pi_e2e_pending_refund', 're_e2e_pending_refund', $2, now()),
+       ($3, 'FAILED', 'pi_e2e_failed_refund', 're_e2e_failed_refund', $4, now())`,
+    [randomUUID(), pendingRefundRequestId, randomUUID(), failedRefundRequestId]
+  );
+  const refundStatusClientAccountId = randomUUID();
+  const refundStatusClientSessionId = randomUUID();
+
+  await client.query(
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [refundStatusClientAccountId, refundStatusClientEmail, refundStatusClientId]
+  );
+  await client.query(
+    `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
+     VALUES ($1, $2, $3, 'CLIENT')`,
+    [refundStatusClientSessionId, sessionExpiresAt, refundStatusClientAccountId]
+  );
+
   // A CLIENT Account with a linked ClientProfile -- exactly what
   // requestClientSignInCode requires before it issues a code (54.3.6.1).
   // No booking: the sign-in spec only asserts the dashboard renders.
@@ -1090,6 +1147,7 @@ export default async function globalSetup() {
       maxEndTimeClientId,
       flaggedClientId,
       imageClientId,
+      refundStatusClientId,
       dashboardTodayClientId,
       otpClientId,
       gateOtpClientId,
@@ -1112,6 +1170,8 @@ export default async function globalSetup() {
       flaggedRequestId,
       imageRemoveRequestId,
       imageRejectRequestId,
+      pendingRefundRequestId,
+      failedRefundRequestId,
       dashboardTodayRequestId,
     ],
     approveClientHandle,
@@ -1139,6 +1199,7 @@ export default async function globalSetup() {
     clientLoginSessionId,
     onboardedClientSessionId,
     imageClientSessionId,
+    refundStatusClientSessionId,
     otpClientEmail,
     gateOtpClientEmail,
     bookingOtpClientEmail,

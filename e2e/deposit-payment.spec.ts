@@ -111,8 +111,11 @@ test.describe("deposit payment (client dashboard)", () => {
   });
 });
 
+// Labels come from the booking's DepositRefund status (56.6.6.1). The
+// pending and failed fixtures also carry the legacy depositRefunded flag,
+// so "Deposit refunded" on either would mean the card read the flag.
 test.describe("deposit refund status (client dashboard)", () => {
-  test("shows 'Deposit refunded' on a cancelled booking whose deposit was refunded", async ({
+  test("shows 'Deposit refunded' on a cancelled booking whose refund succeeded", async ({
     page,
   }) => {
     const fixture = await readFixture();
@@ -120,6 +123,28 @@ test.describe("deposit refund status (client dashboard)", () => {
 
     const card = page.locator("article", { hasText: "FREESTYLE" });
     await expect(card.getByText("Deposit refunded")).toBeVisible();
+  });
+
+  test("shows 'Refund pending' on a cancelled booking whose refund is still pending", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await openClientDashboard(page, fixture.refundStatusClientSessionId);
+
+    const card = page.locator("article", { hasText: "TIER_2" });
+    await expect(card.getByText("Refund pending")).toBeVisible();
+    await expect(card.getByText("Deposit refunded")).not.toBeVisible();
+  });
+
+  test("shows 'Contact support' on a cancelled booking whose refund failed", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await openClientDashboard(page, fixture.refundStatusClientSessionId);
+
+    const card = page.locator("article", { hasText: "TIER_3" });
+    await expect(card.getByText("Contact support")).toBeVisible();
+    await expect(card.getByText("Deposit refunded")).not.toBeVisible();
   });
 
   test("does not show a deposit status label on a booking with no deposit paid", async ({
@@ -131,5 +156,7 @@ test.describe("deposit refund status (client dashboard)", () => {
     const card = page.locator("article", { hasText: "TIER_3" });
     await expect(card.getByText("Deposit refunded")).not.toBeVisible();
     await expect(card.getByText("Deposit paid")).not.toBeVisible();
+    await expect(card.getByText("Refund pending")).not.toBeVisible();
+    await expect(card.getByText("Contact support")).not.toBeVisible();
   });
 });
