@@ -486,6 +486,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - Recovering a `FAILED` refund is manual until 56.11. A re-refund from the Dashboard is logged as unmatched, and the row stays `FAILED` until someone fixes it by hand.
     - The two cancel paths' comments still name the webhook as the backstop for a failed refund call. 2.5 renames the function they mention, but correcting what the comment claims is 56.7's.
     - "Contact support" has nowhere to point: the app has no support email or page yet. One is needed before 53.3, and 56.11 or 53.7 is the natural owner.
+    - The `FAILED` alert is logged after `advanceDepositRefundStatus` commits. A crash between the two loses it, and a redelivered `refund.failed` writes nothing, so nothing alerts again. The row still reads `FAILED` and the client sees "Contact support". A durable alert (an outbox, for example) belongs to 53.7 or Phase 57's ledger.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **56.6.4.1 / 56.6.5.1** UI/Hook — N/A. `ClientBookingCard` composes containers (View, per 54.8's split), and the dashboard is server-rendered.
     - [x] **56.6.1.1** Data Gateway — `DepositRefund` + `DepositRefundStatus` enum + migration with the backfill above. No app code. Integration `wipe()` needs no change (it cascades from `BookingRequest`).
