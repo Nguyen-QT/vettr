@@ -579,7 +579,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **56.7.4.1 / 56.7.5.1** UI/Hook — N/A. "Refund pending" already covers an id-less row.
     - [x] **56.7.1.1** Data Gateway — `DepositRefund.retryAttempts Int @default(0)` and `@@index([status, updatedAt])` + migration with the backfill above. No app code.
-    - [ ] **56.7.2.1** Domain Service — billing: new transaction-composable `insertDepositRefundIntent(tx, …)`, which `recordDepositRefundIntent` uses (+ unit tests).
+    - [x] **56.7.2.1** Domain Service — billing: new transaction-composable `insertDepositRefundIntent(tx, …)`, which `recordDepositRefundIntent` uses (+ unit tests).
     - [ ] **56.7.2.2** Domain Service — booking: both cancel paths insert the intent inside their transaction, and their comments and refund logs change as above.
       - Unit tests: a paid booking inserts with the transaction client; an unpaid one doesn't.
       - Integration cases in `booking.deposits-and-strikes.integration.test.ts`: the row exists even when `refundDeposit` throws after the commit; a cancel whose `refunds.create` throws leaves exactly one id-less `PENDING` row; the 56.2 race cases still leave one row and one `refunds.create` per booking.
