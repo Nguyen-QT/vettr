@@ -88,7 +88,7 @@ This tracking file contains large-lift feature sets, complex multi-domain subsys
   2. **Remove billing's imports of booking.**
      - `createDepositPaymentIntent`, `confirmDepositPayment`, `confirmDepositRefund`, `refundDeposit` and `finalizeCheckout` all call booking services, while booking's cancel paths call billing's `refundDeposit`.
      - That two-way dependency breaks `architecture.md` §4: booking is the higher-level orchestrator, so billing must not call it.
-     - Moving deposit state (`depositAmount`, `depositPaid`, `stripePaymentIntentId`, `depositRefunded`, `stripeRefundId`) into billing-owned tables keyed by `bookingRequestId` means billing never writes booking's table. Booking then reads deposit status through billing's public interface.
+     - Moving deposit state (`depositAmount`, `depositPaid`, `stripePaymentIntentId`) into billing-owned tables keyed by `bookingRequestId` means billing never writes booking's table. (56.6 already moves `depositRefunded` and `stripeRefundId` into `DepositRefund`.) Booking then reads deposit status through billing's public interface.
 - **Open questions for scoping:**
   - Does booking still need a copy of `depositPaid` on `BookingRequest` for its own queries?
   - How is `finalizeCheckout`'s billing → booking call reversed?

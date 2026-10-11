@@ -449,11 +449,69 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.5.6.1** View & Route — `DepositPaymentCard` drops `started`.
       - `deposit-payment.spec`: abort the first action request, then expect the error and "Pay deposit". Retry and expect "Confirm payment".
       - That describe runs serially: both its tests pay the same booking, and `fullyParallel` could race them onto one key.
-- [ ] **56.6: Refund Status Lifecycle (Pending / Failed)** — *unscoped.*
+- [ ] **56.6: Refund Status Lifecycle (Pending / Failed)** (execute 1.1 → 2.1 → 2.2 → 2.3 → 3.1 → 2.4 → 6.1 → 2.5 → 1.2)
   - `refundDeposit` sets `depositRefunded = true` as soon as `refunds.create` returns, even when the refund is still `pending`. Nothing handles a refund that later fails, so the booking reads as refunded while the client never got the money.
   - Record a refund intent as `PENDING` before calling Stripe (architecture.md §6.2). Move it to `SUCCEEDED`/`FAILED` from the events 56.1 identifies. `depositRefunded` becomes a derived view of that status.
   - Status changes must follow Stripe's event time or a fixed precedence of states, not arrival order. Webhooks are at-least-once and unordered, and this is the first deposit state that can move backwards.
   - Prerequisite for 56.7.
+  - **Design (confirmed 2026-10-11):**
+    - Storage: a billing-owned `DepositRefund` table, one row per booking (`bookingRequestId @unique`, cascading like `Addon`). It holds the refunded `stripePaymentIntentId`, `stripeRefundId` (`@unique`, null until Stripe answers) and `status` (`PENDING`, `SUCCEEDED`, `FAILED`).
+      - `BookingRequest.depositRefunded` and `stripeRefundId` move here and are dropped at the end, so refund state lives in one place. This overrides 56.3's "existing columns wait for Phase 57" for these two columns only.
+      - The migration backfills a `SUCCEEDED` row for every `depositRefunded = true` booking.
+    - Stripe status → ours, through a `Record` over Stripe's refund statuses in `billing/constants.ts` (same idea as 56.4's): `pending`, `requires_action` → `PENDING`; `succeeded` → `SUCCEEDED`; `failed`, `canceled` → `FAILED`. A null or unknown status is logged as a warning and ignored.
+    - Ordering: a fixed precedence, not event time. `PENDING < SUCCEEDED < FAILED`. Stripe's refund transitions only move this way (56.1: `succeeded` → `failed`, then a stale `refund.updated` still saying `succeeded`). Event `created` has one-second resolution, and `refundDeposit`'s own write has no event time.
+      - One conditional `updateMany` moves the status forward, or keeps it and fills in a missing refund id. It never replaces a different refund id, and it returns whether it wrote.
+      - A write that newly reaches `FAILED` logs a critical alert (53.7) with ids and Stripe's `failure_reason` (an enum, not PII). A redelivered `refund.failed` writes nothing, so it alerts once.
+    - `refundDeposit`:
+      - After its existing checks, it records the intent: it inserts a `PENDING` row if none exists (architecture.md §6.2). A concurrent caller finds the existing row.
+      - A row that already has a refund id returns success with no Stripe call. That includes `FAILED`: a refund exists on Stripe, and recovering a failed one is manual (56.11). So `confirmDepositPayment` stops retrying on redeliveries once a refund exists, instead of failing forever.
+      - Otherwise it calls `refunds.create` with the per-booking key (as today) plus `metadata.bookingRequestId`.
+      - Each step has its own try/catch, logging ids only:
+        - The intent insert fails: nothing reached Stripe. It returns `DEPOSIT_REFUND_INIT_ERROR_MESSAGE`.
+        - The create fails: the row stays `PENDING` with no refund id, which is what 56.7 retries. It returns the same error.
+        - The record write fails: it logs critical with the refund id and the Prisma code, then returns success. The webhook attaches the id.
+    - Webhook: `refund.created`, `refund.updated` and the new `refund.failed` all go, whatever their status, to a new billing service, `syncDepositRefundStatus`. It replaces `confirmDepositRefund` and reads only billing's table.
+      - A refund whose id is already stored advances that row.
+      - Otherwise it fills in the id-less intent row for its PaymentIntent, but only when `metadata.bookingRequestId` names that row's booking. That is the case where `refundDeposit`'s write was lost.
+      - Anything else, such as a Dashboard refund (partial or full) or a second refund on the same PaymentIntent, is logged critical with ids only and never recorded. The route still answers 200, because a retry can't create a match. Every Stripe charge on this account is a deposit.
+      - This closes 56.1's flagged partial-refund item.
+      - Endpoint registration (53.2.1.2, 53.3.1.1) adds `refund.failed`.
+    - Reads: billing's new `getDepositRefundStatuses(bookingRequestIds)` returns statuses keyed by booking, like `getPayableDeposits`. The client dashboard composes it next to `getClientBookings`.
+      - `ClientBookingCard` shows "Refund pending", "Deposit refunded" or "Contact support".
+      - With no refund row it keeps today's "Deposit forfeited"/"Deposit paid".
+      - An id-less `PENDING` row (a failed Stripe call that 56.7 will retry) also reads "Refund pending".
+    - Transition: until 2.5, `refundDeposit` keeps calling booking's `recordDepositRefund` as a mirror, so the legacy dashboard label keeps working until 6.1 switches it. The webhook service doesn't mirror, so a lost write in that window shows "Deposit paid" on staging until 6.1.
+  - **Flagged, not fixed:**
+    - A failed intent insert leaves no row, so nothing records the owed refund, and the cancel paths only log it. 56.7's sweep finds only `PENDING` rows with no refund id. It also needs to find paid, cancelled or declined bookings that have no refund row.
+    - Recovering a `FAILED` refund is manual until 56.11. A re-refund from the Dashboard is logged as unmatched, and the row stays `FAILED` until someone fixes it by hand.
+    - The two cancel paths' comments still name the webhook as the backstop for a failed refund call. 2.5 renames the function they mention, but correcting what the comment claims is 56.7's.
+    - "Contact support" has nowhere to point: the app has no support email or page yet. One is needed before 53.3, and 56.11 or 53.7 is the natural owner.
+  - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **56.6.4.1 / 56.6.5.1** UI/Hook — N/A. `ClientBookingCard` composes containers (View, per 54.8's split), and the dashboard is server-rendered.
+    - [ ] **56.6.1.1** Data Gateway — `DepositRefund` + `DepositRefundStatus` enum + migration with the backfill above. No app code. Integration `wipe()` needs no change (it cascades from `BookingRequest`).
+    - [ ] **56.6.2.1** Domain Service — billing: the status types, the Stripe-status `Record` and `advanceDepositRefundStatus` (the conditional write above).
+      - Unit tests.
+      - `billing.integration.test.ts` cases: a stale `SUCCEEDED` after `FAILED` writes nothing; a redelivered `FAILED` writes and alerts once; a different refund id never replaces the stored one.
+    - [ ] **56.6.2.2** Domain Service — billing: `refundDeposit` records the intent first (new `recordDepositRefundIntent`), sets `metadata.bookingRequestId`, catches each step as above and writes the returned status through 2.1.
+      - Keeps the legacy mirror, and updates `confirmDepositPayment`'s comment.
+      - Unit tests per path.
+      - Integration cases assert the `DepositRefund` row. The 56.2 race case also asserts exactly one row per booking.
+    - [ ] **56.6.2.3** Domain Service — billing: new `syncDepositRefundStatus`, as above.
+      - Unit tests per match path and status.
+      - Integration case: a stale `refund.updated` (`succeeded`) after `refund.failed` leaves `FAILED`.
+    - [ ] **56.6.3.1** Controller/Action — the webhook route sends `refund.created`/`refund.updated`/`refund.failed`, whatever their status, to `syncDepositRefundStatus`, and its header lists `refund.failed`.
+      - Route unit tests.
+      - The Stripe-tier `refund.created` replay records the intent first and refunds with the same metadata, then asserts the row.
+    - [ ] **56.6.2.4** Domain Service — billing: `getDepositRefundStatuses` (+ unit tests).
+    - [ ] **56.6.6.1** View & Route — the client dashboard passes each booking's refund status to `ClientBookingCard`, which labels from it.
+      - `global-setup` gives the refunded fixture a `SUCCEEDED` row and adds `PENDING` and `FAILED` fixtures.
+      - `deposit-payment.spec` asserts each label.
+    - [ ] **56.6.2.5** Domain Service — booking + billing: retire the flag.
+      - Delete booking's `recordDepositRefund` and billing's `confirmDepositRefund` (+ tests). This ends the mirror.
+      - Drop `depositRefunded` from `BookingRequestDepositView`, `ClientBookingSummary` and their reads.
+      - Point `depositRefundLifecycle.stripe-integration.test.ts` at `syncDepositRefundStatus`, and repoint the cancel-path comments.
+    - [ ] **56.6.1.2** Data Gateway — drop `BookingRequest.depositRefunded` and `stripeRefundId` + migration.
+      - Fixture-only edits forced by the drop: the `global-setup` insert and the integration assertions on the dropped columns.
 - [ ] **56.7: Retry Refunds Whose Stripe Call Failed** — *unscoped.*
   - If `stripe.refunds.create` itself fails, no refund exists on Stripe, so no webhook will ever arrive.
   - Both cancel paths only `console.error`. `cancelBookingRequest`'s comment, which says the webhook backstop reconciles this, is wrong for this case.
@@ -475,6 +533,25 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - `cancelBookingRequest.test.ts` has no case for either status.
   - Fix: allow only `PENDING`, `AWAITING_SLOT_CONFIRMATION` and `APPROVED`, from one constant in booking shared by the service and the UI so they can't drift. Add unit tests for `NO_SHOW` and `CANCELLED_BY_ARTIST`. Decide whether `refundDeposit`'s callers should also refuse a non-cancelled status.
   - Same family as 56.2 (handlers that don't check booking status): design them together, ship them separately.
+- [ ] **56.11: Failed Refund Recovery** — *unscoped.* Waits for 56.12.
+  - After 56.6, a `FAILED` refund only raises a critical alert, and the client sees "Contact support". Stripe returns the money to the platform balance.
+  - A new card refund to the same closed card would fail again, so recovery needs another method (bank transfer, credit).
+  - Proposed (2026-10-11):
+    - Show Stripe's `failure_reason` as plain copy to whoever acts. Check each code against Stripe's docs first: a low platform balance usually holds a refund `pending` (`pending_reason: insufficient_funds`) rather than failing it.
+    - Add an inline callout with the next steps.
+    - Add a guarded "Mark as refunded another way" action. It sets a new terminal status, `REFUNDED_MANUALLY`, above `FAILED` in 56.6's precedence. Only this action reaches it, never a webhook. "Refunded" then means `SUCCEEDED` or `REFUNDED_MANUALLY`.
+  - Design pass:
+    - Who acts, the platform or the artist. 56.12 decides who holds the money after a failed refund, and that settles it.
+    - Where it lives. The only roles today are `ARTIST` and `CLIENT`, so it's an in-app admin role or an internal tool (Retool, Refine). A tool reads through a read-only database role and writes only through an app endpoint, so billing's status rules and logging still apply.
+    - How much of the failure the person acting should see. "Lost or stolen card" is client detail an artist doesn't need.
+- [ ] **56.12: Reverse the Connect Transfer on Deposit Refunds** — *unscoped.*
+  - Deposits are destination charges (`on_behalf_of` + `transfer_data.destination` in `createDepositPaymentIntent`). `refundDeposit` calls `refunds.create` without `reverse_transfer: true`.
+  - Stripe's documented default then leaves the transfer with the artist and debits the platform balance for the refund. So the platform pays for a Connect-routed refund while the artist keeps the deposit. Untested: 56.1 had no connected account.
+  - Design pass:
+    - Reverse the transfer in full. Partial reversal only matters with an application fee, and there is none today.
+    - Decide what a reversal does when the artist's balance is short.
+    - Decide what happens to the reversal when the refund later fails. That decides who acts in 56.11.
+    - Prove it in test mode with a connected account (Stripe CLI, like 56.1).
 
 ---
 
