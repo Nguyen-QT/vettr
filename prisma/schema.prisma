@@ -385,11 +385,21 @@ model DepositRefund {
   // belongs to exactly one deposit.
   stripeRefundId String? @unique
 
+  // How many times the retry sweep (56.7) has visited this row while it
+  // was still PENDING with no refund id. Only the sweep's conditional
+  // increment writes it. At 5 it alerts once, and after that the row is
+  // retried at most once a day.
+  retryAttempts Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   bookingRequest   BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
   bookingRequestId String         @unique
+
+  // The retry sweep's candidate read (56.7): PENDING rows, oldest
+  // updatedAt first.
+  @@index([status, updatedAt])
 }
 
 // No Auto-Booking: rows here are only ever created already BOOKED, by
