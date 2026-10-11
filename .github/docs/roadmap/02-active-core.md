@@ -201,11 +201,11 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - 2.3 removes `assertSafeDatabaseUrl`'s localhost exemption once the wrapper is in use, so plain `test:integration`/`test:e2e` refuse the dev DB.
   - **Flagged, not fixed:** `test:stripe` stays unwrapped and unguarded, so any rows its tests write still land in the dev DB.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **28.9.1.1** Data Gateway — N/A, no schema change.
-    - [ ] **28.9.2.1** Domain Service (test infra) — `scripts/test-db/`: `constants.ts`; pure helpers with unit tests (`parseArgs`, `parseDockerPort`, `waitForPostgres`, `isPortListening`); entry points `with-test-db.ts` and `prune-test-dbs.ts`; the four npm scripts.
+    - [x] **28.9.1.1** Data Gateway — N/A, no schema change.
+    - [x] **28.9.2.1** Domain Service (test infra) — `scripts/test-db/`: `constants.ts`; pure helpers with unit tests (`parseArgs`, `parseDockerPort`, `waitForPostgres`, `isPortListening`); entry points `with-test-db.ts` and `prune-test-dbs.ts`; the four npm scripts.
     - [ ] **28.9.2.2** Domain Service (governance) — `CLAUDE.md` commands and `.claude/rules/testing.md` §2/§3/§4 switch to the `*:local` commands. Docs only.
     - [ ] **28.9.2.3** Domain Service (test infra, safety) — `assertSafeDatabaseUrl` requires a `*test*` DB name even on localhost, with generic messages; called from `e2e/global-setup.ts` and `global-teardown.ts`; `assertSafeDatabaseUrl.test.ts` updated (localhost `vettr` rejected).
-    - [ ] **28.9.3.1–28.9.6.1** Controller/UI/Hook/View — N/A (reserved).
+    - [x] **28.9.3.1–28.9.6.1** Controller/UI/Hook/View — N/A (reserved).
 
 ---
 
