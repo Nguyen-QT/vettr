@@ -867,9 +867,9 @@ export default async function globalSetup() {
 
   await client.query(
     `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "estimatedPrice", "depositPaid", "depositAmount", "stripePaymentIntentId", "depositRefunded", "stripeRefundId", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "estimatedPrice", "depositPaid", "depositAmount", "stripePaymentIntentId", "updatedAt")
      VALUES
-       ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'FREESTYLE', 50, 500, ARRAY[]::text[], ARRAY[]::text[], 250, true, 100, 'pi_e2e_refunded_deposit', true, 're_e2e_refunded_deposit', now())`,
+       ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'FREESTYLE', 50, 500, ARRAY[]::text[], ARRAY[]::text[], 250, true, 100, 'pi_e2e_refunded_deposit', now())`,
     [refundedDepositRequestId, clientLoginProfileId, artistId]
   );
   // Its refund (56.6), as the DepositRefund backfill records one. Raw SQL
@@ -1007,10 +1007,9 @@ export default async function globalSetup() {
 
   // A fully separate client for the refund status labels (56.6.6.1), off
   // clientLoginProfileId for reason 1 above. Both bookings are cancelled
-  // with a paid deposit and carry depositRefunded = true, which is what
-  // refundDeposit's legacy mirror writes as soon as Stripe accepts a
-  // refund. Only their DepositRefund rows differ (PENDING on TIER_2,
-  // FAILED on TIER_3), so the labels can only come from the refund status.
+  // with a paid deposit. Only their DepositRefund rows differ (PENDING on
+  // TIER_2, FAILED on TIER_3), so the labels can only come from the
+  // refund status.
   const refundStatusClientId = randomUUID();
   const pendingRefundRequestId = randomUUID();
   const failedRefundRequestId = randomUUID();
@@ -1023,10 +1022,10 @@ export default async function globalSetup() {
   );
   await client.query(
     `INSERT INTO "BookingRequest"
-       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "estimatedPrice", "depositPaid", "depositAmount", "stripePaymentIntentId", "depositRefunded", "stripeRefundId", "updatedAt")
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "estimatedPrice", "depositPaid", "depositAmount", "stripePaymentIntentId", "updatedAt")
      VALUES
-       ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], 150, true, 50, 'pi_e2e_pending_refund', true, 're_e2e_pending_refund', now()),
-       ($4, 'CANCELLED_BY_CLIENT', $2, $3, 'TIER_3', 150, 300, ARRAY[]::text[], ARRAY[]::text[], 200, true, 50, 'pi_e2e_failed_refund', true, 're_e2e_failed_refund', now())`,
+       ($1, 'CANCELLED_BY_CLIENT', $2, $3, 'TIER_2', 100, 200, ARRAY[]::text[], ARRAY[]::text[], 150, true, 50, 'pi_e2e_pending_refund', now()),
+       ($4, 'CANCELLED_BY_CLIENT', $2, $3, 'TIER_3', 150, 300, ARRAY[]::text[], ARRAY[]::text[], 200, true, 50, 'pi_e2e_failed_refund', now())`,
     [pendingRefundRequestId, refundStatusClientId, artistId, failedRefundRequestId]
   );
   await client.query(
