@@ -1,10 +1,13 @@
 import { prismaMock } from "@/testUtils/prismaMock";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockDeep } from "vitest-mock-extended";
 
 import { cancelDepositPaymentIntent } from "@/domains/billing/services/cancelDepositPaymentIntent";
+import { insertDepositRefundIntent } from "@/domains/billing/services/insertDepositRefundIntent";
 import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
+import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 import {
   CANCELLATION_WINDOW_ERROR_MESSAGE,
@@ -16,6 +19,9 @@ import { cancelBookingRequest } from "./cancelBookingRequest";
 vi.mock("@/domains/billing/services/cancelDepositPaymentIntent", () => ({
   cancelDepositPaymentIntent: vi.fn(),
 }));
+vi.mock("@/domains/billing/services/insertDepositRefundIntent", () => ({
+  insertDepositRefundIntent: vi.fn(),
+}));
 vi.mock("@/domains/billing/services/refundDeposit", () => ({
   refundDeposit: vi.fn(),
 }));
@@ -23,12 +29,12 @@ vi.mock("@/domains/scheduling/services/releaseBookedTimeSlots", () => ({
   releaseBookedTimeSlots: vi.fn(),
 }));
 
-// Mocked-Prisma unit test (architecture.md §7): billing's refundDeposit and
-// cancelDepositPaymentIntent and scheduling's releaseBookedTimeSlots are
-// mocked at their public contracts (the Stripe calls themselves are covered
-// by billing's own tests). Slot status flipping to RELEASED and the
-// transaction's all-or-nothing rollback are real-DB behaviours -> 28.3
-// integration-tier candidates.
+// Mocked-Prisma unit test (architecture.md §7): billing's refundDeposit,
+// insertDepositRefundIntent and cancelDepositPaymentIntent and scheduling's
+// releaseBookedTimeSlots are mocked at their public contracts (the Stripe
+// calls and the intent insert are covered by billing's own tests). Slot
+// status flipping to RELEASED and the transaction's all-or-nothing rollback
+// are real-DB behaviours -> 28.3 integration-tier candidates.
 describe("cancelBookingRequest", () => {
   const now = new Date("2026-10-05T12:00:00.000Z");
   const hour = 60 * 60_000;
@@ -39,6 +45,8 @@ describe("cancelBookingRequest", () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
     vi.mocked(refundDeposit).mockReset();
+    vi.mocked(insertDepositRefundIntent).mockReset();
+    vi.mocked(insertDepositRefundIntent).mockResolvedValue(undefined);
     vi.mocked(cancelDepositPaymentIntent).mockReset();
     vi.mocked(cancelDepositPaymentIntent).mockResolvedValue(true);
     vi.mocked(releaseBookedTimeSlots).mockReset();
@@ -143,9 +151,13 @@ describe("cancelBookingRequest", () => {
     expect(refundDeposit).toHaveBeenCalledWith(requestId);
   });
 
-  it("logs, but still reports success, when the deposit refund fails after the cancellation committed", async () => {
+  it("logs ids only, but still reports success, when the deposit refund fails after the cancellation committed", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    stubRequest("APPROVED", { slotStarts: [farFuture()], depositPaid: true });
+    stubRequest("APPROVED", {
+      slotStarts: [farFuture()],
+      depositPaid: true,
+      stripePaymentIntentId: "pi_123",
+    });
     vi.mocked(refundDeposit).mockResolvedValue({
       success: false,
       error: "stripe down",
@@ -155,6 +167,13 @@ describe("cancelBookingRequest", () => {
 
     expect(result).toEqual({ success: true });
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith({
+      operation: "cancelBookingRequest",
+      reason: "deposit_refund_failed",
+      severity: "warning",
+      bookingRequestId: requestId,
+      paymentIntentId: "pi_123",
+    });
     expect(prismaMock.bookingRequest.update).toHaveBeenCalled();
   });
 
@@ -164,6 +183,66 @@ describe("cancelBookingRequest", () => {
     await call();
 
     expect(refundDeposit).not.toHaveBeenCalled();
+  });
+
+  it("records a paid deposit's refund intent through the cancel's transaction, before refunding", async () => {
+    stubRequest("APPROVED", {
+      slotStarts: [farFuture()],
+      depositPaid: true,
+      stripePaymentIntentId: "pi_123",
+    });
+    const txMock = mockDeep<Prisma.TransactionClient>();
+    txMock.bookingRequest.update.mockResolvedValue({
+      depositPaid: true,
+      stripePaymentIntentId: "pi_123",
+    } as never);
+    txMock.clientProfile.update.mockResolvedValue({ cancellationCount: 1 } as never);
+    prismaMock.$transaction.mockImplementationOnce(
+      ((callback: (tx: Prisma.TransactionClient) => unknown) =>
+        callback(txMock)) as PrismaClient["$transaction"]
+    );
+    vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
+
+    await call();
+
+    expect(insertDepositRefundIntent).toHaveBeenCalledTimes(1);
+    expect(insertDepositRefundIntent).toHaveBeenCalledWith(expect.anything(), requestId, "pi_123");
+    // Identity, not deep equality: two deep mocks compare equal.
+    expect(vi.mocked(insertDepositRefundIntent).mock.calls[0]?.[0]).toBe(txMock);
+    expect(vi.mocked(insertDepositRefundIntent).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(refundDeposit).mock.invocationCallOrder[0]!
+    );
+  });
+
+  it("records no refund intent for an unpaid booking with a PaymentIntent", async () => {
+    stubRequest("APPROVED", { slotStarts: [farFuture()], stripePaymentIntentId: "pi_123" });
+
+    await call();
+
+    expect(insertDepositRefundIntent).not.toHaveBeenCalled();
+  });
+
+  it("records no refund intent for a paid deposit with no PaymentIntent", async () => {
+    stubRequest("APPROVED", { slotStarts: [farFuture()], depositPaid: true });
+    vi.mocked(refundDeposit).mockResolvedValue({ success: true } as never);
+
+    await call();
+
+    expect(insertDepositRefundIntent).not.toHaveBeenCalled();
+  });
+
+  it("fails the cancellation, and never refunds, when the refund intent insert throws", async () => {
+    stubRequest("APPROVED", {
+      slotStarts: [farFuture()],
+      depositPaid: true,
+      stripePaymentIntentId: "pi_123",
+    });
+    vi.mocked(insertDepositRefundIntent).mockRejectedValue(new Error("db down"));
+
+    await expect(call()).rejects.toThrow("db down");
+
+    expect(refundDeposit).not.toHaveBeenCalled();
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
   });
 
   it("cancels an unpaid booking's stored PaymentIntent and does not refund", async () => {

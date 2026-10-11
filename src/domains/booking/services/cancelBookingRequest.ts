@@ -1,4 +1,5 @@
 import { cancelDepositPaymentIntent } from "@/domains/billing/services/cancelDepositPaymentIntent";
+import { insertDepositRefundIntent } from "@/domains/billing/services/insertDepositRefundIntent";
 import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 import { prisma } from "@/lib/prisma";
@@ -60,6 +61,12 @@ export async function cancelBookingRequest(
       data: { status: "CANCELLED_BY_CLIENT" },
       select: { depositPaid: true, stripePaymentIntentId: true },
     });
+    // The owed refund commits with the cancel or not at all (56.7), so a
+    // crash after the commit or a failed refund call below leaves a
+    // PENDING intent for the retry sweep instead of nothing.
+    if (updated.depositPaid && updated.stripePaymentIntentId) {
+      await insertDepositRefundIntent(tx, request.id, updated.stripePaymentIntentId);
+    }
     if (wasApproved) {
       await applyCancellationStrike(tx, request.clientId);
     }
@@ -70,21 +77,25 @@ export async function cancelBookingRequest(
   // the CANCELLATION_WINDOW_HOURS check above (CLAUDE.md 7.3). Deliberately
   // outside the transaction: refundDeposit makes an external Stripe call,
   // which shouldn't hold a DB transaction open for the duration of that
-  // network round-trip. The cancellation has already committed by this
-  // point, so a refund failure is logged rather than reported back as a
-  // cancellation failure -- the booking is genuinely cancelled either way,
-  // and refundDeposit's own webhook backstop (syncDepositRefundStatus)
-  // reconciles a transient failure independently. depositPaid and
-  // stripePaymentIntentId are read back from the status update above, not
-  // the earlier read (56.2, 56.4), so a payment confirmed or a
-  // PaymentIntent stored in between is still seen.
+  // network round-trip. The cancellation and its refund intent have
+  // already committed by this point, so a refund failure is logged rather
+  // than reported back as a cancellation failure -- the booking is
+  // genuinely cancelled either way. The deposit-refund retry sweep (56.7)
+  // retries the intent, which stays PENDING with no refund id; the refund
+  // webhooks (syncDepositRefundStatus) only reconcile a refund Stripe
+  // actually created. depositPaid and stripePaymentIntentId are read back
+  // from the status update above, not the earlier read (56.2, 56.4), so a
+  // payment confirmed or a PaymentIntent stored in between is still seen.
   if (cancelled.depositPaid) {
     const refundResult = await refundDeposit(request.id);
     if (!refundResult.success) {
-      console.error(
-        `Deposit refund failed for cancelled booking request ${request.id}:`,
-        refundResult.error
-      );
+      console.error({
+        operation: "cancelBookingRequest",
+        reason: "deposit_refund_failed",
+        severity: "warning",
+        bookingRequestId: request.id,
+        paymentIntentId: cancelled.stripePaymentIntentId,
+      });
     }
   } else if (cancelled.stripePaymentIntentId) {
     // Unpaid: cancel the stored PaymentIntent so a tab with the deposit

@@ -1,4 +1,5 @@
 import { cancelDepositPaymentIntent } from "@/domains/billing/services/cancelDepositPaymentIntent";
+import { insertDepositRefundIntent } from "@/domains/billing/services/insertDepositRefundIntent";
 import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
 import { prisma } from "@/lib/prisma";
@@ -33,27 +34,37 @@ export async function cancelApprovedBookingAsArtist(
 
   const cancelled = await prisma.$transaction(async (tx) => {
     await releaseBookedTimeSlots(tx, request.id);
-    return tx.bookingRequest.update({
+    const updated = await tx.bookingRequest.update({
       where: { id: request.id },
       data: { status: "CANCELLED_BY_ARTIST" },
       select: { depositPaid: true, stripePaymentIntentId: true },
     });
+    // The owed refund commits with the cancel or not at all (56.7), same
+    // as cancelBookingRequest's identical step.
+    if (updated.depositPaid && updated.stripePaymentIntentId) {
+      await insertDepositRefundIntent(tx, request.id, updated.stripePaymentIntentId);
+    }
+    return updated;
   });
 
   // Refunds in full, unconditionally on timing -- an artist-initiated
   // cancellation is never the client's fault (CLAUDE.md 7.3). Deliberately
   // outside the transaction and logged-not-thrown-on-failure, same
-  // reasoning as cancelBookingRequest's identical refund step.
-  // depositPaid and stripePaymentIntentId are read back from the status
-  // update above, not the earlier read (56.2, 56.4), so a payment
-  // confirmed or a PaymentIntent stored in between is still seen.
+  // reasoning as cancelBookingRequest's identical refund step: the
+  // deposit-refund retry sweep (56.7), not the webhook, retries a failed
+  // refund call. depositPaid and stripePaymentIntentId are read back from
+  // the status update above, not the earlier read (56.2, 56.4), so a
+  // payment confirmed or a PaymentIntent stored in between is still seen.
   if (cancelled.depositPaid) {
     const refundResult = await refundDeposit(request.id);
     if (!refundResult.success) {
-      console.error(
-        `Deposit refund failed for artist-cancelled booking request ${request.id}:`,
-        refundResult.error
-      );
+      console.error({
+        operation: "cancelApprovedBookingAsArtist",
+        reason: "deposit_refund_failed",
+        severity: "warning",
+        bookingRequestId: request.id,
+        paymentIntentId: cancelled.stripePaymentIntentId,
+      });
     }
   } else if (cancelled.stripePaymentIntentId) {
     // Unpaid: cancel the stored PaymentIntent, same optimisation as

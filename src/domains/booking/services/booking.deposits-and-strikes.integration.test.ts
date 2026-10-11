@@ -24,9 +24,10 @@ import { updateClientProfile } from "./updateClientProfile";
 import { updatePendingBookingRequest } from "./updatePendingBookingRequest";
 
 // Stripe has no network access (or secrets) in the integration CI job, so the
-// SDK stays mocked. The late-payment cases (56.2) count refunds.create calls
-// per booking; every other fixture keeps depositPaid false and never reaches
-// it. paymentIntents.cancel is the cancel paths' after-commit cancel of an
+// SDK stays mocked. The late-payment cases (56.2) and the refund-intent cases
+// (56.7) count refunds.create calls per booking; every other fixture keeps
+// depositPaid false and never reaches it. paymentIntents.cancel is the
+// cancel paths' after-commit cancel of an
 // unpaid booking's PaymentIntent (56.4). They ignore its result, so the
 // late-payment cases still prove 56.2's refund, the guarantee for when that
 // cancel never reaches Stripe.
@@ -77,6 +78,46 @@ vi.mock("./getBookingRequestByPaymentIntentId", async () => {
   };
 });
 
+// Lets the refund-intent cases (56.7) make refundDeposit throw after a cancel
+// has committed (its booking read is outside any try/catch), or make the
+// cancel's own intent insert fail inside its transaction. Both pass through
+// everywhere else.
+const depositReadControl = vi.hoisted(() => ({ failNext: false }));
+vi.mock("./getBookingRequestForDeposit", async () => {
+  const actual = await vi.importActual<typeof import("./getBookingRequestForDeposit")>(
+    "./getBookingRequestForDeposit"
+  );
+  return {
+    getBookingRequestForDeposit: async (
+      ...args: Parameters<typeof actual.getBookingRequestForDeposit>
+    ): ReturnType<typeof actual.getBookingRequestForDeposit> => {
+      if (depositReadControl.failNext) {
+        depositReadControl.failNext = false;
+        throw new Error("forced deposit read failure");
+      }
+      return actual.getBookingRequestForDeposit(...args);
+    },
+  };
+});
+
+const intentInsertControl = vi.hoisted(() => ({ failNext: false }));
+vi.mock("@/domains/billing/services/insertDepositRefundIntent", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/domains/billing/services/insertDepositRefundIntent")
+  >("@/domains/billing/services/insertDepositRefundIntent");
+  return {
+    insertDepositRefundIntent: async (
+      ...args: Parameters<typeof actual.insertDepositRefundIntent>
+    ): Promise<void> => {
+      if (intentInsertControl.failNext) {
+        intentInsertControl.failNext = false;
+        throw new Error("forced intent insert failure");
+      }
+      return actual.insertDepositRefundIntent(...args);
+    },
+  };
+});
+
 // Real-database booking tests (28.3.2.5.2): the strike atomicity, rollback,
 // slot-release and unique-constraint behaviour the mocked unit tier cannot
 // prove.
@@ -106,7 +147,8 @@ async function createApprovedWithSlot(
   clientId: string,
   start: Date,
   minutes = 180,
-  stripePaymentIntentId?: string
+  stripePaymentIntentId?: string,
+  depositPaid = false
 ): Promise<{ id: string }> {
   const request = await createBookingRequest({
     artistId,
@@ -114,6 +156,7 @@ async function createApprovedWithSlot(
     requestedStartTime: start,
     status: "APPROVED",
     stripePaymentIntentId,
+    depositPaid,
   });
   await prisma.timeSlot.create({
     data: {
@@ -165,6 +208,8 @@ describe("booking deposits-and-strikes integration", () => {
   beforeEach(async () => {
     strikeControl.failNext = false;
     raceControl.lookupHoldMs = 0;
+    depositReadControl.failNext = false;
+    intentInsertControl.failNext = false;
     refundsCreateMock.mockReset();
     // A fresh id per call: stripeRefundId is unique (56.3), and the race
     // cases refund several bookings in one test.
@@ -415,6 +460,97 @@ describe("booking deposits-and-strikes integration", () => {
       expect(after).toMatchObject({ depositPaid: true });
       expect(await prisma.depositRefund.count({ where: { bookingRequestId: request.id } })).toBe(0);
     });
+  });
+
+  describe("refund intent on cancel (56.7)", () => {
+    async function createPaidApproved(): Promise<{
+      clientId: string;
+      intent: string;
+      request: { id: string };
+    }> {
+      const { artistId, clientId } = await setup();
+      const intent = paymentIntentId();
+      const request = await createApprovedWithSlot(
+        artistId,
+        clientId,
+        futureStart(),
+        180,
+        intent,
+        true
+      );
+      return { clientId, intent, request };
+    }
+
+    it.each(CANCEL_PATHS)(
+      "$name leaves the intent even when refundDeposit throws after the commit",
+      async ({ cancelledStatus, cancel }) => {
+        const { clientId, intent, request } = await createPaidApproved();
+
+        depositReadControl.failNext = true;
+        await expect(cancel(request.id, clientId)).rejects.toThrow(
+          "forced deposit read failure"
+        );
+
+        expect(refundsCreateMock).not.toHaveBeenCalled();
+        const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
+        expect(after.status).toBe(cancelledStatus);
+        const refundRows = await prisma.depositRefund.findMany({
+          where: { bookingRequestId: request.id },
+        });
+        expect(refundRows).toHaveLength(1);
+        expect(refundRows[0]).toMatchObject({
+          status: "PENDING",
+          stripePaymentIntentId: intent,
+          stripeRefundId: null,
+        });
+      }
+    );
+
+    it.each(CANCEL_PATHS)(
+      "$name whose refunds.create throws leaves exactly one id-less PENDING row",
+      async ({ cancelledStatus, cancel }) => {
+        const { clientId, intent, request } = await createPaidApproved();
+        refundsCreateMock.mockRejectedValueOnce(new Error("stripe down"));
+        const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+        const result = await cancel(request.id, clientId);
+        consoleErrorSpy.mockRestore();
+
+        expect(result).toEqual({ success: true });
+        expect(refundsCreateMock).toHaveBeenCalledTimes(1);
+        const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
+        expect(after.status).toBe(cancelledStatus);
+        const refundRows = await prisma.depositRefund.findMany({
+          where: { bookingRequestId: request.id },
+        });
+        expect(refundRows).toHaveLength(1);
+        expect(refundRows[0]).toMatchObject({
+          status: "PENDING",
+          stripePaymentIntentId: intent,
+          stripeRefundId: null,
+        });
+      }
+    );
+
+    it.each(CANCEL_PATHS)(
+      "$name: a failing intent insert rolls back the cancel",
+      async ({ cancel }) => {
+        const { clientId, request } = await createPaidApproved();
+
+        intentInsertControl.failNext = true;
+        await expect(cancel(request.id, clientId)).rejects.toThrow(
+          "forced intent insert failure"
+        );
+
+        expect(refundsCreateMock).not.toHaveBeenCalled();
+        const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
+        expect(after.status).toBe("APPROVED");
+        const slots = await prisma.timeSlot.findMany({ where: { bookingRequestId: request.id } });
+        expect(slots.map((s) => s.status)).toEqual(["BOOKED"]);
+        expect((await getClient(clientId)).cancellationCount).toBe(0);
+        expect(await prisma.depositRefund.count({ where: { bookingRequestId: request.id } })).toBe(0);
+      }
+    );
   });
 
   describe("declineBookingRequest (56.2)", () => {
