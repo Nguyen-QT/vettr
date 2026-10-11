@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { recordDepositRefundIntent } from "@/domains/billing/services/recordDepositRefundIntent";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 
@@ -20,8 +21,8 @@ import { POST } from "./route";
 // the same way Stripe's own servers would call this endpoint.
 // Refund dispatch branches are unit-tested in route.test.ts; the one
 // dispatch case here is the refund backstop's delivery proof
-// (56.1.3.1), which replays an event Stripe really emitted rather than
-// a hand-built payload.
+// (56.1.3.1, 56.6.3.1), which replays an event Stripe really emitted
+// rather than a hand-built payload.
 describe("Stripe webhook route -- signature verification (real Stripe test mode)", () => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
@@ -160,7 +161,7 @@ describe("Stripe webhook route -- signature verification (real Stripe test mode)
   }
 
   it(
-    "reconciles a real refund.created event for a refund whose local write never happened",
+    "records a real refund.created event on the intent row of a refund whose local write was lost",
     async () => {
       const paymentIntent = await stripe.paymentIntents.create({
         amount: 2000,
@@ -182,10 +183,15 @@ describe("Stripe webhook route -- signature verification (real Stripe test mode)
         },
       });
 
-      // Issued straight through Stripe rather than refundDeposit, so no
-      // local write ever records it -- the exact state the backstop
-      // exists for: Stripe refunded, depositRefunded still false.
-      const refund = await stripe.refunds.create({ payment_intent: paymentIntent.id });
+      // refundDeposit's first two steps without its status write (56.6):
+      // the same intent insert, then a refund carrying the same metadata.
+      // That leaves the exact state the webhook's intent match exists for:
+      // Stripe refunded, the row still PENDING with no refund id.
+      await recordDepositRefundIntent(request.id, paymentIntent.id);
+      const refund = await stripe.refunds.create({
+        payment_intent: paymentIntent.id,
+        metadata: { bookingRequestId: request.id },
+      });
       const event = await waitForRefundCreatedEvent(refund.id, refund.created);
 
       const payload = JSON.stringify(event);
@@ -197,9 +203,16 @@ describe("Stripe webhook route -- signature verification (real Stripe test mode)
       const response = await POST(buildRequest(payload, signature));
 
       expect(response.status).toBe(200);
-      const updated = await prisma.bookingRequest.findUnique({ where: { id: request.id } });
-      expect(updated?.depositRefunded).toBe(true);
-      expect(updated?.stripeRefundId).toBe(refund.id);
+      // A pm_card_visa refund is created succeeded, so refund.created
+      // alone completes it.
+      const row = await prisma.depositRefund.findUnique({
+        where: { bookingRequestId: request.id },
+      });
+      expect(row).toMatchObject({
+        status: "SUCCEEDED",
+        stripeRefundId: refund.id,
+        stripePaymentIntentId: paymentIntent.id,
+      });
     },
     30_000
   );

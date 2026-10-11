@@ -2,19 +2,19 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { confirmDepositPayment } from "@/domains/billing/services/confirmDepositPayment";
-import { confirmDepositRefund } from "@/domains/billing/services/confirmDepositRefund";
 import { syncArtistConnectAccountStatus } from "@/domains/billing/services/syncArtistConnectAccountStatus";
+import { syncDepositRefundStatus } from "@/domains/billing/services/syncDepositRefundStatus";
 import { stripe } from "@/lib/stripe";
 
 // Route Handler (CLAUDE.md 7.1.5, refund handling added 7.3.3-fix):
 // dumb delivery only -- verifies the Stripe signature and delegates to
-// confirmDepositPayment/confirmDepositRefund for the actual business
+// confirmDepositPayment/syncDepositRefundStatus for the actual business
 // logic. Reads the raw request body rather than request.json() since
 // Stripe's signature is computed over the exact bytes it sent; a
 // re-serialized JSON body would fail verification. The Stripe webhook
-// endpoint must subscribe to every event handled below (56.1):
+// endpoint must subscribe to every event handled below (56.1, 56.6):
 // payment_intent.succeeded, payment_intent.payment_failed,
-// refund.created, refund.updated and account.updated.
+// refund.created, refund.updated, refund.failed and account.updated.
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   // A non-2xx response here makes Stripe automatically retry delivery
   // (exponential backoff over several days) -- the deliberate safety
-  // net for confirmDepositPayment/confirmDepositRefund throwing (e.g.
+  // net for confirmDepositPayment/syncDepositRefundStatus throwing (e.g.
   // a transient DB error), since both are idempotent and safe to
   // re-run. Explicit try/catch per case rather than relying on an
   // unhandled throw to implicitly produce a 500, so that intent is
@@ -59,19 +59,31 @@ export async function POST(request: NextRequest) {
         console.error("Deposit PaymentIntent failed:", event.data.object.id);
         break;
       case "refund.created":
-      case "refund.updated": {
+      case "refund.updated":
+      case "refund.failed": {
         const refund = event.data.object;
-        // Only a completed refund actually moved money, so only
-        // "succeeded" is the authoritative confirmation
-        // confirmDepositRefund needs. refund.created carries the status
-        // a refund starts in -- a card refund usually starts
-        // "succeeded", and no other event reports that at once (56.1
-        // spike: refund.updated only follows when the card network's
-        // reference number arrives). A refund that starts "pending" is
-        // confirmed later by the refund.updated for its transition.
-        if (refund.status === "succeeded" && typeof refund.payment_intent === "string") {
-          await confirmDepositRefund(refund.payment_intent, refund.id);
-        }
+        // Every refund event goes through, whatever its status (56.6):
+        // refund.created carries the status a refund starts in,
+        // refund.updated a pending refund's success, and only
+        // refund.failed carries a failure (56.1 spike). The status and
+        // failure_reason pass through unmapped: syncDepositRefundStatus
+        // decides what they mean, and a fixed precedence, not arrival
+        // order, decides whether the row moves. metadata.bookingRequestId
+        // only lets an id-less intent row be matched, never picks a
+        // booking on its own, and is missing on a refund made outside the
+        // app, so it's read defensively. Webhook objects are never
+        // expanded, so payment_intent is an id or null. Nothing written
+        // still answers 200: the service logs an unmatched refund, a
+        // stale or redelivered one needs nothing, and a retry can't
+        // change either.
+        await syncDepositRefundStatus({
+          stripeRefundId: refund.id,
+          stripePaymentIntentId:
+            typeof refund.payment_intent === "string" ? refund.payment_intent : null,
+          metadataBookingRequestId: refund.metadata?.bookingRequestId,
+          stripeStatus: refund.status,
+          failureReason: refund.failure_reason,
+        });
         break;
       }
       case "account.updated": {
