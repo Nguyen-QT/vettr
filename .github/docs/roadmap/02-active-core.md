@@ -446,7 +446,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.5.2.2** Domain Service — billing: `createDepositPaymentIntent` catches the create and the record write separately, as above (+ unit tests per failure: generic error, no secret, the exact log).
     - [x] **56.5.3.1** Controller/Action — `createDepositPaymentIntentAction` catches anything the session lookup or the service throws (+ `billing/actions.test.ts` cases).
     - [x] **56.5.5.1** Domain Hook — `useDepositPayment` catches a rejection and resets `isLoading` (+ new `useDepositPayment.test.ts`, jsdom).
-    - [ ] **56.5.6.1** View & Route — `DepositPaymentCard` drops `started`.
+    - [x] **56.5.6.1** View & Route — `DepositPaymentCard` drops `started`.
       - `deposit-payment.spec`: abort the first action request, then expect the error and "Pay deposit". Retry and expect "Confirm payment".
       - That describe runs serially: both its tests pay the same booking, and `fullyParallel` could race them onto one key.
 - [ ] **56.6: Refund Status Lifecycle (Pending / Failed)** — *unscoped.*
