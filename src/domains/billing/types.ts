@@ -93,6 +93,18 @@ export interface AdvanceDepositRefundStatusInput {
   failureReason?: string;
 }
 
+// A refund webhook event's own fields (56.6), unmapped for the same reason
+// as AdvanceDepositRefundStatusInput. metadataBookingRequestId is the
+// metadata.bookingRequestId refundDeposit sets on every refund it creates;
+// a refund made anywhere else (the Stripe Dashboard) doesn't carry it.
+export interface SyncDepositRefundStatusInput {
+  stripeRefundId: string;
+  stripePaymentIntentId: string | null;
+  metadataBookingRequestId?: string;
+  stripeStatus: string | null;
+  failureReason?: string;
+}
+
 // A booking's recorded refund intent (56.6), new or already there: the
 // PaymentIntent it refunds, and the Stripe refund id once one is stored.
 export interface DepositRefundIntent {

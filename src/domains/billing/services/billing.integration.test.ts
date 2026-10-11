@@ -24,10 +24,12 @@ import { getArtistDepositSettings } from "./getArtistDepositSettings";
 import { getBillingAddons } from "./getBillingAddons";
 import { getFinalBillTotal } from "./getFinalBillTotal";
 import { getPayableDeposits } from "./getPayableDeposits";
+import { recordDepositRefundIntent } from "./recordDepositRefundIntent";
 import { refundDeposit } from "./refundDeposit";
 import { removeBillingAddon } from "./removeBillingAddon";
 import { setArtistDepositSettings } from "./setArtistDepositSettings";
 import { syncArtistConnectAccountStatus } from "./syncArtistConnectAccountStatus";
+import { syncDepositRefundStatus } from "./syncDepositRefundStatus";
 
 // Stripe has no network access (or secrets) in the integration CI job, so the
 // SDK stays mocked exactly as in the unit tier; everything else is real.
@@ -643,6 +645,136 @@ describe("billing integration", () => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(refundFailedAlert);
         expect(await readRefundRow(bookingRequestId)).toEqual({ status: "FAILED", stripeRefundId });
       }
+    });
+  });
+
+  // The refund webhooks' lookup (56.6) on real rows: both match paths in one
+  // OR read, and the refunds it must never record.
+  describe("syncDepositRefundStatus", () => {
+    let consoleErrorSpy: MockInstance<typeof console.error>;
+
+    beforeEach(() => {
+      consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleErrorSpy.mockRestore();
+    });
+
+    function refundId(): string {
+      return `re_it_${uniqueSuffix()}`;
+    }
+
+    // The state refundDeposit leaves when Stripe accepted the refund but the
+    // status write was lost: a PENDING intent row with no refund id.
+    async function createIntentRow(): Promise<{ bookingRequestId: string; intent: string }> {
+      const { artistId, clientId } = await setup();
+      const intent = paymentIntentId();
+      const request = await createBookingRequest({
+        artistId,
+        clientId,
+        depositPaid: true,
+        stripePaymentIntentId: intent,
+      });
+      await recordDepositRefundIntent(request.id, intent);
+      return { bookingRequestId: request.id, intent };
+    }
+
+    function readRefundRow(
+      bookingRequestId: string
+    ): Promise<{ status: DepositRefundStatus; stripeRefundId: string | null }> {
+      return prisma.depositRefund.findUniqueOrThrow({
+        where: { bookingRequestId },
+        select: { status: true, stripeRefundId: true },
+      });
+    }
+
+    const refundUnmatchedAlert = expect.objectContaining({
+      reason: "refund_unmatched",
+      severity: "critical",
+    });
+
+    it("keeps FAILED when a stale refund.updated (succeeded) arrives after refund.failed", async () => {
+      const { bookingRequestId, intent } = await createIntentRow();
+      const stripeRefundId = refundId();
+      // 56.1's failed card refund: created succeeded, then refund.failed,
+      // then a refund.updated still saying succeeded.
+      const delivery = {
+        stripeRefundId,
+        stripePaymentIntentId: intent,
+        metadataBookingRequestId: bookingRequestId,
+      };
+
+      const created = await syncDepositRefundStatus({ ...delivery, stripeStatus: "succeeded" });
+      const failed = await syncDepositRefundStatus({
+        ...delivery,
+        stripeStatus: "failed",
+        failureReason: "expired_or_canceled_card",
+      });
+      const stale = await syncDepositRefundStatus({ ...delivery, stripeStatus: "succeeded" });
+
+      expect([created, failed, stale]).toEqual([true, true, false]);
+      expect(await readRefundRow(bookingRequestId)).toEqual({ status: "FAILED", stripeRefundId });
+    });
+
+    it("attaches a refund whose local write was lost to its booking's intent row through the metadata", async () => {
+      const { bookingRequestId, intent } = await createIntentRow();
+      const stripeRefundId = refundId();
+
+      const written = await syncDepositRefundStatus({
+        stripeRefundId,
+        stripePaymentIntentId: intent,
+        metadataBookingRequestId: bookingRequestId,
+        stripeStatus: "pending",
+      });
+
+      expect(written).toBe(true);
+      expect(await readRefundRow(bookingRequestId)).toEqual({ status: "PENDING", stripeRefundId });
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+    });
+
+    it("never attaches a Dashboard refund with no metadata to the intent row on its PaymentIntent", async () => {
+      const { bookingRequestId, intent } = await createIntentRow();
+
+      const written = await syncDepositRefundStatus({
+        stripeRefundId: refundId(),
+        stripePaymentIntentId: intent,
+        stripeStatus: "succeeded",
+      });
+
+      expect(written).toBe(false);
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(refundUnmatchedAlert);
+      expect(await readRefundRow(bookingRequestId)).toEqual({
+        status: "PENDING",
+        stripeRefundId: null,
+      });
+    });
+
+    it("never records a second refund on a PaymentIntent whose row already holds another id", async () => {
+      const { bookingRequestId, intent } = await createIntentRow();
+      const storedRefundId = refundId();
+      await syncDepositRefundStatus({
+        stripeRefundId: storedRefundId,
+        stripePaymentIntentId: intent,
+        metadataBookingRequestId: bookingRequestId,
+        stripeStatus: "succeeded",
+      });
+
+      const written = await syncDepositRefundStatus({
+        stripeRefundId: refundId(),
+        stripePaymentIntentId: intent,
+        metadataBookingRequestId: bookingRequestId,
+        stripeStatus: "failed",
+      });
+
+      expect(written).toBe(false);
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(refundUnmatchedAlert);
+      expect(await readRefundRow(bookingRequestId)).toEqual({
+        status: "SUCCEEDED",
+        stripeRefundId: storedRefundId,
+      });
     });
   });
 });
