@@ -288,6 +288,10 @@ model BookingRequest {
   designReferences DesignReference[]
   addons           Addon[]
 
+  // Back-relation Prisma requires, not a column. Billing owns
+  // DepositRefund (56.6); booking code never reads it.
+  depositRefund DepositRefund?
+
   tier          ComplexityTier
   minPrice      Decimal        @db.Decimal(10, 2)
   maxPrice      Decimal        @db.Decimal(10, 2)
@@ -318,7 +322,8 @@ model BookingRequest {
   // not an active state. depositRefunded guards refundDeposit's
   // idempotency the same way depositPaid guards confirmDepositPayment's.
   // stripeRefundId is unique (56.3): a Stripe refund belongs to exactly
-  // one deposit.
+  // one deposit. Both are superseded by DepositRefund (56.6) and dropped
+  // in 56.6.1.2.
   depositRefunded Boolean @default(false)
   stripeRefundId  String? @unique
 
@@ -364,6 +369,40 @@ model Addon {
 
   bookingRequest   BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
   bookingRequestId String
+}
+
+// Where a deposit refund stands (56.6). Moves forward only, in this
+// order: PENDING < SUCCEEDED < FAILED. Stripe's own refund transitions
+// only go this way, so a stale webhook can never move a row back.
+enum DepositRefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+// A booking's deposit refund (56.6), owned by billing and keyed by
+// bookingRequestId (Phase 56 design constraint). One row per booking.
+// refundDeposit inserts it as PENDING before calling Stripe
+// (architecture.md §6.2), and the refund webhooks move it forward.
+// Replaces BookingRequest.depositRefunded/stripeRefundId.
+model DepositRefund {
+  id     String              @id @default(cuid())
+  status DepositRefundStatus @default(PENDING)
+
+  // The PaymentIntent that was refunded. refundDeposit only refunds a
+  // booking that has one, so it's always set.
+  stripePaymentIntentId String
+
+  // Null until Stripe answers refunds.create, or until a webhook fills it
+  // in after refundDeposit's own write was lost. Unique: a Stripe refund
+  // belongs to exactly one deposit.
+  stripeRefundId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookingRequest   BookingRequest @relation(fields: [bookingRequestId], references: [id], onDelete: Cascade)
+  bookingRequestId String         @unique
 }
 
 // No Auto-Booking: rows here are only ever created already BOOKED, by
