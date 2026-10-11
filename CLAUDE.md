@@ -10,8 +10,12 @@
 ## ⚙️ Common Development Commands
 - Build Workspace: `npm run build`
 - Run Local Dev Server: `npm run dev`
-- Playwright End-to-End Verification: `npm run test:e2e:ui`
+- Unit Tests (mocked Prisma, no database): `npm run test`
+- Integration Tests (throwaway Docker Postgres): `npm run test:local`
+- Playwright End-to-End Verification: `npm run test:e2e:ui:local` (headless: `npm run test:e2e:local`)
+- Remove Leftover Test Databases: `npm run test:db:prune`
 - Code Formatting & Linting: `npm run lint`
+- DB-backed suites need Docker Desktop running and never touch `.env`'s dev database. See `.claude/rules/testing.md` §2.
 
 ## 🧭 System Infrastructure Map
 - **Modular Feature Roadmaps:** Read/write files exclusively inside `/.github/docs/roadmap/` for tracking overall engine execution status.
