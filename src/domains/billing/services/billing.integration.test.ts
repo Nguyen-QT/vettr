@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { prisma } from "@/lib/prisma";
 import {
@@ -15,7 +15,9 @@ import {
   DEPOSIT_REFUND_NOT_PAID_ERROR_MESSAGE,
   DEPOSIT_REFUND_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
 } from "../constants";
+import type { DepositRefundStatus } from "../types";
 import { addBillingAddon } from "./addBillingAddon";
+import { advanceDepositRefundStatus } from "./advanceDepositRefundStatus";
 import { confirmDepositPayment } from "./confirmDepositPayment";
 import { confirmDepositRefund } from "./confirmDepositRefund";
 import { getArtistDepositSettings } from "./getArtistDepositSettings";
@@ -428,6 +430,141 @@ describe("billing integration", () => {
       const row = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
       expect(row.depositRefunded).toBe(false);
       expect(row.stripeRefundId).toBeNull();
+    });
+  });
+
+  // The conditional write's precedence and refund-id rules (56.6), proven on
+  // real rows: the order Stripe's refund events can arrive in (56.1), and
+  // concurrent deliveries serialised by Postgres's row lock.
+  describe("advanceDepositRefundStatus", () => {
+    let consoleErrorSpy: MockInstance<typeof console.error>;
+
+    beforeEach(() => {
+      consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleErrorSpy.mockRestore();
+    });
+
+    function refundId(): string {
+      return `re_it_${uniqueSuffix()}`;
+    }
+
+    // 56.6.2.2's intent insert doesn't exist yet, so the row is created here.
+    async function createRefundRow(
+      status: DepositRefundStatus,
+      stripeRefundId: string | null
+    ): Promise<string> {
+      const { artistId, clientId } = await setup();
+      const intent = paymentIntentId();
+      const request = await createBookingRequest({
+        artistId,
+        clientId,
+        depositPaid: true,
+        stripePaymentIntentId: intent,
+      });
+      await prisma.depositRefund.create({
+        data: {
+          bookingRequestId: request.id,
+          stripePaymentIntentId: intent,
+          status,
+          stripeRefundId,
+        },
+      });
+      return request.id;
+    }
+
+    function readRefundRow(
+      bookingRequestId: string
+    ): Promise<{ status: DepositRefundStatus; stripeRefundId: string | null }> {
+      return prisma.depositRefund.findUniqueOrThrow({
+        where: { bookingRequestId },
+        select: { status: true, stripeRefundId: true },
+      });
+    }
+
+    const refundFailedAlert = expect.objectContaining({
+      reason: "refund_failed",
+      severity: "critical",
+    });
+
+    it("keeps FAILED when a stale SUCCEEDED arrives after it", async () => {
+      const bookingRequestId = await createRefundRow("PENDING", null);
+      const stripeRefundId = refundId();
+
+      const created = await advanceDepositRefundStatus({
+        bookingRequestId,
+        stripeRefundId,
+        stripeStatus: "succeeded",
+      });
+      const failed = await advanceDepositRefundStatus({
+        bookingRequestId,
+        stripeRefundId,
+        stripeStatus: "failed",
+        failureReason: "expired_or_canceled_card",
+      });
+      const stale = await advanceDepositRefundStatus({
+        bookingRequestId,
+        stripeRefundId,
+        stripeStatus: "succeeded",
+      });
+
+      expect([created, failed, stale]).toEqual([true, true, false]);
+      expect(await readRefundRow(bookingRequestId)).toEqual({ status: "FAILED", stripeRefundId });
+    });
+
+    it("writes a redelivered FAILED once and alerts once", async () => {
+      const stripeRefundId = refundId();
+      const bookingRequestId = await createRefundRow("SUCCEEDED", stripeRefundId);
+      const delivery = {
+        bookingRequestId,
+        stripeRefundId,
+        stripeStatus: "failed",
+        failureReason: "expired_or_canceled_card",
+      };
+
+      const first = await advanceDepositRefundStatus(delivery);
+      const redelivery = await advanceDepositRefundStatus(delivery);
+
+      expect([first, redelivery]).toEqual([true, false]);
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(refundFailedAlert);
+      expect(await readRefundRow(bookingRequestId)).toEqual({ status: "FAILED", stripeRefundId });
+    });
+
+    it("never replaces a stored refund id with a different one", async () => {
+      const stripeRefundId = refundId();
+      const bookingRequestId = await createRefundRow("PENDING", stripeRefundId);
+
+      const written = await advanceDepositRefundStatus({
+        bookingRequestId,
+        stripeRefundId: refundId(),
+        stripeStatus: "succeeded",
+      });
+
+      expect(written).toBe(false);
+      expect(await readRefundRow(bookingRequestId)).toEqual({ status: "PENDING", stripeRefundId });
+    });
+
+    it("ends FAILED with one alert when SUCCEEDED and two FAILED deliveries race, over repeated runs", async () => {
+      for (let run = 0; run < 5; run++) {
+        consoleErrorSpy.mockClear();
+        const stripeRefundId = refundId();
+        const bookingRequestId = await createRefundRow("PENDING", stripeRefundId);
+        const failedDelivery = { bookingRequestId, stripeRefundId, stripeStatus: "failed" };
+
+        const [, ...failedWrites] = await Promise.all([
+          advanceDepositRefundStatus({ bookingRequestId, stripeRefundId, stripeStatus: "succeeded" }),
+          advanceDepositRefundStatus(failedDelivery),
+          advanceDepositRefundStatus(failedDelivery),
+        ]);
+
+        expect(failedWrites.filter(Boolean)).toHaveLength(1);
+        expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(refundFailedAlert);
+        expect(await readRefundRow(bookingRequestId)).toEqual({ status: "FAILED", stripeRefundId });
+      }
     });
   });
 });

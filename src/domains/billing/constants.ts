@@ -3,6 +3,8 @@ import type { RequestStatus } from "@/domains/booking/types";
 import type {
   DepositPaymentAction,
   DepositPaymentIntentStatus,
+  DepositRefundStatus,
+  DepositRefundStripeStatus,
   StoredDepositPaymentIntentAction,
 } from "./types";
 
@@ -129,6 +131,38 @@ export const DEPOSIT_REFUND_MISSING_PAYMENT_INTENT_ERROR_MESSAGE =
   "This booking's deposit payment could not be located for refund.";
 export const DEPOSIT_REFUND_INIT_ERROR_MESSAGE =
   "Something went wrong issuing this refund. Please try again.";
+
+// Stripe's refund status -> ours (56.6). A Record, like
+// STORED_DEPOSIT_PAYMENT_INTENT_ACTION_BY_STATUS, so a status can't be
+// added without a mapping. requires_action is still waiting on the
+// customer, so the refund is pending. A canceled refund never moved the
+// money, so it counts as failed.
+export const DEPOSIT_REFUND_STATUS_BY_STRIPE_STATUS: Record<
+  DepositRefundStripeStatus,
+  DepositRefundStatus
+> = {
+  pending: "PENDING",
+  requires_action: "PENDING",
+  succeeded: "SUCCEEDED",
+  failed: "FAILED",
+  canceled: "FAILED",
+};
+
+// The fixed precedence PENDING < SUCCEEDED < FAILED (56.6): the statuses
+// each status may be written over. A refund only ever moves this way on
+// Stripe (56.1: succeeded -> failed, then a stale refund.updated still
+// saying succeeded), so a fixed order is safe where event time isn't:
+// an event's created has one-second resolution, and refundDeposit's own
+// write has no event time at all. A Record, so a new status doesn't
+// compile until it has a place in the order.
+export const DEPOSIT_REFUND_STATUSES_BEHIND: Record<
+  DepositRefundStatus,
+  readonly DepositRefundStatus[]
+> = {
+  PENDING: [],
+  SUCCEEDED: ["PENDING"],
+  FAILED: ["PENDING", "SUCCEEDED"],
+};
 
 // Surfaced by confirmDepositRefund (CLAUDE.md 7.3.3-fix) when the
 // webhook reports a PaymentIntent id that doesn't match any
