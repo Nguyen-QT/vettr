@@ -534,12 +534,67 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - Point `depositRefundLifecycle.stripe-integration.test.ts` at `syncDepositRefundStatus`, and repoint the cancel-path comments.
     - [x] **56.6.1.2** Data Gateway — drop `BookingRequest.depositRefunded` and `stripeRefundId` + migration.
       - Fixture-only edits forced by the drop: the `global-setup` insert and the integration assertions on the dropped columns.
-- [ ] **56.7: Retry Refunds Whose Stripe Call Failed** — *unscoped.*
+- [ ] **56.7: Retry Refunds Whose Stripe Call Failed** (execute 1.1 → 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 3.1 → 3.2 → 6.1)
   - If `stripe.refunds.create` itself fails, no refund exists on Stripe, so no webhook will ever arrive.
   - Both cancel paths only `console.error`. `cancelBookingRequest`'s comment, which says the webhook backstop reconciles this, is wrong for this case.
   - Add a bounded, idempotent retry for refund intents (from 56.6) that are still `PENDING` with no Stripe refund id. The 27.4 session-cleanup cron route and workflow are the precedent.
   - Reuse the per-booking refund idempotency key, so a retry after a lost response can't refund twice.
   - Raise a critical alert after N failed attempts (53.7).
+  - **Design (confirmed 2026-10-11):**
+    - No orphans: the cancel paths record the refund intent inside their own transaction, so the sweep never has to search for paid, cancelled bookings with no row (56.6's flagged item).
+      - Billing exports a transaction-composable `insertDepositRefundIntent(tx, bookingRequestId, stripePaymentIntentId)`: one `INSERT … ON CONFLICT DO NOTHING` (`createMany` with `skipDuplicates`). `recordDepositRefundIntent` uses it. Booking already passes its transaction to scheduling's `releaseBookedTimeSlots` the same way.
+      - `cancelBookingRequest` and `cancelApprovedBookingAsArtist` call it when their status update returns a paid deposit with a PaymentIntent. The cancel and the intent commit together, or neither does.
+      - After the commit, `refundDeposit` runs as today, and its own insert finds the row. A crash after the commit, or a failed refund call, leaves an id-less `PENDING` row for the sweep.
+      - Late payments need nothing: a failed intent insert in `confirmDepositPayment` throws, the webhook answers 500, and Stripe redelivers.
+      - The migration backfills a `PENDING` row for every paid `CANCELLED_BY_CLIENT`, `CANCELLED_BY_ARTIST` or `DECLINED` booking that has a PaymentIntent and no row (staging data only).
+    - Sweep: billing's `retryOwedDepositRefunds()` reads only billing's table.
+      - Candidates: `PENDING` rows with no refund id, oldest `updatedAt` first, at most 50 per run.
+        - A row is skipped until it's 10 minutes old, so the sweep never races the call that created it. This must stay above the longest a server action or webhook can run (300s).
+        - After 5 retries, a row is retried at most once a day. That also outlasts Stripe's 24h key window, which replays a saved Stripe 500.
+        - The cutoffs come from the Node clock (Prisma's `@updatedAt` does too), computed once per run.
+      - Per row, in turn, each in its own try/catch:
+        1. Reconcile first: list the PaymentIntent's refunds on Stripe. A refund whose `metadata.bookingRequestId` names this booking goes through `syncDepositRefundStatus` (the webhook's own path), and nothing is created. This covers a refund that exists but whose id never reached us (a lost response or a failed status write, with no webhook). After the 24h key window, a new create would get `charge_already_refunded`, and if that hidden refund had failed, it would bypass 56.6's manual recovery rule.
+        2. A failed list call skips the row this run. The sweep never creates a refund without checking first.
+        3. Otherwise `refundDeposit(bookingRequestId)`, with the per-booking idempotency key and the PaymentIntent stored on the row.
+        4. Any result other than success or the generic retryable error (the booking is missing, unpaid or has no PaymentIntent, none of which can happen today) is logged critical, ids only.
+      - After each row, `recordDepositRefundRetry` counts the visit: one conditional `updateManyAndReturn` that increments `retryAttempts` only while the row is still `PENDING` with no refund id. A row that got its id isn't counted. The increment also bumps `updatedAt`, so failing rows take turns.
+      - The increment that returns exactly 5 logs critical (`refund_retry_failing`, ids only, 53.7 routes it). The update is atomic, so it alerts once. Retries continue daily after that, and the client still sees "Refund pending".
+      - Budget: no new row starts after 60s, and the rest wait for the next run. The route sets `maxDuration = 300`, because one Stripe call with stripe-node's own retries can take minutes.
+      - Returns `{ reconciled, refunded, failed, deferred }`.
+    - Route: `POST /api/cron/deposit-refund-retry`, copying session-cleanup.
+      - The bearer check moves to `src/lib/cronAuth.ts` (`isAuthorizedCronRequest`), and both routes use it.
+      - 200 with the counts and `durationMs`. A sweep that throws (its read fails) answers a generic 500, so the job fails visibly. Per-row failures are logged and still answer 200.
+    - Workflow: `.github/workflows/deposit-refund-retry.yml`, hourly at minute 17 plus `workflow_dispatch`, with the same `APP_URL`/`CRON_SECRET` secrets.
+      - curl has no retries (the next hourly run is the retry) and `--max-time 330`, above the route's `maxDuration`, so two sweeps never overlap and double-count retries.
+      - An overlap would still be money-safe: the per-booking key and reconcile-first stop a second refund.
+    - Both cancel paths' comments say the sweep, not the webhook, retries a failed refund call. Their plain-string refund logs become structured, ids-only logs.
+  - **Flagged, not fixed:**
+    - A late payment's refund intent is only as durable as Stripe's redeliveries (about 3 days in live mode). If `confirmDepositPayment`'s insert fails on every one, nothing records the owed refund.
+    - `refundDeposit` reads the booking outside any try/catch. A DB error there makes a cancel path throw after its commit, so the client sees an error for a cancel that went through. The sweep still refunds it.
+    - `refundDeposit` has no status check, and the sweep calls it hours later. A booking re-approved through 56.2's flagged `reviewBookingRequest` hole would still be refunded. 56.10 decides whether `refundDeposit` refuses non-refund statuses.
+    - A Stripe 500 on the first create is saved against the per-booking key for 24h (56.5's flag). Retries inside that window replay it, so the alert fires before the daily backoff gets a fresh result.
+    - A Dashboard refund has no metadata, so it's never reconciled, and the create gets `charge_already_refunded`. The row retries daily and has already alerted. Recovery is manual (56.11).
+    - The new workflow fails every run until 53.2.1.3 adds `APP_URL` and `CRON_SECRET`, like session-cleanup.
+    - The 56.4/56.5 PaymentIntent sweeps (open PaymentIntents on cancelled bookings, created-but-unrecorded ones) stay out of 56.7. They aren't refunds, and 56.2 refunds any payment made on them.
+  - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **56.7.4.1 / 56.7.5.1** UI/Hook — N/A. "Refund pending" already covers an id-less row.
+    - [ ] **56.7.1.1** Data Gateway — `DepositRefund.retryAttempts Int @default(0)` and `@@index([status, updatedAt])` + migration with the backfill above. No app code.
+    - [ ] **56.7.2.1** Domain Service — billing: new transaction-composable `insertDepositRefundIntent(tx, …)`, which `recordDepositRefundIntent` uses (+ unit tests).
+    - [ ] **56.7.2.2** Domain Service — booking: both cancel paths insert the intent inside their transaction, and their comments and refund logs change as above.
+      - Unit tests: a paid booking inserts with the transaction client; an unpaid one doesn't.
+      - Integration cases in `booking.deposits-and-strikes.integration.test.ts`: the row exists even when `refundDeposit` throws after the commit; a cancel whose `refunds.create` throws leaves exactly one id-less `PENDING` row; the 56.2 race cases still leave one row and one `refunds.create` per booking.
+    - [ ] **56.7.2.3** Domain Service — billing: new `reconcileDepositRefundFromStripe` (list the PaymentIntent's refunds, sync a match through `syncDepositRefundStatus`, catch the list call).
+      - Unit tests per outcome.
+      - Stripe-tier case in `depositRefundLifecycle.stripe-integration.test.ts`: refund, clear the row's refund id, and reconciling attaches it again.
+    - [ ] **56.7.2.4** Domain Service — billing: new `recordDepositRefundRetry` (the conditional increment and the alert at 5).
+      - Unit tests.
+      - `billing.integration.test.ts` cases: a row with a refund id isn't counted; concurrent increments alert exactly once.
+    - [ ] **56.7.2.5** Domain Service — billing: new `retryOwedDepositRefunds` and its constants.
+      - Unit tests: the candidate query and backoff, reconcile-first, a failed list call skips the create, a refund, a refusal logged critical, a row that throws doesn't stop the batch, the budget defers.
+      - `billing.integration.test.ts` cases (Stripe mocked): an old id-less row is refunded; a young row is skipped; a row at 5 retries waits a day; `SUCCEEDED`/`FAILED` rows are never touched.
+    - [ ] **56.7.3.1** Controller/Action — move the bearer check to `src/lib/cronAuth.ts`; session-cleanup uses it, behaviour unchanged (+ `cronAuth.test.ts`; session-cleanup's route tests pass unchanged).
+    - [ ] **56.7.3.2** Controller/Action — `POST /api/cron/deposit-refund-retry` with `maxDuration = 300` (+ route unit tests: the 401 cases, 200 with counts, 500 without leaking Prisma codes). `.env.example` names both routes.
+    - [ ] **56.7.6.1** View & Route — `.github/workflows/deposit-refund-retry.yml` as above (the 27.4.6.1 analog).
 - [ ] **56.8: Disputes and Failed Payments** — *unscoped.*
   - The webhook ignores `charge.dispute.*` events entirely. A chargeback on a deposit would go unnoticed: Stripe debits the platform for disputes on destination charges, and evidence has a deadline.
   - `payment_intent.payment_failed` is only logged.
