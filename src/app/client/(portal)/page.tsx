@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { buttonVariants } from "@/components/ui/button";
 import { PortalGateSection } from "@/components/ui/portal-gate-section";
+import { getDepositRefundStatuses } from "@/domains/billing/services/getDepositRefundStatuses";
 import { getPayableDeposits } from "@/domains/billing/services/getPayableDeposits";
 import { getCurrentSession } from "@/domains/auth/actions";
 import { ClientBookingCard } from "@/domains/booking/components/ClientBookingCard";
@@ -14,7 +15,8 @@ import { FindArtistContainer } from "@/domains/directory/components/FindArtistCo
 // reached here, getCurrentSession just reads which one. Composes
 // booking's and billing's independent reads itself (CLAUDE.md's Domain
 // Boundary Isolation rule) rather than either domain querying the
-// other's table directly.
+// other's table directly. Refund statuses (56.6) come from billing for
+// the client's own bookings, read just above.
 export default async function ClientDashboardPage() {
   const session = await getCurrentSession();
   const bookings = session?.clientProfileId
@@ -25,6 +27,9 @@ export default async function ClientDashboardPage() {
         await getApprovedUnpaidRequestSummaries(session.clientProfileId)
       )
     : {};
+  const refundStatuses = await getDepositRefundStatuses(
+    bookings.map((booking) => booking.id)
+  );
 
   return (
     <>
@@ -56,6 +61,7 @@ export default async function ClientDashboardPage() {
               key={booking.id}
               booking={booking}
               depositAmount={payableDeposits[booking.id] ?? null}
+              refundStatus={refundStatuses[booking.id] ?? null}
             />
           ))}
         </div>
