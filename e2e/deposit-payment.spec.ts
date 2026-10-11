@@ -111,9 +111,7 @@ test.describe("deposit payment (client dashboard)", () => {
   });
 });
 
-// Labels come from the booking's DepositRefund status (56.6.6.1). The
-// pending and failed fixtures also carry the legacy depositRefunded flag,
-// so "Deposit refunded" on either would mean the card read the flag.
+// Labels come from the booking's DepositRefund status (56.6.6.1).
 test.describe("deposit refund status (client dashboard)", () => {
   test("shows 'Deposit refunded' on a cancelled booking whose refund succeeded", async ({
     page,

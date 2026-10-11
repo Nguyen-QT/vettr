@@ -412,7 +412,7 @@ describe("booking deposits-and-strikes integration", () => {
       expect(alerts).toBe(1);
       expect(refundsCreateMock).not.toHaveBeenCalled();
       const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-      expect(after).toMatchObject({ depositPaid: true, depositRefunded: false, stripeRefundId: null });
+      expect(after).toMatchObject({ depositPaid: true });
       expect(await prisma.depositRefund.count({ where: { bookingRequestId: request.id } })).toBe(0);
     });
   });
@@ -452,12 +452,8 @@ describe("booking deposits-and-strikes integration", () => {
 
       expect(result).toEqual({ success: false, error: REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE });
       const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-      expect(after).toMatchObject({
-        status: "APPROVED",
-        depositPaid: true,
-        depositRefunded: false,
-        stripeRefundId: null,
-      });
+      expect(after).toMatchObject({ status: "APPROVED", depositPaid: true });
+      expect(await prisma.depositRefund.count({ where: { bookingRequestId: request.id } })).toBe(0);
       const slots = await prisma.timeSlot.findMany({ where: { bookingRequestId: request.id } });
       expect(slots.map((s) => s.status)).toEqual(["BOOKED"]);
       expect(refundsCreateMock).not.toHaveBeenCalled();

@@ -408,9 +408,6 @@ describe("billing integration", () => {
       expect(result).toEqual({ success: false, error: DEPOSIT_REFUND_NOT_PAID_ERROR_MESSAGE });
       expect(refundsCreateMock).not.toHaveBeenCalled();
       expect(await readRefundRows(request.id)).toEqual([]);
-      const row = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-      expect(row.depositRefunded).toBe(false);
-      expect(row.stripeRefundId).toBeNull();
     });
 
     it("leaves a PENDING intent with no refund id when Stripe rejects, and a retry refunds through it", async () => {
@@ -425,9 +422,6 @@ describe("billing integration", () => {
       expect(await readRefundRows(request.id)).toEqual([
         { status: "PENDING", stripePaymentIntentId: request.intent, stripeRefundId: null },
       ]);
-      const row = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-      expect(row.depositRefunded).toBe(false);
-      expect(row.stripeRefundId).toBeNull();
 
       refundsCreateMock.mockResolvedValueOnce({ id: "re_it_retry", status: "succeeded" });
 
