@@ -68,6 +68,31 @@ export type RefundDepositResult =
   | { success: true }
   | { success: false; error: string };
 
+// Mirrors Prisma's DepositRefundStatus enum (56.6): where a deposit
+// refund stands, in its fixed precedence PENDING < SUCCEEDED < FAILED.
+export type DepositRefundStatus = "PENDING" | "SUCCEEDED" | "FAILED";
+
+// Stripe's refund statuses (56.6). Declared here for the same reason as
+// DepositPaymentIntentStatus: Stripe.Refund's status is `string | null`,
+// which can't key an exhaustive Record.
+export type DepositRefundStripeStatus =
+  | "pending"
+  | "requires_action"
+  | "succeeded"
+  | "failed"
+  | "canceled";
+
+// stripeStatus and failureReason are the refund's own status and
+// failure_reason as Stripe reports them, unmapped, so every caller
+// passes them straight through and advanceDepositRefundStatus alone
+// decides what a null or unknown status means.
+export interface AdvanceDepositRefundStatusInput {
+  bookingRequestId: string;
+  stripeRefundId: string;
+  stripeStatus: string | null;
+  failureReason?: string;
+}
+
 export type ConfirmDepositRefundResult =
   | { success: true }
   | { success: false; error: string };

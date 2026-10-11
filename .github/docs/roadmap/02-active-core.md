@@ -488,8 +488,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - "Contact support" has nowhere to point: the app has no support email or page yet. One is needed before 53.3, and 56.11 or 53.7 is the natural owner.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
     - [x] **56.6.4.1 / 56.6.5.1** UI/Hook — N/A. `ClientBookingCard` composes containers (View, per 54.8's split), and the dashboard is server-rendered.
-    - [ ] **56.6.1.1** Data Gateway — `DepositRefund` + `DepositRefundStatus` enum + migration with the backfill above. No app code. Integration `wipe()` needs no change (it cascades from `BookingRequest`).
-    - [ ] **56.6.2.1** Domain Service — billing: the status types, the Stripe-status `Record` and `advanceDepositRefundStatus` (the conditional write above).
+    - [x] **56.6.1.1** Data Gateway — `DepositRefund` + `DepositRefundStatus` enum + migration with the backfill above. No app code. Integration `wipe()` needs no change (it cascades from `BookingRequest`).
+    - [x] **56.6.2.1** Domain Service — billing: the status types, the Stripe-status `Record` and `advanceDepositRefundStatus` (the conditional write above).
       - Unit tests.
       - `billing.integration.test.ts` cases: a stale `SUCCEEDED` after `FAILED` writes nothing; a redelivered `FAILED` writes and alerts once; a different refund id never replaces the stored one.
     - [ ] **56.6.2.2** Domain Service — billing: `refundDeposit` records the intent first (new `recordDepositRefundIntent`), sets `metadata.bookingRequestId`, catches each step as above and writes the returned status through 2.1.
