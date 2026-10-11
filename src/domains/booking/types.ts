@@ -276,12 +276,11 @@ export interface ClientBookingSummary {
   // Deposit status (CLAUDE.md 7.3.5) -- depositPaid: false means no
   // deposit badge shows at all (a still-payable one surfaces
   // separately via billing's getPayableDeposits/DepositPaymentCard).
-  // depositRefunded only ever becomes true after a cancellation
-  // refund (7.3); a NO_SHOW with depositPaid true and depositRefunded
-  // false is a forfeited deposit, distinguished at render time by
+  // Whether a paid deposit was refunded is billing's (56.6), read
+  // through getDepositRefundStatuses; a NO_SHOW with a paid deposit and
+  // no refund is a forfeited deposit, distinguished at render time by
   // status rather than a dedicated field.
   depositPaid: boolean;
-  depositRefunded: boolean;
 }
 
 // Narrow cross-domain read (CLAUDE.md 7.1.8) -- exposes only what a
@@ -307,10 +306,8 @@ export interface BookingRequestDepositView {
   status: RequestStatus;
   depositPaid: boolean;
   // Added for refundDeposit (CLAUDE.md 7.3.3) -- stripePaymentIntentId
-  // is what the refund is issued against; depositRefunded guards its
-  // idempotency the same way depositPaid guards confirmDepositPayment's.
+  // is what the refund is issued against.
   stripePaymentIntentId: string | null;
-  depositRefunded: boolean;
   // Added for the precharge engine (CLAUDE.md 7.4) -- estimatedPrice is
   // what a flagged client's 50% precharge is computed against;
   // clientEnforcePrecharge is ClientProfile.enforcePrecharge joined in,

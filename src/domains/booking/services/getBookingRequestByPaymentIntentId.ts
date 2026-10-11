@@ -19,7 +19,6 @@ export async function getBookingRequestByPaymentIntentId(
       status: true,
       depositPaid: true,
       stripePaymentIntentId: true,
-      depositRefunded: true,
       estimatedPrice: true,
       client: { select: { enforcePrecharge: true } },
     },

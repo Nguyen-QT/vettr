@@ -6,8 +6,8 @@ import { advanceDepositRefundStatus } from "./advanceDepositRefundStatus";
 
 // Domain Service (56.6): called from the Stripe webhook route for every
 // refund.created, refund.updated and refund.failed, whatever its status.
-// Replaces confirmDepositRefund, and reads only billing's DepositRefund
-// table. It finds the booking's row, then moves it through
+// Reads only billing's DepositRefund table. It finds the booking's row,
+// then moves it through
 // advanceDepositRefundStatus, which alone decides what the status means
 // and whether the row may move. A row matches when:
 // - it already holds this refund id, or

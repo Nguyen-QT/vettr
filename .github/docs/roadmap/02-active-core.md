@@ -528,7 +528,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.6.6.1** View & Route — the client dashboard passes each booking's refund status to `ClientBookingCard`, which labels from it.
       - `global-setup` gives the refunded fixture a `SUCCEEDED` row and adds `PENDING` and `FAILED` fixtures.
       - `deposit-payment.spec` asserts each label.
-    - [ ] **56.6.2.5** Domain Service — booking + billing: retire the flag.
+    - [x] **56.6.2.5** Domain Service — booking + billing: retire the flag.
       - Delete booking's `recordDepositRefund` and billing's `confirmDepositRefund` (+ tests). This ends the mirror.
       - Drop `depositRefunded` from `BookingRequestDepositView`, `ClientBookingSummary` and their reads.
       - Point `depositRefundLifecycle.stripe-integration.test.ts` at `syncDepositRefundStatus`, and repoint the cancel-path comments.

@@ -44,7 +44,6 @@ describe("confirmDepositPayment", () => {
       status: "APPROVED",
       depositPaid: false,
       stripePaymentIntentId: "pi_123",
-      depositRefunded: false,
       estimatedPrice: 150,
       clientEnforcePrecharge: false,
       ...overrides,

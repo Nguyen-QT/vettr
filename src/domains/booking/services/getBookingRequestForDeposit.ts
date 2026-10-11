@@ -20,7 +20,6 @@ export async function getBookingRequestForDeposit(
       status: true,
       depositPaid: true,
       stripePaymentIntentId: true,
-      depositRefunded: true,
       estimatedPrice: true,
       client: { select: { enforcePrecharge: true } },
     },

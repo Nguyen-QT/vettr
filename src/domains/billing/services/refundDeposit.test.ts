@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
-import { recordDepositRefund } from "@/domains/booking/services/recordDepositRefund";
 import type { BookingRequestDepositView } from "@/domains/booking/types";
 import { Prisma } from "@/generated/prisma/client";
 
@@ -30,9 +29,6 @@ vi.mock("@/lib/stripe", () => ({
 vi.mock("@/domains/booking/services/getBookingRequestForDeposit", () => ({
   getBookingRequestForDeposit: vi.fn(),
 }));
-vi.mock("@/domains/booking/services/recordDepositRefund", () => ({
-  recordDepositRefund: vi.fn(),
-}));
 vi.mock("./recordDepositRefundIntent", () => ({
   recordDepositRefundIntent: vi.fn(),
 }));
@@ -41,7 +37,7 @@ vi.mock("./advanceDepositRefundStatus", () => ({
 }));
 
 // Unit test (architecture.md §7): refundDeposit touches no Prisma of its
-// own -- Stripe, booking's deposit read/write and billing's intent and
+// own -- Stripe, booking's deposit read and billing's intent and
 // status writes are mocked at their boundaries. The writes themselves are
 // proven on real rows in billing.integration.test.ts.
 describe("refundDeposit", () => {
@@ -62,7 +58,6 @@ describe("refundDeposit", () => {
       status: "CANCELLED_BY_CLIENT",
       depositPaid: true,
       stripePaymentIntentId: "pi_refund_123",
-      depositRefunded: false,
       estimatedPrice: null,
       clientEnforcePrecharge: false,
       ...overrides,
@@ -79,7 +74,6 @@ describe("refundDeposit", () => {
   beforeEach(() => {
     createRefundMock.mockReset();
     vi.mocked(getBookingRequestForDeposit).mockReset().mockResolvedValue(depositView());
-    vi.mocked(recordDepositRefund).mockReset();
     vi.mocked(recordDepositRefundIntent).mockReset().mockResolvedValue({
       stripePaymentIntentId: intentPaymentIntentId,
       stripeRefundId: null,
@@ -109,7 +103,6 @@ describe("refundDeposit", () => {
       stripeStatus: "succeeded",
       failureReason: undefined,
     });
-    expect(recordDepositRefund).toHaveBeenCalledWith(bookingRequestId, "re_123");
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
@@ -131,7 +124,6 @@ describe("refundDeposit", () => {
         stripeStatus: status,
         failureReason: failure_reason,
       });
-      expect(recordDepositRefund).toHaveBeenCalledWith(bookingRequestId, "re_123");
     }
   );
 
@@ -143,19 +135,6 @@ describe("refundDeposit", () => {
 
     expect(result).toEqual({ success: true });
     expect(consoleErrorSpy).not.toHaveBeenCalled();
-  });
-
-  it("is idempotent when the deposit was already refunded", async () => {
-    vi.mocked(getBookingRequestForDeposit).mockResolvedValue(
-      depositView({ depositRefunded: true })
-    );
-
-    const result = await refundDeposit(bookingRequestId);
-
-    expect(result).toEqual({ success: true });
-    expect(recordDepositRefundIntent).not.toHaveBeenCalled();
-    expect(createRefundMock).not.toHaveBeenCalled();
-    expect(recordDepositRefund).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -216,7 +195,6 @@ describe("refundDeposit", () => {
     expect(result).toEqual({ success: true });
     expect(createRefundMock).not.toHaveBeenCalled();
     expect(advanceDepositRefundStatus).not.toHaveBeenCalled();
-    expect(recordDepositRefund).not.toHaveBeenCalled();
   });
 
   it("returns the generic error and leaves the intent unwritten when the Stripe call itself fails", async () => {
@@ -226,7 +204,6 @@ describe("refundDeposit", () => {
 
     expect(result).toEqual({ success: false, error: DEPOSIT_REFUND_INIT_ERROR_MESSAGE });
     expect(advanceDepositRefundStatus).not.toHaveBeenCalled();
-    expect(recordDepositRefund).not.toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith({
       operation: "refundDeposit",
@@ -254,7 +231,6 @@ describe("refundDeposit", () => {
       stripeRefundId: "re_write_fail",
       errorCode: "P2002",
     });
-    expect(recordDepositRefund).toHaveBeenCalledWith(bookingRequestId, "re_write_fail");
   });
 
   it("logs no Prisma code for a status write that fails with a non-Prisma error", async () => {
@@ -267,24 +243,5 @@ describe("refundDeposit", () => {
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       expect.objectContaining({ reason: "record_failed", errorCode: undefined })
     );
-  });
-
-  it("still reports success when the legacy mirror write fails", async () => {
-    createRefundMock.mockResolvedValue({ id: "re_mirror_fail", status: "succeeded" });
-    vi.mocked(recordDepositRefund).mockRejectedValue(prismaError("P2025"));
-
-    const result = await refundDeposit(bookingRequestId);
-
-    expect(result).toEqual({ success: true });
-    expect(advanceDepositRefundStatus).toHaveBeenCalledTimes(1);
-    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith({
-      operation: "refundDeposit",
-      reason: "legacy_mirror_failed",
-      severity: "warning",
-      bookingRequestId,
-      stripeRefundId: "re_mirror_fail",
-      errorCode: "P2025",
-    });
   });
 });
