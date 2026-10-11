@@ -61,7 +61,6 @@ describe("createDepositPaymentIntent", () => {
       status: "APPROVED",
       depositPaid: false,
       stripePaymentIntentId: null,
-      depositRefunded: false,
       estimatedPrice: null,
       clientEnforcePrecharge: false,
       ...overrides,

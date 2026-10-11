@@ -73,7 +73,7 @@ export async function cancelBookingRequest(
   // network round-trip. The cancellation has already committed by this
   // point, so a refund failure is logged rather than reported back as a
   // cancellation failure -- the booking is genuinely cancelled either way,
-  // and refundDeposit's own webhook backstop (confirmDepositRefund)
+  // and refundDeposit's own webhook backstop (syncDepositRefundStatus)
   // reconciles a transient failure independently. depositPaid and
   // stripePaymentIntentId are read back from the status update above, not
   // the earlier read (56.2, 56.4), so a payment confirmed or a

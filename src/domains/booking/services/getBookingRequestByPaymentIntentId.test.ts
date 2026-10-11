@@ -15,7 +15,6 @@ describe("getBookingRequestByPaymentIntentId", () => {
       status: "APPROVED",
       depositPaid: false,
       stripePaymentIntentId: "pi_lookup_123",
-      depositRefunded: false,
       estimatedPrice: null,
       client: { enforcePrecharge: false },
     } as never);
@@ -33,7 +32,6 @@ describe("getBookingRequestByPaymentIntentId", () => {
       status: "APPROVED",
       depositPaid: false,
       stripePaymentIntentId: "pi_lookup_123",
-      depositRefunded: false,
       estimatedPrice: null,
       clientEnforcePrecharge: false,
     });
@@ -48,7 +46,6 @@ describe("getBookingRequestByPaymentIntentId", () => {
       status: "APPROVED",
       depositPaid: true,
       stripePaymentIntentId: "pi_lookup_123",
-      depositRefunded: false,
       estimatedPrice: "150.5",
       client: { enforcePrecharge: true },
     } as never);

@@ -33,6 +33,5 @@ export async function getClientBookings(
       (reference) => reference.imageUrl
     ),
     depositPaid: request.depositPaid,
-    depositRefunded: request.depositRefunded,
   }));
 }

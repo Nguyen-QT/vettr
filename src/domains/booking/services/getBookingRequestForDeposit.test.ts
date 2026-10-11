@@ -15,7 +15,6 @@ describe("getBookingRequestForDeposit", () => {
       status: "APPROVED",
       depositPaid: true,
       stripePaymentIntentId: "pi_view_123",
-      depositRefunded: false,
       estimatedPrice: "150",
       client: { enforcePrecharge },
     } as never;
@@ -37,7 +36,6 @@ describe("getBookingRequestForDeposit", () => {
       status: "APPROVED",
       depositPaid: true,
       stripePaymentIntentId: "pi_view_123",
-      depositRefunded: false,
       estimatedPrice: 150,
       clientEnforcePrecharge: false,
     });

@@ -6,18 +6,18 @@ import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 
 import { confirmDepositPayment } from "./confirmDepositPayment";
-import { confirmDepositRefund } from "./confirmDepositRefund";
 import { createDepositPaymentIntent } from "./createDepositPaymentIntent";
 import { refundDeposit } from "./refundDeposit";
+import { syncDepositRefundStatus } from "./syncDepositRefundStatus";
 
 // Integration Test -- Refund Lifecycle (CLAUDE.md 14.1.3): mirrors
 // 14.1.2's reasoning -- the mocked unit suites for refundDeposit/
-// confirmDepositRefund already cover every business-logic branch
+// syncDepositRefundStatus already cover every business-logic branch
 // (idempotency, not-paid, missing PaymentIntent) against a stubbed
 // Stripe client. This file's only job is proving refundDeposit's real,
 // unmocked `stripe.refunds.create` call still round-trips correctly
 // against a real, paid test-mode PaymentIntent, and that
-// confirmDepositRefund correctly no-ops on a real webhook redelivery
+// syncDepositRefundStatus correctly no-ops on a real webhook redelivery
 // of a refund it already knows about.
 describe("deposit refund lifecycle (real Stripe test mode)", () => {
   let artistId: string;
@@ -54,7 +54,7 @@ describe("deposit refund lifecycle (real Stripe test mode)", () => {
     await prisma.artist.delete({ where: { id: artistId } });
   });
 
-  it("refunds a real paid deposit and reconciles a webhook redelivery via confirmDepositRefund", async () => {
+  it("refunds a real paid deposit and no-ops on a webhook redelivery via syncDepositRefundStatus", async () => {
     const request = await prisma.bookingRequest.create({
       data: {
         clientId,
@@ -89,41 +89,43 @@ describe("deposit refund lifecycle (real Stripe test mode)", () => {
     const refundResult = await refundDeposit(request.id);
     expect(refundResult).toEqual({ success: true });
 
-    const afterRefund = await prisma.bookingRequest.findUnique({
-      where: { id: request.id },
-    });
-    expect(afterRefund?.depositRefunded).toBe(true);
-    expect(afterRefund?.stripeRefundId).toMatch(/^re_/);
-
-    // Verifies the real refund is genuinely reflected on Stripe's side,
-    // not just assumed from a successful `create` response.
-    const refund = await stripe.refunds.retrieve(afterRefund!.stripeRefundId!);
-    expect(refund.payment_intent).toBe(paymentIntentId);
-    expect(refund.metadata?.bookingRequestId).toBe(request.id);
-
     // Billing's refund row (56.6): the intent recorded before the call,
     // moved to the status Stripe's real response reported. An immediate
     // card refund is created already succeeded (56.1).
-    const refundRow = await prisma.depositRefund.findUnique({
-      where: { bookingRequestId: request.id },
-      select: { status: true, stripePaymentIntentId: true, stripeRefundId: true },
-    });
+    const readRefundRow = () =>
+      prisma.depositRefund.findUnique({
+        where: { bookingRequestId: request.id },
+        select: { status: true, stripePaymentIntentId: true, stripeRefundId: true },
+      });
+    const refundRow = await readRefundRow();
     expect(refundRow).toEqual({
       status: "SUCCEEDED",
       stripePaymentIntentId: paymentIntentId,
-      stripeRefundId: refund.id,
+      stripeRefundId: expect.stringMatching(/^re_/),
     });
+
+    // Verifies the real refund is genuinely reflected on Stripe's side,
+    // not just assumed from a successful `create` response.
+    const refund = await stripe.refunds.retrieve(refundRow!.stripeRefundId!);
+    expect(refund.payment_intent).toBe(paymentIntentId);
+    expect(refund.metadata?.bookingRequestId).toBe(request.id);
 
     // Stands in for the webhook's refund.created (and the
     // refund.updated that follows once the card's ARN arrives, 56.1)
-    // reaching confirmDepositRefund after refundDeposit's own write
-    // already succeeded -- the common case confirmDepositRefund exists
-    // to no-op on. Real delivery through the route is proven in
+    // reaching syncDepositRefundStatus after refundDeposit's own write
+    // already succeeded, mapped the way the route maps it. The row
+    // already holds this refund at this status, so nothing is written.
+    // Real delivery through the route is proven in
     // route.stripe-integration.test.ts.
-    const redeliveryResult = await confirmDepositRefund(
-      paymentIntentId,
-      afterRefund!.stripeRefundId!
-    );
-    expect(redeliveryResult).toEqual({ success: true });
+    const written = await syncDepositRefundStatus({
+      stripeRefundId: refund.id,
+      stripePaymentIntentId:
+        typeof refund.payment_intent === "string" ? refund.payment_intent : null,
+      metadataBookingRequestId: refund.metadata?.bookingRequestId,
+      stripeStatus: refund.status,
+      failureReason: refund.failure_reason,
+    });
+    expect(written).toBe(false);
+    expect(await readRefundRow()).toEqual(refundRow);
   });
 });

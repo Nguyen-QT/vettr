@@ -13,13 +13,11 @@ import {
   DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
   DEPOSIT_REFUND_INIT_ERROR_MESSAGE,
   DEPOSIT_REFUND_NOT_PAID_ERROR_MESSAGE,
-  DEPOSIT_REFUND_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
 } from "../constants";
 import type { DepositRefundStatus } from "../types";
 import { addBillingAddon } from "./addBillingAddon";
 import { advanceDepositRefundStatus } from "./advanceDepositRefundStatus";
 import { confirmDepositPayment } from "./confirmDepositPayment";
-import { confirmDepositRefund } from "./confirmDepositRefund";
 import { getArtistDepositSettings } from "./getArtistDepositSettings";
 import { getBillingAddons } from "./getBillingAddons";
 import { getFinalBillTotal } from "./getFinalBillTotal";
@@ -298,33 +296,6 @@ describe("billing integration", () => {
         error: DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
       });
     });
-
-    it("confirmDepositRefund persists the refund id once and ignores a redelivery with a different id", async () => {
-      const { artistId, clientId } = await setup();
-      const intent = paymentIntentId();
-      const request = await createBookingRequest({
-        artistId,
-        clientId,
-        depositPaid: true,
-        stripePaymentIntentId: intent,
-      });
-
-      expect(await confirmDepositRefund(intent, "re_first")).toEqual({ success: true });
-      expect(await confirmDepositRefund(intent, "re_second")).toEqual({ success: true });
-
-      const row = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-      expect(row.depositRefunded).toBe(true);
-      expect(row.stripeRefundId).toBe("re_first");
-    });
-
-    it("confirmDepositRefund returns the not-found error for an unknown PaymentIntent", async () => {
-      const result = await confirmDepositRefund(paymentIntentId(), "re_x");
-
-      expect(result).toEqual({
-        success: false,
-        error: DEPOSIT_REFUND_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
-      });
-    });
   });
 
   describe("syncArtistConnectAccountStatus", () => {
@@ -411,7 +382,7 @@ describe("billing integration", () => {
       });
     }
 
-    it("records a SUCCEEDED refund row and the legacy flag, and a re-run makes no second Stripe call", async () => {
+    it("records a SUCCEEDED refund row, and a re-run makes no second Stripe call", async () => {
       const request = await createPaidRequest();
       refundsCreateMock.mockResolvedValue({ id: "re_it_1", status: "succeeded" });
 
@@ -426,9 +397,6 @@ describe("billing integration", () => {
       expect(await readRefundRows(request.id)).toEqual([
         { status: "SUCCEEDED", stripePaymentIntentId: request.intent, stripeRefundId: "re_it_1" },
       ]);
-      const row = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-      expect(row.depositRefunded).toBe(true);
-      expect(row.stripeRefundId).toBe("re_it_1");
     });
 
     it("rejects an unpaid deposit without calling Stripe, recording an intent or changing the row", async () => {

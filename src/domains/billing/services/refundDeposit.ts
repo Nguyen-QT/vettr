@@ -1,7 +1,6 @@
 import type Stripe from "stripe";
 
 import { getBookingRequestForDeposit } from "@/domains/booking/services/getBookingRequestForDeposit";
-import { recordDepositRefund } from "@/domains/booking/services/recordDepositRefund";
 import { Prisma } from "@/generated/prisma/client";
 import { stripe } from "@/lib/stripe";
 
@@ -38,14 +37,12 @@ function prismaErrorCode(error: unknown): string | undefined {
 // and a failed create leaves the row PENDING with no refund id. A failed
 // status write still returns success, because the refund exists, and the
 // webhook attaches its id through metadata.bookingRequestId.
-// Idempotent: depositRefunded already true, or a row that already holds a
-// refund id (FAILED included -- recovering a failed refund is manual,
-// 56.11), returns success without a second Stripe call.
-// Until 56.6.2.5, booking's recordDepositRefund still mirrors the refund
-// onto depositRefunded/stripeRefundId for the legacy dashboard label.
-// Reads/writes BookingRequest through booking's narrow deposit functions
-// (7.2.3/7.3.2) rather than prisma directly -- billing never queries
-// booking's table (CLAUDE.md's Domain Boundary Isolation rule).
+// Idempotent: a row that already holds a refund id (FAILED included --
+// recovering a failed refund is manual, 56.11) returns success without a
+// second Stripe call.
+// Reads BookingRequest through booking's narrow deposit read (7.2.3)
+// rather than prisma directly -- billing never queries booking's table
+// (CLAUDE.md's Domain Boundary Isolation rule).
 export async function refundDeposit(
   bookingRequestId: string
 ): Promise<RefundDepositResult> {
@@ -53,10 +50,6 @@ export async function refundDeposit(
 
   if (!request) {
     return { success: false, error: DEPOSIT_REFUND_REQUEST_NOT_FOUND_ERROR_MESSAGE };
-  }
-
-  if (request.depositRefunded) {
-    return { success: true };
   }
 
   if (!request.depositPaid) {
@@ -138,22 +131,6 @@ export async function refundDeposit(
       operation: "refundDeposit",
       reason: "record_failed",
       severity: "critical",
-      bookingRequestId,
-      stripeRefundId: refund.id,
-      errorCode: prismaErrorCode(error),
-    });
-  }
-
-  try {
-    await recordDepositRefund(bookingRequestId, refund.id);
-  } catch (error) {
-    // Legacy mirror only (until 56.6.2.5). The webhook's
-    // confirmDepositRefund reconciles it once Stripe reports the refund
-    // succeeded (56.1).
-    console.error({
-      operation: "refundDeposit",
-      reason: "legacy_mirror_failed",
-      severity: "warning",
       bookingRequestId,
       stripeRefundId: refund.id,
       errorCode: prismaErrorCode(error),

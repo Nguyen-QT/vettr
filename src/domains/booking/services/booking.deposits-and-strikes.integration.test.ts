@@ -335,20 +335,14 @@ describe("booking deposits-and-strikes integration", () => {
         { idempotencyKey: `deposit-refund:${request.id}` }
       );
       const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-      expect(after).toMatchObject({
-        status: "CANCELLED_BY_CLIENT",
-        depositPaid: true,
-        depositRefunded: true,
-        stripeRefundId: expect.stringMatching(/^re_it_/),
-      });
-      // Billing's refund row (56.6) agrees with the legacy mirror.
+      expect(after).toMatchObject({ status: "CANCELLED_BY_CLIENT", depositPaid: true });
       const refundRow = await prisma.depositRefund.findUniqueOrThrow({
         where: { bookingRequestId: request.id },
       });
       expect(refundRow).toMatchObject({
         status: "SUCCEEDED",
         stripePaymentIntentId: intent,
-        stripeRefundId: after.stripeRefundId,
+        stripeRefundId: expect.stringMatching(/^re_it_/),
       });
     });
 
@@ -384,18 +378,15 @@ describe("booking deposits-and-strikes integration", () => {
           const after = await prisma.bookingRequest.findUniqueOrThrow({
             where: { id: request.id },
           });
-          expect(after).toMatchObject({
-            status: cancelledStatus,
-            depositPaid: true,
-            depositRefunded: true,
-          });
+          expect(after).toMatchObject({ status: cancelledStatus, depositPaid: true });
           const refundRows = await prisma.depositRefund.findMany({
             where: { bookingRequestId: request.id },
           });
           expect(refundRows).toHaveLength(1);
           expect(refundRows[0]).toMatchObject({
             status: "SUCCEEDED",
-            stripeRefundId: after.stripeRefundId,
+            stripePaymentIntentId: intent,
+            stripeRefundId: expect.stringMatching(/^re_it_/),
           });
         }
       }

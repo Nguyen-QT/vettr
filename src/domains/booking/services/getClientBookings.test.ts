@@ -18,7 +18,6 @@ describe("getClientBookings", () => {
       createdAt: Date;
       estimatedPrice: string | null;
       depositPaid: boolean;
-      depositRefunded: boolean;
       imageUrls: string[];
     }> = {}
   ) {
@@ -33,7 +32,6 @@ describe("getClientBookings", () => {
       requestedStartTime: new Date("2026-11-01T10:00:00.000Z"),
       createdAt: overrides.createdAt ?? new Date("2026-10-01T10:00:00.000Z"),
       depositPaid: overrides.depositPaid ?? false,
-      depositRefunded: overrides.depositRefunded ?? false,
       artist: {
         name: overrides.artistName ?? "Test Artist",
         instagramHandle: overrides.artistHandle ?? "test_artist",
@@ -63,20 +61,18 @@ describe("getClientBookings", () => {
       createdAt: new Date("2026-10-01T10:00:00.000Z"),
       designReferenceImageUrls: [],
       depositPaid: false,
-      depositRefunded: false,
     });
   });
 
-  it("returns the deposit status fields and maps a Decimal estimatedPrice to a number", async () => {
+  it("returns depositPaid and maps a Decimal estimatedPrice to a number", async () => {
     prismaMock.bookingRequest.findMany.mockResolvedValue([
-      row({ estimatedPrice: "150", depositPaid: true, depositRefunded: true }),
+      row({ estimatedPrice: "150", depositPaid: true }),
     ]);
 
     const [result] = await getClientBookings(clientId);
 
     expect(result?.estimatedPrice).toBe(150);
     expect(result?.depositPaid).toBe(true);
-    expect(result?.depositRefunded).toBe(true);
   });
 
   it("returns the request's existing design reference image URLs", async () => {

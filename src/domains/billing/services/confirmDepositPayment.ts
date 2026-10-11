@@ -18,12 +18,12 @@ import { refundDeposit } from "./refundDeposit";
 // side sees the other's write and refunds.
 // A cancelled/declined booking is refunded in full on every delivery,
 // redeliveries of an already-paid event included: refundDeposit no-ops
-// once a refund exists (depositRefunded is set, or the booking's
-// DepositRefund row holds a refund id, FAILED included -- recovering a
-// failed refund is manual, 56.11), so redeliveries stop retrying once
-// Stripe has a refund instead of failing forever. A refund that fails
-// before Stripe makes one throws, so the webhook route answers 500 and
-// Stripe redelivers to retry it. A newly paid
+// once a refund exists (the booking's DepositRefund row holds a refund
+// id, FAILED included -- recovering a failed refund is manual, 56.11),
+// so redeliveries stop retrying once Stripe has a refund instead of
+// failing forever. A refund that fails before Stripe makes one throws,
+// so the webhook route answers 500 and Stripe redelivers to retry it. A
+// newly paid
 // COMPLETED/NO_SHOW booking only raises a critical alert (ids only) for
 // manual reconciliation.
 // A PaymentIntent that matches no booking (56.4) can only be state left
