@@ -120,6 +120,18 @@ export interface DepositRefundIntent {
 // the sweep skips the row this run.
 export type DepositRefundReconcileOutcome = "RECONCILED" | "NO_REFUND" | "LIST_FAILED";
 
+// One retryOwedDepositRefunds run (56.7), counted per row read. reconciled:
+// a refund already existed on Stripe and went through the webhook's sync.
+// refunded: refundDeposit succeeded. failed: the list call or refundDeposit
+// failed, or the row threw; it stays a candidate. deferred: the run's time
+// budget ran out before the row started. The four sum to the rows read.
+export interface RetryOwedDepositRefundsResult {
+  reconciled: number;
+  refunded: number;
+  failed: number;
+  deferred: number;
+}
+
 // Keyed by bookingRequestId (CLAUDE.md 7.1.8) -- only requests that are
 // APPROVED, unpaid, and have a configured deposit for their tier
 // appear here at all; there is no "not payable yet" entry, unlike
