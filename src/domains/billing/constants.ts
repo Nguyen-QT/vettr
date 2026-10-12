@@ -166,8 +166,26 @@ export const DEPOSIT_REFUND_STATUSES_BEHIND: Record<
 
 // The retry sweep's (56.7) count of visits to a refund intent still
 // PENDING with no refund id. The visit whose increment reaches this number
-// raises one critical alert (53.7); retries continue after it.
+// raises one critical alert (53.7); retries continue after it. From this
+// count on, retryOwedDepositRefunds retries the row at most once a day.
 export const DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS = 5;
+
+// The retry sweep's bounds (56.7). At most this many rows are read per run,
+// oldest updatedAt first; the rest wait for the next run.
+export const DEPOSIT_REFUND_RETRY_BATCH_SIZE = 50;
+// A row is retried only once its updatedAt is this old, so the sweep never
+// races the call that created it or last touched it. Must stay above the
+// longest a server action or webhook can run (300s).
+export const DEPOSIT_REFUND_RETRY_MIN_AGE_MS = 10 * 60 * 1000;
+// Once a row reaches DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS it waits this long
+// between retries. That also outlasts Stripe's 24h idempotency key window,
+// which replays a saved Stripe 500 to every retry inside it.
+export const DEPOSIT_REFUND_RETRY_BACKOFF_MS = 24 * 60 * 60 * 1000;
+// No new row starts once a run has taken this long; the rest are deferred
+// to the next run. The route's maxDuration (300s) leaves room for the row
+// in progress, since one Stripe call with stripe-node's retries can take
+// minutes.
+export const DEPOSIT_REFUND_RETRY_BUDGET_MS = 60 * 1000;
 
 // Surfaced by the day-of checkout flow (CLAUDE.md 7.5.3/7.5.4):
 // addBillingAddon, removeBillingAddon, getBillingAddons. Not found and

@@ -589,7 +589,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.7.2.4** Domain Service — billing: new `recordDepositRefundRetry` (the conditional increment and the alert at 5).
       - Unit tests.
       - `billing.integration.test.ts` cases: a row with a refund id isn't counted; concurrent increments alert exactly once.
-    - [ ] **56.7.2.5** Domain Service — billing: new `retryOwedDepositRefunds` and its constants.
+    - [x] **56.7.2.5** Domain Service — billing: new `retryOwedDepositRefunds` and its constants.
       - Unit tests: the candidate query and backoff, reconcile-first, a failed list call skips the create, a refund, a refusal logged critical, a row that throws doesn't stop the batch, the budget defers.
       - `billing.integration.test.ts` cases (Stripe mocked): an old id-less row is refunded; a young row is skipped; a row at 5 retries waits a day; `SUCCEEDED`/`FAILED` rows are never touched.
     - [ ] **56.7.3.1** Controller/Action — move the bearer check to `src/lib/cronAuth.ts`; session-cleanup uses it, behaviour unchanged (+ `cronAuth.test.ts`; session-cleanup's route tests pass unchanged).

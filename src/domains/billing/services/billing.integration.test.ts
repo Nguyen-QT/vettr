@@ -27,6 +27,7 @@ import { recordDepositRefundIntent } from "./recordDepositRefundIntent";
 import { recordDepositRefundRetry } from "./recordDepositRefundRetry";
 import { refundDeposit } from "./refundDeposit";
 import { removeBillingAddon } from "./removeBillingAddon";
+import { retryOwedDepositRefunds } from "./retryOwedDepositRefunds";
 import { setArtistDepositSettings } from "./setArtistDepositSettings";
 import { syncArtistConnectAccountStatus } from "./syncArtistConnectAccountStatus";
 import { syncDepositRefundStatus } from "./syncDepositRefundStatus";
@@ -34,9 +35,13 @@ import { syncDepositRefundStatus } from "./syncDepositRefundStatus";
 // Stripe has no network access (or secrets) in the integration CI job, so the
 // SDK stays mocked exactly as in the unit tier; everything else is real.
 const refundsCreateMock = vi.fn();
+const refundsListMock = vi.fn();
 vi.mock("@/lib/stripe", () => ({
   stripe: {
-    refunds: { create: (...args: unknown[]) => refundsCreateMock(...args) },
+    refunds: {
+      create: (...args: unknown[]) => refundsCreateMock(...args),
+      list: (...args: unknown[]) => refundsListMock(...args),
+    },
   },
 }));
 
@@ -55,9 +60,46 @@ function paymentIntentId(): string {
   return `pi_it_${uniqueSuffix()}`;
 }
 
+function hoursAgo(hours: number): Date {
+  return new Date(Date.now() - hours * 60 * 60 * 1000);
+}
+
+// A paid booking's refund intent row, created directly. updatedAt defaults
+// to an hour back, so a bump shows whatever the clock's resolution.
+async function createRefundRow(row: {
+  status: DepositRefundStatus;
+  stripeRefundId: string | null;
+  retryAttempts: number;
+  updatedAt?: Date;
+}): Promise<{ bookingRequestId: string; stripePaymentIntentId: string; updatedAt: Date }> {
+  const { artistId, clientId } = await setup();
+  const intent = paymentIntentId();
+  const request = await createBookingRequest({
+    artistId,
+    clientId,
+    depositPaid: true,
+    stripePaymentIntentId: intent,
+  });
+  const created = await prisma.depositRefund.create({
+    data: {
+      bookingRequestId: request.id,
+      stripePaymentIntentId: intent,
+      ...row,
+      updatedAt: row.updatedAt ?? hoursAgo(1),
+    },
+    select: { updatedAt: true },
+  });
+  return {
+    bookingRequestId: request.id,
+    stripePaymentIntentId: intent,
+    updatedAt: created.updatedAt,
+  };
+}
+
 describe("billing integration", () => {
   beforeEach(async () => {
     refundsCreateMock.mockReset();
+    refundsListMock.mockReset();
     await tracker.wipe();
   });
 
@@ -762,33 +804,6 @@ describe("billing integration", () => {
       updatedAt: Date;
     }
 
-    // Created directly, with updatedAt an hour back so a bump shows
-    // whatever the clock's resolution.
-    async function createRefundRow(row: {
-      status: DepositRefundStatus;
-      stripeRefundId: string | null;
-      retryAttempts: number;
-    }): Promise<{ bookingRequestId: string; updatedAt: Date }> {
-      const { artistId, clientId } = await setup();
-      const intent = paymentIntentId();
-      const request = await createBookingRequest({
-        artistId,
-        clientId,
-        depositPaid: true,
-        stripePaymentIntentId: intent,
-      });
-      const created = await prisma.depositRefund.create({
-        data: {
-          bookingRequestId: request.id,
-          stripePaymentIntentId: intent,
-          ...row,
-          updatedAt: new Date(Date.now() - 60 * 60 * 1000),
-        },
-        select: { updatedAt: true },
-      });
-      return { bookingRequestId: request.id, updatedAt: created.updatedAt };
-    }
-
     function readRetryRow(bookingRequestId: string): Promise<RetryRow> {
       return prisma.depositRefund.findUniqueOrThrow({
         where: { bookingRequestId },
@@ -855,6 +870,187 @@ describe("billing integration", () => {
           DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS + 1
         );
       }
+    });
+  });
+
+  // The retry sweep (56.7) on real rows, Stripe mocked: which rows the
+  // candidate read lets through (the minimum age, the daily backoff from
+  // the alert count, status and refund id), and a refund that settles its
+  // row. Files run serially and wipe before each test, so a run's counts
+  // are the test's own rows.
+  describe("retryOwedDepositRefunds", () => {
+    let consoleErrorSpy: MockInstance<typeof console.error>;
+
+    // Stands in for stripe-node's auto-paginating list when the
+    // PaymentIntent has no refunds.
+    async function* noListedRefunds(): AsyncGenerator<never> {
+      yield* [];
+    }
+
+    beforeEach(() => {
+      refundsListMock.mockImplementation(() => noListedRefunds());
+      consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleErrorSpy.mockRestore();
+    });
+
+    interface SweptRow {
+      status: DepositRefundStatus;
+      stripeRefundId: string | null;
+      retryAttempts: number;
+      updatedAt: Date;
+    }
+
+    function readSweptRow(bookingRequestId: string): Promise<SweptRow> {
+      return prisma.depositRefund.findUniqueOrThrow({
+        where: { bookingRequestId },
+        select: { status: true, stripeRefundId: true, retryAttempts: true, updatedAt: true },
+      });
+    }
+
+    const emptyRun = { reconciled: 0, refunded: 0, failed: 0, deferred: 0 };
+
+    it("refunds an old id-less PENDING row after checking Stripe, settling it uncounted", async () => {
+      const created = await createRefundRow({
+        status: "PENDING",
+        stripeRefundId: null,
+        retryAttempts: 0,
+      });
+      const stripeRefundId = `re_it_${uniqueSuffix()}`;
+      refundsCreateMock.mockResolvedValue({ id: stripeRefundId, status: "succeeded" });
+
+      const result = await retryOwedDepositRefunds();
+
+      expect(result).toEqual({ reconciled: 0, refunded: 1, failed: 0, deferred: 0 });
+      expect(refundsListMock).toHaveBeenCalledTimes(1);
+      expect(refundsListMock).toHaveBeenCalledWith({
+        payment_intent: created.stripePaymentIntentId,
+        limit: 100,
+      });
+      expect(refundsCreateMock).toHaveBeenCalledTimes(1);
+      expect(refundsCreateMock).toHaveBeenCalledWith(
+        {
+          payment_intent: created.stripePaymentIntentId,
+          metadata: { bookingRequestId: created.bookingRequestId },
+        },
+        { idempotencyKey: `deposit-refund:${created.bookingRequestId}` }
+      );
+      expect(await readSweptRow(created.bookingRequestId)).toMatchObject({
+        status: "SUCCEEDED",
+        stripeRefundId,
+        retryAttempts: 0,
+      });
+    });
+
+    it("skips an id-less PENDING row younger than the minimum age", async () => {
+      const created = await createRefundRow({
+        status: "PENDING",
+        stripeRefundId: null,
+        retryAttempts: 0,
+        updatedAt: new Date(Date.now() - 5 * 60 * 1000),
+      });
+
+      expect(await retryOwedDepositRefunds()).toEqual(emptyRun);
+
+      expect(refundsListMock).not.toHaveBeenCalled();
+      expect(refundsCreateMock).not.toHaveBeenCalled();
+      expect(await readSweptRow(created.bookingRequestId)).toEqual({
+        status: "PENDING",
+        stripeRefundId: null,
+        retryAttempts: 0,
+        updatedAt: created.updatedAt,
+      });
+    });
+
+    it("retries a row below the alert count after the minimum age, and one at it only after a day", async () => {
+      const belowAlert = await createRefundRow({
+        status: "PENDING",
+        stripeRefundId: null,
+        retryAttempts: DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS - 1,
+        updatedAt: hoursAgo(2),
+      });
+      const waiting = await createRefundRow({
+        status: "PENDING",
+        stripeRefundId: null,
+        retryAttempts: DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS,
+        updatedAt: hoursAgo(2),
+      });
+      const due = await createRefundRow({
+        status: "PENDING",
+        stripeRefundId: null,
+        retryAttempts: DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS,
+        updatedAt: hoursAgo(25),
+      });
+      refundsCreateMock.mockRejectedValue(new Error("stripe down"));
+
+      const result = await retryOwedDepositRefunds();
+
+      expect(result).toEqual({ reconciled: 0, refunded: 0, failed: 2, deferred: 0 });
+      // Oldest first.
+      expect(refundsListMock.mock.calls).toEqual([
+        [{ payment_intent: due.stripePaymentIntentId, limit: 100 }],
+        [{ payment_intent: belowAlert.stripePaymentIntentId, limit: 100 }],
+      ]);
+      expect(await readSweptRow(waiting.bookingRequestId)).toEqual({
+        status: "PENDING",
+        stripeRefundId: null,
+        retryAttempts: DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS,
+        updatedAt: waiting.updatedAt,
+      });
+      for (const [created, retryAttempts] of [
+        [belowAlert, DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS],
+        [due, DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS + 1],
+      ] as const) {
+        const row = await readSweptRow(created.bookingRequestId);
+        expect(row).toMatchObject({ status: "PENDING", stripeRefundId: null, retryAttempts });
+        expect(row.updatedAt.getTime()).toBeGreaterThan(created.updatedAt.getTime());
+      }
+      // The row that reached the count alerts; the one past it doesn't
+      // alert again.
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: "refund_retry_failing",
+          bookingRequestId: belowAlert.bookingRequestId,
+        })
+      );
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: "refund_retry_failing",
+          bookingRequestId: due.bookingRequestId,
+        })
+      );
+    });
+
+    it.each<{ case: string; status: DepositRefundStatus; hasRefundId: boolean }>([
+      {
+        case: "a SUCCEEDED row with no refund id (56.6's backfill)",
+        status: "SUCCEEDED",
+        hasRefundId: false,
+      },
+      { case: "a SUCCEEDED row", status: "SUCCEEDED", hasRefundId: true },
+      { case: "a FAILED row", status: "FAILED", hasRefundId: true },
+      { case: "a PENDING row that holds a refund id", status: "PENDING", hasRefundId: true },
+    ])("never touches $case", async ({ status, hasRefundId }) => {
+      const stripeRefundId = hasRefundId ? `re_it_${uniqueSuffix()}` : null;
+      const created = await createRefundRow({
+        status,
+        stripeRefundId,
+        retryAttempts: 0,
+        updatedAt: hoursAgo(25),
+      });
+
+      expect(await retryOwedDepositRefunds()).toEqual(emptyRun);
+
+      expect(refundsListMock).not.toHaveBeenCalled();
+      expect(refundsCreateMock).not.toHaveBeenCalled();
+      expect(await readSweptRow(created.bookingRequestId)).toEqual({
+        status,
+        stripeRefundId,
+        retryAttempts: 0,
+        updatedAt: created.updatedAt,
+      });
     });
   });
 });
