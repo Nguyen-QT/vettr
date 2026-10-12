@@ -534,7 +534,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - Point `depositRefundLifecycle.stripe-integration.test.ts` at `syncDepositRefundStatus`, and repoint the cancel-path comments.
     - [x] **56.6.1.2** Data Gateway — drop `BookingRequest.depositRefunded` and `stripeRefundId` + migration.
       - Fixture-only edits forced by the drop: the `global-setup` insert and the integration assertions on the dropped columns.
-- [ ] **56.7: Retry Refunds Whose Stripe Call Failed** (execute 1.1 → 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 3.1 → 3.2 → 6.1)
+- [x] **56.7: Retry Refunds Whose Stripe Call Failed** (execute 1.1 → 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 3.1 → 3.2 → 6.1)
   - If `stripe.refunds.create` itself fails, no refund exists on Stripe, so no webhook will ever arrive.
   - Both cancel paths only `console.error`. `cancelBookingRequest`'s comment, which says the webhook backstop reconciles this, is wrong for this case.
   - Add a bounded, idempotent retry for refund intents (from 56.6) that are still `PENDING` with no Stripe refund id. The 27.4 session-cleanup cron route and workflow are the precedent.
@@ -594,7 +594,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - `billing.integration.test.ts` cases (Stripe mocked): an old id-less row is refunded; a young row is skipped; a row at 5 retries waits a day; `SUCCEEDED`/`FAILED` rows are never touched.
     - [x] **56.7.3.1** Controller/Action — move the bearer check to `src/lib/cronAuth.ts`; session-cleanup uses it, behaviour unchanged (+ `cronAuth.test.ts`; session-cleanup's route tests pass unchanged).
     - [x] **56.7.3.2** Controller/Action — `POST /api/cron/deposit-refund-retry` with `maxDuration = 300` (+ route unit tests: the 401 cases, 200 with counts, 500 without leaking Prisma codes). `.env.example` names both routes.
-    - [ ] **56.7.6.1** View & Route — `.github/workflows/deposit-refund-retry.yml` as above (the 27.4.6.1 analog).
+    - [x] **56.7.6.1** View & Route — `.github/workflows/deposit-refund-retry.yml` as above (the 27.4.6.1 analog).
 - [ ] **56.8: Disputes and Failed Payments** — *unscoped.*
   - The webhook ignores `charge.dispute.*` events entirely. A chargeback on a deposit would go unnoticed: Stripe debits the platform for disputes on destination charges, and evidence has a deadline.
   - `payment_intent.payment_failed` is only logged.
