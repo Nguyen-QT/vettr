@@ -583,7 +583,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.7.2.2** Domain Service — booking: both cancel paths insert the intent inside their transaction, and their comments and refund logs change as above.
       - Unit tests: a paid booking inserts with the transaction client; an unpaid one doesn't.
       - Integration cases in `booking.deposits-and-strikes.integration.test.ts`: the row exists even when `refundDeposit` throws after the commit; a cancel whose `refunds.create` throws leaves exactly one id-less `PENDING` row; the 56.2 race cases still leave one row and one `refunds.create` per booking.
-    - [ ] **56.7.2.3** Domain Service — billing: new `reconcileDepositRefundFromStripe` (list the PaymentIntent's refunds, sync a match through `syncDepositRefundStatus`, catch the list call).
+    - [x] **56.7.2.3** Domain Service — billing: new `reconcileDepositRefundFromStripe` (list the PaymentIntent's refunds, sync a match through `syncDepositRefundStatus`, catch the list call).
       - Unit tests per outcome.
       - Stripe-tier case in `depositRefundLifecycle.stripe-integration.test.ts`: refund, clear the row's refund id, and reconciling attaches it again.
     - [ ] **56.7.2.4** Domain Service — billing: new `recordDepositRefundRetry` (the conditional increment and the alert at 5).

@@ -5,9 +5,10 @@ import type { SyncDepositRefundStatusInput } from "../types";
 import { advanceDepositRefundStatus } from "./advanceDepositRefundStatus";
 
 // Domain Service (56.6): called from the Stripe webhook route for every
-// refund.created, refund.updated and refund.failed, whatever its status.
-// Reads only billing's DepositRefund table. It finds the booking's row,
-// then moves it through
+// refund.created, refund.updated and refund.failed, whatever its status,
+// and from reconcileDepositRefundFromStripe (56.7) for a refund the retry
+// sweep finds on Stripe. Reads only billing's DepositRefund table. It
+// finds the booking's row, then moves it through
 // advanceDepositRefundStatus, which alone decides what the status means
 // and whether the row may move. A row matches when:
 // - it already holds this refund id, or
@@ -21,8 +22,8 @@ import { advanceDepositRefundStatus } from "./advanceDepositRefundStatus";
 // matches nothing. Both are logged critical with ids only and never
 // recorded: every Stripe charge on this account is a deposit, and the
 // route still answers 200 because a retry can't create a match. Returns
-// whether it wrote. Database errors aren't caught, so the route answers
-// 500 and Stripe redelivers.
+// whether it wrote. Database errors aren't caught: the route answers 500
+// and Stripe redelivers, and the sweep leaves the row for its next run.
 export async function syncDepositRefundStatus(
   input: SyncDepositRefundStatusInput
 ): Promise<boolean> {

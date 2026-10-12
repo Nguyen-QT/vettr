@@ -112,6 +112,14 @@ export interface DepositRefundIntent {
   stripeRefundId: string | null;
 }
 
+// What reconcileDepositRefundFromStripe found on Stripe for an id-less
+// refund intent (56.7). RECONCILED: a refund this app made for the booking
+// exists and went through syncDepositRefundStatus, so nothing may be
+// created, whether or not the sync wrote. NO_REFUND: none exists, so the
+// sweep may call refundDeposit. LIST_FAILED: Stripe couldn't be asked, so
+// the sweep skips the row this run.
+export type DepositRefundReconcileOutcome = "RECONCILED" | "NO_REFUND" | "LIST_FAILED";
+
 // Keyed by bookingRequestId (CLAUDE.md 7.1.8) -- only requests that are
 // APPROVED, unpaid, and have a configured deposit for their tier
 // appear here at all; there is no "not payable yet" entry, unlike
