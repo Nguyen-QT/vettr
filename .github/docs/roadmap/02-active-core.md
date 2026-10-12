@@ -593,7 +593,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - Unit tests: the candidate query and backoff, reconcile-first, a failed list call skips the create, a refund, a refusal logged critical, a row that throws doesn't stop the batch, the budget defers.
       - `billing.integration.test.ts` cases (Stripe mocked): an old id-less row is refunded; a young row is skipped; a row at 5 retries waits a day; `SUCCEEDED`/`FAILED` rows are never touched.
     - [x] **56.7.3.1** Controller/Action — move the bearer check to `src/lib/cronAuth.ts`; session-cleanup uses it, behaviour unchanged (+ `cronAuth.test.ts`; session-cleanup's route tests pass unchanged).
-    - [ ] **56.7.3.2** Controller/Action — `POST /api/cron/deposit-refund-retry` with `maxDuration = 300` (+ route unit tests: the 401 cases, 200 with counts, 500 without leaking Prisma codes). `.env.example` names both routes.
+    - [x] **56.7.3.2** Controller/Action — `POST /api/cron/deposit-refund-retry` with `maxDuration = 300` (+ route unit tests: the 401 cases, 200 with counts, 500 without leaking Prisma codes). `.env.example` names both routes.
     - [ ] **56.7.6.1** View & Route — `.github/workflows/deposit-refund-retry.yml` as above (the 27.4.6.1 analog).
 - [ ] **56.8: Disputes and Failed Payments** — *unscoped.*
   - The webhook ignores `charge.dispute.*` events entirely. A chargeback on a deposit would go unnoticed: Stripe debits the platform for disputes on destination charges, and evidence has a deadline.
