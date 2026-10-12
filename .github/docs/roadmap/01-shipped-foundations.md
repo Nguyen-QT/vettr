@@ -39,3 +39,12 @@ This ledger tracks the high-level completions, core technical parameters, and cr
 
 ### 📦 Phase 25: Universal Back Navigation 
 - **Completed:** Audited every client/artist sub-page, form view, modal overlay, and drawer layer for a consistent, structured parent back navigation control. Replaced scattered layout links with a shared navigation primitive. Standardizes on `ChevronLeftIcon` (lucide-react), matching the one existing back pattern already in the app (the calendar's mobile stack). Also adds a shared `src/app/client/layout.tsx`, mirroring `ArtistDashboardLayout`, since no shared client-side layout exists today.
+
+### 📦 Phase 26: Unified Dual-Role Accounts & Explicit Role-Switching
+- **Completed:** Resolved identity collisions by introducing a server-trusted `Session.activeRole` database layer to decouple an account's home identity from its per-session runtime context. Extracted shared Instagram and age validation rules to a core utility module, deployed transactional user profiling linking workflows, and implemented dedicated role-toggle primitives (`RoleSwitcher`) across dashboard layout grids.
+
+### 📦 Phase 27: Auth Session Security & Lifecycle Hardening
+- **Completed:** Hardened application-wide identity boundaries by implementing an account-scoped failed login lockout engine with Node-consistent timing fallback mechanics. Isolated critical database transaction boundaries from front-end code using safe, try/catch service primitives. Built out an email ownership validation pipeline integrated with a secure, automated session-cleanup cron network and deployed a structured database auditing model mapping security-relevant actions to append-only forensic event streams.
+
+### 📦 Phase 54: Private Portal, Canonical Artist Handles & Passwordless Client Booking
+- **Completed:** Re-engineered the application's core entry point into a private portal gate by deprecating the public marketplace directory in favour of public `/@handle` profiles with automated lowercase redirect normalization. Fully transitioned the client lifecycle to a passwordless model, replacing standard password sign-up flows with a 6-digit email OTP challenge matrix. Orchestrated a transactional user-provisioning engine that securely handles inline verification, profile linking, and session issuance simultaneously at the final step of the revised booking submission wizard.
