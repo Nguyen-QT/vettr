@@ -1,0 +1,54 @@
+name: Deposit Refund Retry
+
+on:
+  schedule:
+    # Hourly at minute 17, off the top of the hour, when GitHub most often
+    # delays or drops scheduled runs. A late or skipped run only delays
+    # retries until the next one (CLAUDE.md 56.7).
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+# Two sweeps at once would read the same rows and count each retry twice,
+# bringing the 5-attempt alert forward. That is still money-safe (the
+# per-booking idempotency key and reconcile-first stop a second refund), so
+# serialising only keeps the counts honest. A manual run queues behind a
+# scheduled one.
+concurrency:
+  group: deposit-refund-retry
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    # Above curl's --max-time, so the job never ends before the request does
+    # and frees the concurrency slot while a sweep is still running.
+    timeout-minutes: 10
+
+    env:
+      # Passed via env (never interpolated into the script) so the secret
+      # is not expanded inline in the shell command.
+      APP_URL: ${{ secrets.APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+
+    steps:
+      - name: Call deposit-refund-retry route
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_URL and CRON_SECRET repo secrets must both be set." >&2
+            exit 1
+          fi
+
+          # --fail-with-body fails the job on a non-2xx (401/500/504) while
+          # still printing the route's generic error body. No --retry: if the
+          # connection drops, the sweep keeps running on Vercel, and a retry
+          # would start a second one over the same rows. The next hourly run
+          # is the retry. --max-time 330 is above the route's maxDuration
+          # (300s), so Vercel has ended the sweep before curl gives up.
+          curl --silent --show-error --fail-with-body \
+            --max-time 330 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/deposit-refund-retry"
+          echo
