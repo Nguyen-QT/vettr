@@ -13,6 +13,7 @@ import {
   DEPOSIT_PAYMENT_INTENT_NOT_FOUND_ERROR_MESSAGE,
   DEPOSIT_REFUND_INIT_ERROR_MESSAGE,
   DEPOSIT_REFUND_NOT_PAID_ERROR_MESSAGE,
+  DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS,
 } from "../constants";
 import type { DepositRefundStatus } from "../types";
 import { addBillingAddon } from "./addBillingAddon";
@@ -23,6 +24,7 @@ import { getBillingAddons } from "./getBillingAddons";
 import { getFinalBillTotal } from "./getFinalBillTotal";
 import { getPayableDeposits } from "./getPayableDeposits";
 import { recordDepositRefundIntent } from "./recordDepositRefundIntent";
+import { recordDepositRefundRetry } from "./recordDepositRefundRetry";
 import { refundDeposit } from "./refundDeposit";
 import { removeBillingAddon } from "./removeBillingAddon";
 import { setArtistDepositSettings } from "./setArtistDepositSettings";
@@ -737,6 +739,122 @@ describe("billing integration", () => {
         status: "SUCCEEDED",
         stripeRefundId: storedRefundId,
       });
+    });
+  });
+
+  // The retry sweep's visit count (56.7) on real rows: which rows the
+  // conditional increment counts, the updatedAt bump that makes failing
+  // rows take turns, and concurrent increments serialised by Postgres's row
+  // lock.
+  describe("recordDepositRefundRetry", () => {
+    let consoleErrorSpy: MockInstance<typeof console.error>;
+
+    beforeEach(() => {
+      consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleErrorSpy.mockRestore();
+    });
+
+    interface RetryRow {
+      retryAttempts: number;
+      updatedAt: Date;
+    }
+
+    // Created directly, with updatedAt an hour back so a bump shows
+    // whatever the clock's resolution.
+    async function createRefundRow(row: {
+      status: DepositRefundStatus;
+      stripeRefundId: string | null;
+      retryAttempts: number;
+    }): Promise<{ bookingRequestId: string; updatedAt: Date }> {
+      const { artistId, clientId } = await setup();
+      const intent = paymentIntentId();
+      const request = await createBookingRequest({
+        artistId,
+        clientId,
+        depositPaid: true,
+        stripePaymentIntentId: intent,
+      });
+      const created = await prisma.depositRefund.create({
+        data: {
+          bookingRequestId: request.id,
+          stripePaymentIntentId: intent,
+          ...row,
+          updatedAt: new Date(Date.now() - 60 * 60 * 1000),
+        },
+        select: { updatedAt: true },
+      });
+      return { bookingRequestId: request.id, updatedAt: created.updatedAt };
+    }
+
+    function readRetryRow(bookingRequestId: string): Promise<RetryRow> {
+      return prisma.depositRefund.findUniqueOrThrow({
+        where: { bookingRequestId },
+        select: { retryAttempts: true, updatedAt: true },
+      });
+    }
+
+    const refundRetryFailingAlert = expect.objectContaining({
+      reason: "refund_retry_failing",
+      severity: "critical",
+    });
+
+    it("counts an id-less PENDING row and moves its updatedAt forward", async () => {
+      const created = await createRefundRow({
+        status: "PENDING",
+        stripeRefundId: null,
+        retryAttempts: 0,
+      });
+
+      await recordDepositRefundRetry(created.bookingRequestId);
+
+      const row = await readRetryRow(created.bookingRequestId);
+      expect(row.retryAttempts).toBe(1);
+      expect(row.updatedAt.getTime()).toBeGreaterThan(created.updatedAt.getTime());
+    });
+
+    it.each<DepositRefundStatus>(["PENDING", "SUCCEEDED", "FAILED"])(
+      "doesn't count a %s row that holds a refund id, or touch its updatedAt",
+      async (status) => {
+        const created = await createRefundRow({
+          status,
+          stripeRefundId: `re_it_${uniqueSuffix()}`,
+          retryAttempts: 0,
+        });
+
+        await recordDepositRefundRetry(created.bookingRequestId);
+
+        expect(await readRetryRow(created.bookingRequestId)).toEqual({
+          retryAttempts: 0,
+          updatedAt: created.updatedAt,
+        });
+        expect(consoleErrorSpy).not.toHaveBeenCalled();
+      }
+    );
+
+    it("alerts exactly once when concurrent increments cross the threshold, over repeated runs", async () => {
+      for (let run = 0; run < 5; run++) {
+        consoleErrorSpy.mockClear();
+        const { bookingRequestId } = await createRefundRow({
+          status: "PENDING",
+          stripeRefundId: null,
+          retryAttempts: DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS - 2,
+        });
+
+        await Promise.all([
+          recordDepositRefundRetry(bookingRequestId),
+          recordDepositRefundRetry(bookingRequestId),
+          recordDepositRefundRetry(bookingRequestId),
+        ]);
+
+        expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(refundRetryFailingAlert);
+        expect((await readRetryRow(bookingRequestId)).retryAttempts).toBe(
+          DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS + 1
+        );
+      }
     });
   });
 });

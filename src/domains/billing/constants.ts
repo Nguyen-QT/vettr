@@ -164,6 +164,11 @@ export const DEPOSIT_REFUND_STATUSES_BEHIND: Record<
   FAILED: ["PENDING", "SUCCEEDED"],
 };
 
+// The retry sweep's (56.7) count of visits to a refund intent still
+// PENDING with no refund id. The visit whose increment reaches this number
+// raises one critical alert (53.7); retries continue after it.
+export const DEPOSIT_REFUND_RETRY_ALERT_ATTEMPTS = 5;
+
 // Surfaced by the day-of checkout flow (CLAUDE.md 7.5.3/7.5.4):
 // addBillingAddon, removeBillingAddon, getBillingAddons. Not found and
 // ownership-mismatch share one message deliberately, same precedent

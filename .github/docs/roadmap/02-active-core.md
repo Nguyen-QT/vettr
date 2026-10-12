@@ -586,7 +586,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.7.2.3** Domain Service — billing: new `reconcileDepositRefundFromStripe` (list the PaymentIntent's refunds, sync a match through `syncDepositRefundStatus`, catch the list call).
       - Unit tests per outcome.
       - Stripe-tier case in `depositRefundLifecycle.stripe-integration.test.ts`: refund, clear the row's refund id, and reconciling attaches it again.
-    - [ ] **56.7.2.4** Domain Service — billing: new `recordDepositRefundRetry` (the conditional increment and the alert at 5).
+    - [x] **56.7.2.4** Domain Service — billing: new `recordDepositRefundRetry` (the conditional increment and the alert at 5).
       - Unit tests.
       - `billing.integration.test.ts` cases: a row with a refund id isn't counted; concurrent increments alert exactly once.
     - [ ] **56.7.2.5** Domain Service — billing: new `retryOwedDepositRefunds` and its constants.
