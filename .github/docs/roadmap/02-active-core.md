@@ -140,8 +140,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **53.1.1.1** Data Gateway — N/A, no schema change.
     - [x] **53.1.2.1** Domain Service — N/A.
     - [x] **53.1.3.1** Controller/Action — make the Vercel build generate the Prisma client (`prisma generate` via `postinstall` or the build script; first verify whether `src/generated/prisma` is gitignored). `prisma migrate deploy` stays out of the build.
-    - [ ] **53.1.4.1** UI Primitive — N/A.
-    - [ ] **53.1.5.1** Domain Hook — N/A.
+    - [x] **53.1.4.1** UI Primitive — N/A.
+    - [x] **53.1.5.1** Domain Hook — N/A.
     - [ ] **53.1.6.1** View & Route — document every production env var in `.env.example` (`DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `UPLOADTHING_TOKEN`, `RESEND_API_KEY`, `EMAIL_FROM`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`) and add a deployment runbook covering Vercel project setup, Neon provisioning (pooled vs direct URL), region matching and the later US region-move path, the Stripe webhook endpoint at `/api/webhooks/stripe`, UploadThing/Resend setup, and `CRON_SECRET` generation.
 - [ ] **53.2: Staging Deploy & Cron Activation** (operational, no code)
   - [ ] **53.2.1.1** Provision Neon (UK/EU region), run `prisma migrate deploy` with the direct URL, set Vercel env vars (Stripe test keys). Staging gets its own Neon project/branch, never shared with production. Moved earlier from 53.3.1.1: verify `vettr.studio` as the Resend sending domain (SPF, DKIM, DMARC DNS records) and set `EMAIL_FROM` to a `@vettr.studio` address.
