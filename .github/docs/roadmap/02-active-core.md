@@ -112,7 +112,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **28.8.2.1** Domain Service — `updateClientProfile`:
       - Keep the P2002 → `INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE` mapping. Any other error returns `UPDATE_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE` and logs with `clientProfileId`.
       - Tests replace "rethrows any other error": P2025 (logs `errorCode: "P2025"`), a plain `Error` (`errorCode: undefined`), P2002 doesn't log, and no input PII in the log.
-    - [ ] **28.8.2.2** Domain Service — `updatePendingBookingRequest`:
+    - [x] **28.8.2.2** Domain Service — `updatePendingBookingRequest`:
       - Wrap the whole body. A throw from `findUnique`, `getAvailableSlots` or `update` returns `UPDATE_PENDING_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE` and logs with `bookingRequestId`.
       - Tests: one case per throw site, plus no notes or image URLs in the log.
     - [ ] **28.8.2.3** Domain Service — `cancelBookingRequest`, two distinct outcomes:
