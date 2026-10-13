@@ -145,3 +145,8 @@ export const CLIENT_MAX_END_TIME_COMPLEXITY_WARNING =
 // client can act on, rather than a raw Prisma exception.
 export const INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE =
   "That Instagram handle is already in use by another account.";
+
+// updateClientProfile (28.8.2.1): every other failure is retryable and
+// gets the same copy -- the cause is in the ops log, never the response.
+export const UPDATE_CLIENT_PROFILE_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong saving your profile. Please try again.";
