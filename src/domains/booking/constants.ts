@@ -107,6 +107,12 @@ export const CANCELLATION_WINDOW_ERROR_MESSAGE = `This appointment is within ${C
 export const REQUEST_NOT_EDITABLE_ERROR_MESSAGE =
   "Only pending requests can be edited.";
 
+// updatePendingBookingRequest (28.8.2.2): every unexpected failure is
+// retryable and gets the same copy -- the cause is in the ops log, never
+// the response.
+export const UPDATE_PENDING_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong saving your changes. Please try again.";
+
 // Cancellation & No-Show Lifecycle (CLAUDE.md 5.6): a ClientProfile is
 // flagged for enforcePrecharge once cancellationCount reaches this many
 // strikes. Only an APPROVED-booking client cancellation or a no-show

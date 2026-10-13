@@ -1,13 +1,15 @@
 import { prismaMock } from "@/testUtils/prismaMock";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { SLOT_CONFLICT_ERROR_MESSAGE } from "@/domains/scheduling/constants";
 import { getAvailableSlots } from "@/domains/scheduling/services/getAvailableSlots";
+import { Prisma } from "@/generated/prisma/client";
 
 import {
   REQUEST_NOT_EDITABLE_ERROR_MESSAGE,
   REQUEST_NOT_FOUND_ERROR_MESSAGE,
+  UPDATE_PENDING_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
 } from "../constants";
 import { combineRequestedDateAndTime } from "../booking.schema";
 import { updatePendingBookingRequest } from "./updatePendingBookingRequest";
@@ -15,6 +17,11 @@ import { updatePendingBookingRequest } from "./updatePendingBookingRequest";
 vi.mock("@/domains/scheduling/services/getAvailableSlots", () => ({
   getAvailableSlots: vi.fn(),
 }));
+
+const GENERIC_ERROR = {
+  success: false,
+  error: UPDATE_PENDING_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+};
 
 // Mocked-Prisma unit test (architecture.md §7): scheduling's availability
 // read is mocked at its public contract. The nested deleteMany/create
@@ -34,9 +41,40 @@ describe("updatePendingBookingRequest", () => {
     designReferenceImageUrls: ["https://example.com/existing.jpg"],
   };
 
+  const privateNotes = "Cover-up over my ex's name";
+
+  let consoleErrorSpy: MockInstance<typeof console.error>;
+
   beforeEach(() => {
     vi.mocked(getAvailableSlots).mockReset();
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  function knownRequestError(code: string): Prisma.PrismaClientKnownRequestError {
+    // The message echoes the notes and image URL, so the log assertions
+    // prove it's never logged.
+    return new Prisma.PrismaClientKnownRequestError(
+      `Failed for ${privateNotes} ${baseInput.designReferenceImageUrls[0]}`,
+      { code, clientVersion: "test" }
+    );
+  }
+
+  function expectLoggedOnce(errorCode: string | undefined): void {
+    expect(consoleErrorSpy.mock.calls).toStrictEqual([
+      [
+        {
+          operation: "updatePendingBookingRequest",
+          reason: "unexpected_failure",
+          bookingRequestId: requestId,
+          errorCode,
+        },
+      ],
+    ]);
+  }
 
   function stubRequest(status = "PENDING", ownerId = clientId): void {
     prismaMock.bookingRequest.findUnique.mockResolvedValue({
@@ -78,6 +116,7 @@ describe("updatePendingBookingRequest", () => {
         },
       },
     });
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
   it("replaces the request's design reference images wholesale", async () => {
@@ -171,5 +210,60 @@ describe("updatePendingBookingRequest", () => {
       error: REQUEST_NOT_FOUND_ERROR_MESSAGE,
     });
     expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+  });
+
+  it("returns the generic error without a code when the request read fails", async () => {
+    prismaMock.bookingRequest.findUnique.mockRejectedValue(new Error("connection lost"));
+
+    const result = await updatePendingBookingRequest(baseInput);
+
+    expect(result).toEqual(GENERIC_ERROR);
+    expectLoggedOnce(undefined);
+    expect(getAvailableSlots).not.toHaveBeenCalled();
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+  });
+
+  it("returns the generic error and logs the Prisma code when the availability check fails", async () => {
+    stubRequest();
+    vi.mocked(getAvailableSlots).mockRejectedValue(knownRequestError("P2024"));
+
+    const result = await updatePendingBookingRequest(baseInput);
+
+    expect(result).toEqual(GENERIC_ERROR);
+    expectLoggedOnce("P2024");
+    expect(prismaMock.bookingRequest.update).not.toHaveBeenCalled();
+  });
+
+  it("returns the generic error and logs the Prisma code when the row is gone at update (P2025)", async () => {
+    stubRequest();
+    stubAvailability(true);
+    prismaMock.bookingRequest.update.mockRejectedValue(knownRequestError("P2025"));
+
+    const result = await updatePendingBookingRequest(baseInput);
+
+    expect(result).toEqual(GENERIC_ERROR);
+    expectLoggedOnce("P2025");
+  });
+
+  it("never logs the notes or image URLs", async () => {
+    stubRequest();
+    stubAvailability(true);
+    prismaMock.bookingRequest.update.mockRejectedValue(knownRequestError("P2025"));
+    const input = {
+      ...baseInput,
+      clientNotes: privateNotes,
+      designReferenceImageUrls: [
+        ...baseInput.designReferenceImageUrls,
+        "https://example.com/private-2.jpg",
+      ],
+    };
+
+    await updatePendingBookingRequest(input);
+
+    const logged = JSON.stringify(consoleErrorSpy.mock.calls);
+    expect(consoleErrorSpy).toHaveBeenCalledOnce();
+    for (const detail of [input.clientNotes, ...input.designReferenceImageUrls]) {
+      expect(logged).not.toContain(detail);
+    }
   });
 });
