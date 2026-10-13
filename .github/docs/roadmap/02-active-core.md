@@ -137,9 +137,9 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 - **Design (confirmed):** Vercel hosting + **Neon free plan** Postgres (plain Postgres, so it works with the existing `@prisma/adapter-pg`/`pg` stack; scale-to-zero wakes automatically, unlike Supabase's free tier which pauses after 7 days of inactivity and needs a manual restore). Start in a UK/EU region and align the Vercel function region to it. A future US East/West move is expected: a Neon project's region is fixed at creation, so it is a new project + dump/restore, and the runbook (53.1.6.1) must document that path and keep the Vercel function region configurable rather than hardcoded in app code. Runtime `DATABASE_URL` uses Neon's pooled (`-pooler`) connection string; `prisma migrate deploy` uses the direct, non-pooled URL. Migrations stay out of the Vercel build to avoid concurrent-deploy races.
 - [ ] **53.1: Deployable Build & Runbook**
   - **Confirmed 6-layer sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **53.1.1.1** Data Gateway — N/A, no schema change.
-    - [ ] **53.1.2.1** Domain Service — N/A.
-    - [ ] **53.1.3.1** Controller/Action — make the Vercel build generate the Prisma client (`prisma generate` via `postinstall` or the build script; first verify whether `src/generated/prisma` is gitignored). `prisma migrate deploy` stays out of the build.
+    - [x] **53.1.1.1** Data Gateway — N/A, no schema change.
+    - [x] **53.1.2.1** Domain Service — N/A.
+    - [x] **53.1.3.1** Controller/Action — make the Vercel build generate the Prisma client (`prisma generate` via `postinstall` or the build script; first verify whether `src/generated/prisma` is gitignored). `prisma migrate deploy` stays out of the build.
     - [ ] **53.1.4.1** UI Primitive — N/A.
     - [ ] **53.1.5.1** Domain Hook — N/A.
     - [ ] **53.1.6.1** View & Route — document every production env var in `.env.example` (`DATABASE_URL`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, `UPLOADTHING_TOKEN`, `RESEND_API_KEY`, `EMAIL_FROM`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL`) and add a deployment runbook covering Vercel project setup, Neon provisioning (pooled vs direct URL), region matching and the later US region-move path, the Stripe webhook endpoint at `/api/webhooks/stripe`, UploadThing/Resend setup, and `CRON_SECRET` generation.
