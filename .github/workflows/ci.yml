@@ -45,7 +45,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "26"
+          # engines.node in package.json, the same field Vercel's runtime
+          # follows, so CI tests the Node major production runs (53.1.3.2).
+          node-version-file: package.json
           cache: "npm"
 
       - run: npm ci
@@ -112,7 +114,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "26"
+          # engines.node in package.json, the same field Vercel's runtime
+          # follows, so CI tests the Node major production runs (53.1.3.2).
+          node-version-file: package.json
           cache: "npm"
 
       - run: npm ci
@@ -166,7 +170,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "26"
+          # engines.node in package.json, the same field Vercel's runtime
+          # follows, so CI tests the Node major production runs (53.1.3.2).
+          node-version-file: package.json
           cache: "npm"
 
       - run: npm ci
@@ -226,7 +232,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "26"
+          # engines.node in package.json, the same field Vercel's runtime
+          # follows, so CI tests the Node major production runs (53.1.3.2).
+          node-version-file: package.json
           cache: "npm"
 
       - run: npm ci
