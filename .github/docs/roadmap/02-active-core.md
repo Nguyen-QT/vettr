@@ -11,7 +11,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 *   **Phase 53.1–53.2 Staging (Stripe test mode, not go-live)** ➔ Make the build deployable and deploy it to `staging.vettr.studio` to prove real Resend email delivery. No real money moves; waits on none of the gates below.
 
 ### 🔒 Pre-Launch Gates (Blocks Production Go-Live)
-*   [ ] **Phase 28.8 Error Isolation** ➔ Stop unexpected DB errors in `updateClientProfile` reaching the client as an uncaught 500 (58.3/58.4 wait on it).
+*   [x] **Phase 28.8 Error Isolation** ➔ Stop unexpected DB errors in `updateClientProfile` reaching the client as an uncaught 500 (58.3/58.4 wait on it).
 *   [ ] **Phase 50 Navigation Layouts** ➔ Build responsive primary header and avatar identity menus.
 *   [ ] **Phase 53.4–53.8 Pre-Launch Hardening** ➔ Scope and execute remaining unscoped stability, infrastructure, and performance hardening tasks.
 *   [ ] **Phase 56 Payment Integrity** ➔ Deploy failed refund sweep mechanics and Connect reversals (`56.8–56.13`).
@@ -92,7 +92,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **28.7.4.1–28.7.6.1** UI/Hook/View — N/A. The dead `artistId` payload key/prop is a flagged follow-up, not part of this phase.
 - [ ] **28.5: Domain Hook Test Coverage** — *unscoped.* `renderHook` tests for the 19 untested hooks (auth 3, billing 5, booking 9, scheduling 2), following the `useSwitchActiveRole.test.ts` convention (jsdom pragma, domain actions mocked, `act`/`waitFor`). Needs its own design pass for per-domain PR split and hooks with timers/router/Stripe Elements dependencies (e.g. `useDepositPayment`, `useBookingWizard`, `useAppointmentCalendar`).
 - [ ] **28.6: `signupClient` Concurrent First-Signup Unique-Conflict Handling** — **SUPERSEDED by 54.5.2.2 / 54.5.2.6** (Phase 54 deletes `signupClient` and `resolveGuestClientProfile`; the P2002 concern moves to the new provisioning service — do not start). *Unscoped.* Surfaced by 28.3.2.3: two concurrent first-time signups for the same email both pass the `findFirst` no-account check, and the loser's `prisma.account.create` throws a raw P2002 (`Account.email` / `Account.clientProfileId` unique) out of `signupClient`, which has no try/catch. Needs its own design pass: catch P2002 around the create only and fall back to the existing-unverified-account reclaim path (or return the same generic pending-verification result) so the loser is handled, with a non-PII log (`operation`, error code only) and no identity-enumeration difference. Must add a real-DB regression case to `auth.integration.test.ts` asserting no rejected promise, plus a mocked unit test for the P2002 branch. Needs a confirmed layer breakdown before any code (Domain Service + integration test; Controller/UI/Hook/View expected N/A). **Scope addition (from 28.3.2.5.2 planning):** `resolveGuestClientProfile` has the same gap — two concurrent guest requests with the same new `instagramHandle`/`email` can make the loser's `clientProfile.create` throw a raw P2002 (no try/catch). Fold its P2002 handling and a real-DB concurrent regression case into this item; 28.3.2.5.2 only covers the sequential merge. If it cannot be folded in cleanly during 28.6's design pass, split it into a new unscoped item.
-- [ ] **28.8: `updateClientProfile` Unexpected-Error Isolation**
+- [x] **28.8: `updateClientProfile` Unexpected-Error Isolation**
   - Surfaced by 28.4.3.6 planning: `booking/services/updateClientProfile.ts` maps only the Instagram-handle P2002 and rethrows everything else (a P2025 if the profile row is gone, any driver/connection failure). `updateClientProfileAction` has no try/catch, so an unexpected DB error reaches the caller as an uncaught 500 (architecture.md §8.B). Listed in the Pre-Launch Gates. Scoped against the post-54.7 code.
   - **Findings (design pass, 2026-10-14):**
     - The fix lives in the service. `linkOrCreateClientProfileForAccount` (27.2), `createBookingRequest` (54.5.2.3) and `refundDeposit` (56.6) already return typed failures and never throw. A catch in the action would put failure policy in the controller. The actions stay unchanged.
@@ -115,17 +115,18 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **28.8.2.2** Domain Service — `updatePendingBookingRequest`:
       - Wrap the whole body. A throw from `findUnique`, `getAvailableSlots` or `update` returns `UPDATE_PENDING_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE` and logs with `bookingRequestId`.
       - Tests: one case per throw site, plus no notes or image URLs in the log.
-    - [ ] **28.8.2.3** Domain Service — `cancelBookingRequest`, two distinct outcomes:
+    - [x] **28.8.2.3** Domain Service — `cancelBookingRequest`, two distinct outcomes:
       - Before commit (`findUnique` or `$transaction` throws): return `CANCEL_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE` and log, with no refund or PaymentIntent-cancel call.
       - After commit: a thrown `refundDeposit` is treated as a failed refund result (the existing `deposit_refund_failed` warning) and still returns `{ success: true }`.
       - Tests cover all three paths.
-    - [ ] **28.8.3.1** Controller — N/A. The actions don't change, and the existing "passes success and service errors through unchanged" tests in `booking/actions.test.ts` already pin pass-through.
-    - [ ] **28.8.4.1–28.8.6.1** UI/Hook/View — N/A. The hooks already show a typed failure inline.
+    - [x] **28.8.3.1** Controller — N/A. The actions don't change, and the existing "passes success and service errors through unchanged" tests in `booking/actions.test.ts` already pin pass-through.
+    - [x] **28.8.4.1–28.8.6.1** UI/Hook/View — N/A. The hooks already show a typed failure inline.
   - **Flagged, not fixed:**
     - `getSessionWithAccount` has no catch, so a DB failure on the session read in `requireClientProfileId` still throws from every action in every domain.
     - The client portal has no `error.tsx` or `global-error.tsx`, so a remaining throw (transport failure, stale action id after a deploy) shows Next's default crash screen.
     - `refundDeposit`'s first read (`getBookingRequestForDeposit`) is unguarded (billing). 28.8.2.3 guards only the call site.
     - `updatePendingBookingRequest` checks `PENDING`, then updates without a status guard in the `where` (TOCTOU, architecture.md §8.A).
+    - `cancelApprovedBookingAsArtist` has the same gap as `cancelBookingRequest` had: no catch around its read or transaction, and a thrown `refundDeposit` after the commit escapes. Its integration tests in `booking.deposits-and-strikes.integration.test.ts` still pin the throw.
 - [x] **28.9: Throwaway Local Test Database** (execute 1.1 → 2.1 → 2.2 → 2.3)
   - Local integration and E2E runs use `.env`'s `DATABASE_URL`, which is the dev database (`localhost:5432/vettr`). `assertSafeDatabaseUrl` accepts any localhost URL, so the integration tier writes to and deletes from the dev DB. E2E `global-setup.ts`/`global-teardown.ts` have no guard at all.
   - CI gets a fresh `postgres:16` service container on 5432 per job. Locally 5432 is taken, so each session (human or agent) improvises its own container.

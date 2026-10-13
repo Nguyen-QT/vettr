@@ -8,6 +8,7 @@ import { createBookingRequest, createIntegrationTracker, uniqueSuffix } from "@/
 import { combineRequestedDateAndTime } from "../booking.schema";
 import {
   APPOINTMENT_NOT_YET_DUE_ERROR_MESSAGE,
+  CANCEL_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
   INSTAGRAM_HANDLE_TAKEN_ERROR_MESSAGE,
   REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE,
 } from "../constants";
@@ -264,15 +265,22 @@ describe("booking deposits-and-strikes integration", () => {
       expect(client.enforcePrecharge).toBe(false);
     });
 
-    it("a failing strike rolls back the slot release and status change", async () => {
+    it("a failing strike returns the generic error and rolls back the slot release and status change", async () => {
       const { artistId, clientId } = await setup();
       const request = await createApprovedWithSlot(artistId, clientId, futureStart());
 
       strikeControl.failNext = true;
-      await expect(
-        cancelBookingRequest({ bookingRequestId: request.id, clientProfileId: clientId })
-      ).rejects.toThrow("forced strike failure");
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const result = await cancelBookingRequest({
+        bookingRequestId: request.id,
+        clientProfileId: clientId,
+      });
+      consoleErrorSpy.mockRestore();
 
+      expect(result).toEqual({
+        success: false,
+        error: CANCEL_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+      });
       const slots = await prisma.timeSlot.findMany({ where: { bookingRequestId: request.id } });
       expect(slots.map((s) => s.status)).toEqual(["BOOKED"]);
       const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
@@ -481,30 +489,62 @@ describe("booking deposits-and-strikes integration", () => {
       return { clientId, intent, request };
     }
 
-    it.each(CANCEL_PATHS)(
-      "$name leaves the intent even when refundDeposit throws after the commit",
-      async ({ cancelledStatus, cancel }) => {
-        const { clientId, intent, request } = await createPaidApproved();
+    // The cancel committed with its intent and nothing reached Stripe.
+    async function expectCancelledWithPendingIntent(
+      requestId: string,
+      intent: string,
+      cancelledStatus: RequestStatus
+    ): Promise<void> {
+      expect(refundsCreateMock).not.toHaveBeenCalled();
+      const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: requestId } });
+      expect(after.status).toBe(cancelledStatus);
+      const refundRows = await prisma.depositRefund.findMany({
+        where: { bookingRequestId: requestId },
+      });
+      expect(refundRows).toHaveLength(1);
+      expect(refundRows[0]).toMatchObject({
+        status: "PENDING",
+        stripePaymentIntentId: intent,
+        stripeRefundId: null,
+      });
+    }
 
-        depositReadControl.failNext = true;
-        await expect(cancel(request.id, clientId)).rejects.toThrow(
-          "forced deposit read failure"
-        );
+    async function expectCancelRolledBack(requestId: string, clientId: string): Promise<void> {
+      expect(refundsCreateMock).not.toHaveBeenCalled();
+      const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: requestId } });
+      expect(after.status).toBe("APPROVED");
+      const slots = await prisma.timeSlot.findMany({ where: { bookingRequestId: requestId } });
+      expect(slots.map((s) => s.status)).toEqual(["BOOKED"]);
+      expect((await getClient(clientId)).cancellationCount).toBe(0);
+      expect(await prisma.depositRefund.count({ where: { bookingRequestId: requestId } })).toBe(0);
+    }
 
-        expect(refundsCreateMock).not.toHaveBeenCalled();
-        const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-        expect(after.status).toBe(cancelledStatus);
-        const refundRows = await prisma.depositRefund.findMany({
-          where: { bookingRequestId: request.id },
-        });
-        expect(refundRows).toHaveLength(1);
-        expect(refundRows[0]).toMatchObject({
-          status: "PENDING",
-          stripePaymentIntentId: intent,
-          stripeRefundId: null,
-        });
-      }
-    );
+    it("cancelBookingRequest reports success and leaves the intent when refundDeposit throws after the commit", async () => {
+      const { clientId, intent, request } = await createPaidApproved();
+
+      depositReadControl.failNext = true;
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const result = await cancelBookingRequest({
+        bookingRequestId: request.id,
+        clientProfileId: clientId,
+      });
+      consoleErrorSpy.mockRestore();
+
+      expect(result).toEqual({ success: true });
+      await expectCancelledWithPendingIntent(request.id, intent, "CANCELLED_BY_CLIENT");
+    });
+
+    // The artist path still throws (flagged under 28.8, not fixed there).
+    it("cancelApprovedBookingAsArtist leaves the intent even when refundDeposit throws after the commit", async () => {
+      const { intent, request } = await createPaidApproved();
+
+      depositReadControl.failNext = true;
+      await expect(
+        cancelApprovedBookingAsArtist({ bookingRequestId: request.id })
+      ).rejects.toThrow("forced deposit read failure");
+
+      await expectCancelledWithPendingIntent(request.id, intent, "CANCELLED_BY_ARTIST");
+    });
 
     it.each(CANCEL_PATHS)(
       "$name whose refunds.create throws leaves exactly one id-less PENDING row",
@@ -532,25 +572,34 @@ describe("booking deposits-and-strikes integration", () => {
       }
     );
 
-    it.each(CANCEL_PATHS)(
-      "$name: a failing intent insert rolls back the cancel",
-      async ({ cancel }) => {
-        const { clientId, request } = await createPaidApproved();
+    it("cancelBookingRequest: a failing intent insert returns the generic error and rolls back the cancel", async () => {
+      const { clientId, request } = await createPaidApproved();
 
-        intentInsertControl.failNext = true;
-        await expect(cancel(request.id, clientId)).rejects.toThrow(
-          "forced intent insert failure"
-        );
+      intentInsertControl.failNext = true;
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const result = await cancelBookingRequest({
+        bookingRequestId: request.id,
+        clientProfileId: clientId,
+      });
+      consoleErrorSpy.mockRestore();
 
-        expect(refundsCreateMock).not.toHaveBeenCalled();
-        const after = await prisma.bookingRequest.findUniqueOrThrow({ where: { id: request.id } });
-        expect(after.status).toBe("APPROVED");
-        const slots = await prisma.timeSlot.findMany({ where: { bookingRequestId: request.id } });
-        expect(slots.map((s) => s.status)).toEqual(["BOOKED"]);
-        expect((await getClient(clientId)).cancellationCount).toBe(0);
-        expect(await prisma.depositRefund.count({ where: { bookingRequestId: request.id } })).toBe(0);
-      }
-    );
+      expect(result).toEqual({
+        success: false,
+        error: CANCEL_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+      });
+      await expectCancelRolledBack(request.id, clientId);
+    });
+
+    it("cancelApprovedBookingAsArtist: a failing intent insert rolls back the cancel", async () => {
+      const { clientId, request } = await createPaidApproved();
+
+      intentInsertControl.failNext = true;
+      await expect(
+        cancelApprovedBookingAsArtist({ bookingRequestId: request.id })
+      ).rejects.toThrow("forced intent insert failure");
+
+      await expectCancelRolledBack(request.id, clientId);
+    });
   });
 
   describe("declineBookingRequest (56.2)", () => {
