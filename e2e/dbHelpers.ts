@@ -69,6 +69,37 @@ export async function resetEmailOtpChallenge(email: string): Promise<void> {
   }
 }
 
+// Sets an Account's lockout state directly (28.11.6.1), so the lockout spec
+// starts each test from a known row -- UI mode re-runs skip global-setup.ts.
+// lockedUntil is bound as a UTC ISO string, never a Date: node-postgres
+// serialises a Date in this process's local zone, "lockedUntil" is a
+// timestamp without a time zone (the offset is dropped), and the app reads
+// it back as UTC, so under BST a lock that expired a minute ago would land
+// 59 minutes in the future. Throws unless exactly one row matched, so a
+// missing fixture can't leave a test running against unseeded state.
+export async function setArtistLoginLockout(
+  email: string,
+  failedLoginAttempts: number,
+  lockedUntil: Date | null
+): Promise<void> {
+  config();
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    const result = await client.query(
+      `UPDATE "Account"
+       SET "failedLoginAttempts" = $2, "lockedUntil" = $3::timestamp(3)
+       WHERE email = $1`,
+      [email, failedLoginAttempts, lockedUntil?.toISOString() ?? null]
+    );
+    if (result.rowCount !== 1) {
+      throw new Error(`setArtistLoginLockout: no Account for ${email}`);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 // Drops every BookingRequest on the ClientProfile with this email (54.5.6.2)
 // so a spec that submits as an existing client can pin the dashboard's
 // booking count across Playwright UI mode re-runs. DesignReference rows
