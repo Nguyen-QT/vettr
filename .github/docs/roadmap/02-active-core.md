@@ -203,7 +203,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - An expired lock restarts the count at 1. The boundary is `<=`, as today.
       - The lock timestamp round-trips exactly at `TIMESTAMP(3)`.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine; execute 2.1 → 2.2 → 2.3 → 6.1 → 6.2):
-    - [ ] **28.11.1.1** Data Gateway — N/A, no schema change.
+    - [x] **28.11.1.1** Data Gateway — N/A, no schema change.
     - [ ] **28.11.2.1** Domain Service — atomic login-attempt reservation:
       - `reserveLoginAttempt.ts` and `reserveLoginAttempt.test.ts`, mocking `prismaMock.$executeRaw` as `pruneExpiredSessions.test.ts` does, with fake timers. Cases:
         - 1 row → `true`; 0 rows → `false`.
