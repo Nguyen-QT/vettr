@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-import { loginAsArtist } from "./authHelpers";
+import { loginAsArtist, loginAsClient } from "./authHelpers";
 import type { E2eFixture } from "./global-setup";
 
 const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
@@ -58,6 +58,53 @@ test.describe("artist appearance settings", () => {
     await loginAsArtist(page, fixture);
 
     await page.goto(`/artist/${fixture.artistId}/settings/appearance`);
+
+    const lightRadio = page.getByRole("radio", { name: "Light" });
+    await lightRadio.click();
+    await expect(lightRadio).toBeChecked();
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
+
+    await page.reload();
+
+    await expect(lightRadio).toBeEnabled();
+    await expect(lightRadio).toBeChecked();
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
+  });
+});
+
+test.describe("client appearance settings", () => {
+  test("the profile page shows the current theme", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsClient(page, fixture.onboardedClientSessionId);
+
+    await page.goto("/client/profile");
+
+    // Same hydration wait as the artist tab.
+    const darkRadio = page.getByRole("radio", { name: "Dark" });
+    await expect(darkRadio).toBeEnabled();
+    await expect(darkRadio).toBeChecked();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+
+    await expect(page.getByRole("group", { name: "Theme" })).toMatchAriaSnapshot(`
+      - group "Theme":
+        - paragraph: Saved on this device.
+        - radiogroup "Theme":
+          - group:
+            - radio "Light"
+          - group:
+            - radio "Dark" [checked]
+    `);
+  });
+
+  test("choosing Light removes the dark class and survives a reload", async ({
+    page,
+  }) => {
+    const fixture = await readFixture();
+    await loginAsClient(page, fixture.onboardedClientSessionId);
+
+    await page.goto("/client/profile");
 
     const lightRadio = page.getByRole("radio", { name: "Light" });
     await lightRadio.click();
