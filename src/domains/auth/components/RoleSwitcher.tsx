@@ -1,6 +1,9 @@
 "use client";
 
+import { ArrowLeftRight } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { RoleSwitcherProps } from "../types";
 
 // Pure view (CLAUDE.md 26.1.4.2): renders whatever activeRole/isVisible/
@@ -13,6 +16,7 @@ export function RoleSwitcher({
   isVisible,
   onSwitch,
   isPending = false,
+  variant = "button",
 }: RoleSwitcherProps) {
   if (!isVisible) {
     return null;
@@ -21,6 +25,22 @@ export function RoleSwitcher({
   const targetRole = activeRole === "ARTIST" ? "CLIENT" : "ARTIST";
   const label =
     targetRole === "CLIENT" ? "Switch to client view" : "Switch to artist view";
+
+  // UserMenu row (50.1.4.2). Stays open on click so "Switching..." is
+  // visible; switchActiveRoleAction redirects on success, which tears the
+  // menu down anyway.
+  if (variant === "menuItem") {
+    return (
+      <DropdownMenuItem
+        onClick={() => onSwitch(targetRole)}
+        disabled={isPending}
+        closeOnClick={false}
+      >
+        <ArrowLeftRight />
+        {isPending ? "Switching..." : label}
+      </DropdownMenuItem>
+    );
+  }
 
   return (
     <Button
