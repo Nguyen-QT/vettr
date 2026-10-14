@@ -48,7 +48,8 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
+/* .light resets the tokens for a subtree inside a dark page (ThemePicker's preview). */
+:root, .light {
   /* --- 60% App Canvas --- */
   --background: oklch(0.988 0.003 340);          /* #fdfafc */
   

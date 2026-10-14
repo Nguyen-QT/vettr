@@ -1,7 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { applyTheme, THEME_STORAGE_KEY } from "./theme";
+import { applyTheme, isTheme, THEME_STORAGE_KEY } from "./theme";
+
+describe("isTheme", () => {
+  it.each(["light", "dark"])("accepts %s", (value) => {
+    expect(isTheme(value)).toBe(true);
+  });
+
+  it.each(["Dark", "system", "", null, undefined, 1])("rejects %s", (value) => {
+    expect(isTheme(value)).toBe(false);
+  });
+});
 
 describe("applyTheme", () => {
   beforeEach(() => {

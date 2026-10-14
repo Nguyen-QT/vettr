@@ -1,5 +1,5 @@
 // Shared between the root layout's anti-flash inline script (server
-// component) and the client theme controls (ThemeToggle, ThemeSwitch)
+// component) and the client theme controls (ThemeToggle, ThemePicker)
 // -- kept in a plain module rather than exported from a "use client"
 // file so importing it doesn't drag that boundary into the layout.
 // The layout imports only the constant; the helpers below touch
@@ -8,12 +8,16 @@ export const THEME_STORAGE_KEY = "vettr-theme";
 
 export type Theme = "light" | "dark";
 
+export function isTheme(value: unknown): value is Theme {
+  return value === "light" || value === "dark";
+}
+
 export function isDarkThemeActive(): boolean {
   return document.documentElement.classList.contains("dark");
 }
 
 // The class on <html> is the single source of truth (the init script
-// sets it before hydration), so every ThemeSwitch on a page follows it
+// sets it before hydration), so every ThemePicker on a page follows it
 // through this observer rather than holding its own copy.
 export function subscribeToThemeClass(onChange: () => void): () => void {
   const observer = new MutationObserver(onChange);
