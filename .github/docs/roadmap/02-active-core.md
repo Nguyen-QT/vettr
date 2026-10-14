@@ -233,17 +233,17 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - (5, expired lock), 10 wrong → exactly 5 new audit rows and a fresh lock.
       - (4, null), 2 concurrent correct → exactly 1 success.
       - No `console.error` calls.
-    - [ ] **28.11.2.3** Domain Service — send-cap burst proofs, in a new describe in `auth.otp.integration.test.ts`. It reuses `createEligibleClient`, `issueCode`, the `sendVerificationEmail` mock and `inParallel`; these services never reject. A seed helper sets `windowSendCount`, `sentAt` = now − cooldown − 1 s, and `windowStartedAt` = now − 1 h. Cases:
+    - [x] **28.11.2.3** Domain Service — send-cap burst proofs, in a new describe in `auth.otp.integration.test.ts`. It reuses `createEligibleClient`, `issueCode`, the `sendVerificationEmail` mock and `inParallel`; these services never reject. A seed helper sets `windowSendCount`, `sentAt` = now − cooldown − 1 s, and `windowStartedAt` = now − 1 h. Cases:
       - Seed 9, burst of 5 `requestClientSignInCode`: all `{ success: true }`, 1 send, count 10.
       - Age `sentAt` and burst again: all succeed, 0 sends, count stays 10, and `codeHash` is unchanged. This proves the cap blocks, not the cooldown.
-      - Seed 7, burst of 10 alternating `requestClientSignInCode` / `requestBookingSubmissionCode`:
+      - Seed 9, burst of 10 alternating `requestClientSignInCode` / `requestBookingSubmissionCode`:
         - All succeed.
-        - Count ≤ 10.
-        - Sends = count − 7, and ≥ 1.
-        - `codeHash` matches one of the sent codes.
-      - An aged follow-up burst sends 0.
-    - [ ] **28.11.3.1** Controller — N/A. `loginAction` passes `result.error` through unchanged, and `auth/actions.test.ts` already pins that.
-    - [ ] **28.11.4.1–28.11.5.1** UI/Hook — N/A. The copy and the hooks don't change.
+        - Exactly 1 send, and the count lands on 10.
+        - `codeHash` matches the sent code.
+        - Seed 9, not 7: after a win only an opposite-purpose call passes, so seed 7 lands on 9 or 10 and a follow-up could still send. At 9, a cap that didn't hold would always send again.
+      - An aged alternating follow-up burst sends 0, and `codeHash` is unchanged.
+    - [x] **28.11.3.1** Controller — N/A. `loginAction` passes `result.error` through unchanged, and `auth/actions.test.ts` already pins that.
+    - [x] **28.11.4.1–28.11.5.1** UI/Hook — N/A. The copy and the hooks don't change.
     - [ ] **28.11.6.1** View & Route (E2E only) — `e2e/artist-login-lockout.spec.ts`:
       - Fixture: a dedicated `e2e-artist-lockout@example.com` ARTIST account with its own `Artist` row in `global-setup.ts`, copying the `bookingOtpArtist` block. Add its artist id to `global-teardown.ts`.
       - Never lock `artistLoginEmail`: `artist-login.spec.ts` signs in with it in parallel.

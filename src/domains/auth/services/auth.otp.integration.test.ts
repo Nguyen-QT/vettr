@@ -6,11 +6,14 @@ import { createIntegrationTracker } from "@/testUtils/integrationDb";
 import {
   EMAIL_VERIFICATION_RESEND_COOLDOWN_MS,
   INVALID_EMAIL_OTP_ERROR_MESSAGE,
+  MAX_EMAIL_OTP_SENDS_PER_WINDOW,
   MAX_EMAIL_VERIFICATION_ATTEMPTS,
 } from "../constants";
+import type { RequestBookingSubmissionCodeResult, RequestClientSignInCodeResult } from "../types";
 import { checkEmailOtpCode } from "./checkEmailOtpCode";
 import { hashEmailVerificationCode } from "./hashEmailVerificationCode";
 import { issueEmailOtp } from "./issueEmailOtp";
+import { requestBookingSubmissionCode } from "./requestBookingSubmissionCode";
 import { requestClientSignInCode } from "./requestClientSignInCode";
 import { sendVerificationEmail } from "./sendVerificationEmail";
 import { signInClientWithEmailOtp } from "./signInClientWithEmailOtp";
@@ -32,6 +35,13 @@ const INVALID = { success: false, error: INVALID_EMAIL_OTP_ERROR_MESSAGE };
 const PARALLEL_REQUESTS = 5;
 // Twice the cap, so a broken reservation would visibly overshoot it.
 const PARALLEL_GUESSES = MAX_EMAIL_VERIFICATION_ATTEMPTS * 2;
+// The full pool width, split evenly between the two purposes.
+const PARALLEL_MIXED_REQUESTS = 10;
+const COOLDOWN_ELAPSED_MS = EMAIL_VERIFICATION_RESEND_COOLDOWN_MS + 1_000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+// Each case runs two sign-in bursts, and each burst waits out the 1.5 s
+// response floor, which leaves vitest's 5 s default little headroom.
+const TWO_SIGN_IN_BURSTS_TIMEOUT_MS = 15_000;
 
 async function createEligibleClient(): Promise<{ accountId: string; email: string }> {
   const client = await tracker.createClientProfile();
@@ -52,12 +62,42 @@ async function issueCode(email: string): Promise<string> {
   return otp.code;
 }
 
+// A real CLIENT_SIGN_IN row with `windowSendCount` sends used, an hour into
+// its window (so the rollover branch can't match) and out of cooldown.
+async function seedSendWindow(email: string, windowSendCount: number): Promise<void> {
+  await issueCode(email);
+  await prisma.emailOtpChallenge.update({
+    where: { email },
+    data: {
+      windowSendCount,
+      windowStartedAt: new Date(Date.now() - ONE_HOUR_MS),
+      sentAt: new Date(Date.now() - COOLDOWN_ELAPSED_MS),
+    },
+  });
+}
+
+async function ageCooldown(email: string): Promise<void> {
+  await prisma.emailOtpChallenge.update({
+    where: { email },
+    data: { sentAt: new Date(Date.now() - COOLDOWN_ELAPSED_MS) },
+  });
+}
+
+// Alternates purposes so the cooldown can't block: a purpose switch skips
+// it, and only the send cap stops the next issue.
+function requestEitherPurpose(
+  email: string,
+  index: number
+): Promise<RequestClientSignInCodeResult | RequestBookingSubmissionCodeResult> {
+  return index % 2 === 0 ? requestClientSignInCode({ email }) : requestBookingSubmissionCode({ email });
+}
+
 function wrongCodeFor(code: string): string {
   return code === "000000" ? "111111" : "000000";
 }
 
-function inParallel<T>(count: number, run: () => Promise<T>): Promise<T[]> {
-  return Promise.all(Array.from({ length: count }, run));
+function inParallel<T>(count: number, run: (index: number) => Promise<T>): Promise<T[]> {
+  return Promise.all(Array.from({ length: count }, (_, index) => run(index)));
 }
 
 describe("email OTP integration", () => {
@@ -181,5 +221,71 @@ describe("email OTP integration", () => {
         })
       ).toBe(1);
     });
+  });
+
+  // 28.11.2.3: the cap is checked in issueEmailOtp's atomic updateMany. Each
+  // case starts one send below it, so a cap that didn't hold under the race
+  // would visibly overshoot to 11.
+  describe("the send cap holds under parallel bursts", () => {
+    it(
+      "a same-purpose burst sends once to reach the cap, and the cap, not the cooldown, blocks the next burst",
+      async () => {
+        const { email } = await createEligibleClient();
+        await seedSendWindow(email, MAX_EMAIL_OTP_SENDS_PER_WINDOW - 1);
+
+        const results = await inParallel(PARALLEL_REQUESTS, () => requestClientSignInCode({ email }));
+
+        expect(results).toEqual(Array(PARALLEL_REQUESTS).fill({ success: true }));
+        expect(sendVerificationEmailMock).toHaveBeenCalledTimes(1);
+        const [, sentCode] = sendVerificationEmailMock.mock.calls[0];
+        const capped = await prisma.emailOtpChallenge.findUniqueOrThrow({ where: { email } });
+        expect(capped.windowSendCount).toBe(MAX_EMAIL_OTP_SENDS_PER_WINDOW);
+        expect(capped.codeHash).toBe(hashEmailVerificationCode(sentCode));
+
+        // Out of cooldown, so only the cap can block these.
+        await ageCooldown(email);
+        const blocked = await inParallel(PARALLEL_REQUESTS, () => requestClientSignInCode({ email }));
+
+        expect(blocked).toEqual(Array(PARALLEL_REQUESTS).fill({ success: true }));
+        expect(sendVerificationEmailMock).toHaveBeenCalledTimes(1);
+        const challenge = await prisma.emailOtpChallenge.findUniqueOrThrow({ where: { email } });
+        expect(challenge.windowSendCount).toBe(MAX_EMAIL_OTP_SENDS_PER_WINDOW);
+        expect(challenge.codeHash).toBe(capped.codeHash);
+      },
+      TWO_SIGN_IN_BURSTS_TIMEOUT_MS
+    );
+
+    it(
+      "an alternating sign-in/booking burst sends once to reach the cap, and an aged follow-up burst sends nothing",
+      async () => {
+        const { email } = await createEligibleClient();
+        await seedSendWindow(email, MAX_EMAIL_OTP_SENDS_PER_WINDOW - 1);
+
+        // After the first issue, every opposite-purpose call passes the
+        // cooldown. Only the cap stops the second send.
+        const results = await inParallel(PARALLEL_MIXED_REQUESTS, (index) =>
+          requestEitherPurpose(email, index)
+        );
+
+        expect(results).toEqual(Array(PARALLEL_MIXED_REQUESTS).fill({ success: true }));
+        expect(sendVerificationEmailMock).toHaveBeenCalledTimes(1);
+        const [, sentCode] = sendVerificationEmailMock.mock.calls[0];
+        const capped = await prisma.emailOtpChallenge.findUniqueOrThrow({ where: { email } });
+        expect(capped.windowSendCount).toBe(MAX_EMAIL_OTP_SENDS_PER_WINDOW);
+        expect(capped.codeHash).toBe(hashEmailVerificationCode(sentCode));
+
+        await ageCooldown(email);
+        const blocked = await inParallel(PARALLEL_MIXED_REQUESTS, (index) =>
+          requestEitherPurpose(email, index)
+        );
+
+        expect(blocked).toEqual(Array(PARALLEL_MIXED_REQUESTS).fill({ success: true }));
+        expect(sendVerificationEmailMock).toHaveBeenCalledTimes(1);
+        const challenge = await prisma.emailOtpChallenge.findUniqueOrThrow({ where: { email } });
+        expect(challenge.windowSendCount).toBe(MAX_EMAIL_OTP_SENDS_PER_WINDOW);
+        expect(challenge.codeHash).toBe(capped.codeHash);
+      },
+      TWO_SIGN_IN_BURSTS_TIMEOUT_MS
+    );
   });
 });
