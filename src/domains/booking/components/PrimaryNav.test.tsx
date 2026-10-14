@@ -24,19 +24,22 @@ describe("PrimaryNav", () => {
     cleanup();
   });
 
-  it("links the four daily-operations routes for the artist", () => {
-    const nav = renderNav();
+  it.each(["bar", "drawer"] as const)(
+    "links the four daily-operations routes for the artist (%s)",
+    (variant) => {
+      const nav = renderNav({ variant });
 
-    const hrefs = within(nav)
-      .getAllByRole("link")
-      .map((link) => link.getAttribute("href"));
-    expect(hrefs).toEqual([
-      `/artist/${ARTIST_ID}`,
-      `/artist/${ARTIST_ID}/requests`,
-      `/artist/${ARTIST_ID}/appointments`,
-      `/artist/${ARTIST_ID}/calendar`,
-    ]);
-  });
+      const hrefs = within(nav)
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href"));
+      expect(hrefs).toEqual([
+        `/artist/${ARTIST_ID}`,
+        `/artist/${ARTIST_ID}/requests`,
+        `/artist/${ARTIST_ID}/appointments`,
+        `/artist/${ARTIST_ID}/calendar`,
+      ]);
+    }
+  );
 
   it("shows a count badge on Requests and Appointments when non-zero", () => {
     const nav = renderNav({ pendingRequestCount: 3, pastDueAppointmentCount: 12 });

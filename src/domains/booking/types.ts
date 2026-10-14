@@ -420,7 +420,14 @@ export interface PrimaryNavProps {
   artistId: string;
   pendingRequestCount: number;
   pastDueAppointmentCount: number;
+  // "bar" is the desktop header row, hidden below `lg`. "drawer"
+  // (50.1.4.4) is the vertical stack MobileNavDrawer renders there instead.
+  variant?: "bar" | "drawer";
 }
+
+// Pure view props (50.1.4.4). Same data as PrimaryNav; the drawer
+// always renders the "drawer" variant, so callers don't pick one.
+export type MobileNavDrawerProps = Omit<PrimaryNavProps, "variant">;
 
 // Write command (CLAUDE.md 5.6): artist-initiated cancellation of an
 // already-APPROVED booking. No clientProfileId -- ownership-checked
