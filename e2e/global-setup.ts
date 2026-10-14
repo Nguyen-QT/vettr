@@ -137,6 +137,12 @@ export interface E2eFixture {
   // .spec.ts makes its Account dual-role mid-suite (a different message).
   bookingOtpArtistId: string;
   bookingOtpArtistEmail: string;
+  // An artist-only ARTIST Account on its own Artist (28.11.6.1), driven only
+  // by artist-login-lockout.spec.ts, which locks it. Not artistLoginEmail:
+  // artist-login.spec.ts signs in with that address in parallel.
+  lockoutArtistId: string;
+  lockoutArtistEmail: string;
+  lockoutArtistPassword: string;
   // A dynamically-dated (always "today"), already-started APPROVED
   // booking for the artist dashboard spec (Phase 22).
   dashboardTodayClientHandle: string;
@@ -1128,6 +1134,35 @@ export default async function globalSetup() {
     ]
   );
 
+  // Same shape as bookingOtpArtistEmail above, for the lockout spec only (see
+  // lockoutArtistEmail's comment on E2eFixture). The spec seeds the lock
+  // state itself, so the defaults (0, null) here don't matter.
+  const lockoutArtistId = randomUUID();
+  const lockoutArtistEmail = "e2e-artist-lockout@example.com";
+  const lockoutArtistPassword = "e2e-test-password-123";
+
+  await client.query(
+    `INSERT INTO "Artist" (id, name, "instagramHandle", handle, email, "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, now())`,
+    [
+      lockoutArtistId,
+      "E2E Lockout Artist",
+      "e2e_lockout_artist",
+      "e2e_lockout_artist",
+      "e2e-fixture-lockout-artist@example.com",
+    ]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "artistId", "updatedAt")
+     VALUES ($1, $2, $3, 'ARTIST', $4, now())`,
+    [
+      randomUUID(),
+      lockoutArtistEmail,
+      hashPasswordForFixture(lockoutArtistPassword),
+      lockoutArtistId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -1205,6 +1240,9 @@ export default async function globalSetup() {
     bookingOtpClientHandle,
     bookingOtpArtistId,
     bookingOtpArtistEmail,
+    lockoutArtistId,
+    lockoutArtistEmail,
+    lockoutArtistPassword,
     maxEndTimeClientHandle,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,
