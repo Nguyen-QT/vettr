@@ -37,6 +37,9 @@ export default async function ArtistSettingsLayout({
         <Link href={`/artist/${artistId}/settings/set-up-client-profile`}>
           Set Up Client Profile
         </Link>
+        <Link href={`/artist/${artistId}/settings/appearance`}>
+          Appearance
+        </Link>
       </nav>
       <Separator />
       {children}
