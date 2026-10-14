@@ -195,7 +195,10 @@ Done once for `vettr.studio` in 53.2.1.1; production reuses it.
 
 1. **Add the domain:** *Domains → Add domain* → `vettr.studio`, region **`eu-west-1` (Ireland)**, the closest to London. The region is fixed at creation; changing it means deleting the domain, re-adding it and redoing the DNS. Latency matters here: `requestClientSignInCode` gives the send 1s (`EMAIL_OTP_SEND_TIMEOUT_MS`, `src/domains/auth/constants.ts`).
 2. **DNS:** add the SPF and DKIM records from the domain's *Records* tab at the registrar, exactly as shown (the Return-Path defaults to the `send.` subdomain). If the registrar proxies CNAMEs (e.g. Cloudflare's orange cloud), turn proxying off for them or verification never completes. Then *Verify*.
-3. **DMARC** (after verification): add a TXT record at `_dmarc.vettr.studio`. Start with `v=DMARC1; p=none; rua=mailto:<your address>` and tighten the policy once reports look clean.
+3. **DMARC** (after verification): add a TXT record at `_dmarc.vettr.studio`. Start with `v=DMARC1; p=none; rua=mailto:dmarc@vettr.studio` and tighten the policy once reports look clean.
+   - The report address must be on `vettr.studio`. Before mailing reports to another domain, a reporter checks for a `vettr.studio._report._dmarc.<that domain>` TXT record. A personal mailbox (Gmail, Hotmail) can't publish one, so its reports are dropped with no error.
+   - `vettr.studio` has no mailboxes, so forward `dmarc@vettr.studio` to a real inbox with the registrar's email forwarding (free on Porkbun, where the DNS is hosted). Forwarding adds MX records and an SPF record at the apex. Neither affects Resend, which sends from the `send.` subdomain and signs with DKIM.
+   - Porkbun creates a wildcard `*` CNAME to its parking page for new domains. Until a name has its own record, the wildcard answers for it, so before step 3 `_dmarc` looks like a CNAME to `pixie.porkbun.com` rather than a missing record.
 4. **API key:** *API Keys → Create*, permission **Sending access**, restricted to `vettr.studio` → `RESEND_API_KEY`.
 5. **Sender:** `EMAIL_FROM` = `Vettr <no-reply@vettr.studio>` (any address on the verified domain works).
 
