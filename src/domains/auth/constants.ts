@@ -16,10 +16,12 @@ export const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 // enumerate registered accounts.
 export const INVALID_CREDENTIALS_ERROR_MESSAGE = "Incorrect email or password.";
 
-// How many failed login attempts are allowed before a temporary lockout
-// is enforced. The lockout is a rolling window, so a user who fails
-// to log in 5 times in a row will be locked out for 15 minutes, but
-// if they wait 15 minutes and try again, the counter resets.
+// Consecutive failed artist logins allowed before a temporary lockout.
+// reserveLoginAttempt counts every attempt before the password is checked;
+// the MAX_FAILED_LOGIN_ATTEMPTS-th arms a LOGIN_LOCKOUT_DURATION_MS lock,
+// and a successful login resets the count. There is no rolling window:
+// failures never decay, and the count restarts at 1 only after a lock
+// expires (Phase 72 decides on a decay window).
 export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 export const LOGIN_LOCKOUT_DURATION_MS = 1000 * 60 * 15; // 15 minutes
 

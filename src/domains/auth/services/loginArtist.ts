@@ -4,7 +4,7 @@ import { INVALID_CREDENTIALS_ERROR_MESSAGE } from "../constants";
 import type { LoginInput, LoginResult } from "../types";
 import { createSession } from "./createSession";
 import { recordAuditEvent } from "./recordAuditEvent";
-import { recordFailedLoginAttempt } from "./recordFailedLoginAttempt";
+import { reserveLoginAttempt } from "./reserveLoginAttempt";
 import { resetFailedLoginAttempts } from "./resetFailedLoginAttempts";
 import { verifyPassword } from "./verifyPassword";
 
@@ -33,19 +33,23 @@ export async function loginArtist(input: LoginInput): Promise<LoginResult> {
     return { success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE };
   }
 
-  // Reuses the row already fetched above and Node's clock, consistent
-  // with recordFailedLoginAttempt's own lock check (27.1.2.1). Never a
-  // distinct error message -- lockout state must not become a new
-  // enumeration vector on top of the existing generic-error protection
-  // (27.1 design note). verifyPassword is skipped entirely while locked.
-  const isLocked = account.lockedUntil !== null && account.lockedUntil.getTime() > Date.now();
-  if (isLocked) {
+  // The attempt is reserved before the password is checked (28.11.2.1), so
+  // a parallel burst can't get more than MAX_FAILED_LOGIN_ATTEMPTS
+  // passwords checked per lock cycle. This is the only lock check: the row
+  // read above may already be stale. A failed reservation means locked,
+  // and gets the same generic error, never a distinct message -- lockout
+  // state must not become a new enumeration vector on top of the existing
+  // generic-error protection (27.1 design note). verifyPassword is skipped
+  // entirely while locked.
+  const reserved = await reserveLoginAttempt(account.id);
+  if (!reserved) {
     return { success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE };
   }
 
   const passwordMatches = await verifyPassword(input.password, account.passwordHash);
   if (!passwordMatches) {
-    await recordFailedLoginAttempt(account.id);
+    // No further write: the reservation already counted this attempt, and
+    // the one that reached MAX_FAILED_LOGIN_ATTEMPTS already armed the lock.
     await recordAuditEvent({
       eventType: "LOGIN_FAILED",
       outcome: "REJECTED",
@@ -55,9 +59,8 @@ export async function loginArtist(input: LoginInput): Promise<LoginResult> {
     return { success: false, error: INVALID_CREDENTIALS_ERROR_MESSAGE };
   }
 
-  if (account.failedLoginAttempts > 0 || account.lockedUntil !== null) {
-    await resetFailedLoginAttempts(account.id);
-  }
+  // Unconditional: every login reserved an attempt, including this one.
+  await resetFailedLoginAttempts(account.id);
 
   const session = await createSession(account.id, account.role);
 
