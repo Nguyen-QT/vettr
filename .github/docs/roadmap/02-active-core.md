@@ -12,8 +12,9 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 
 ### 🔒 Pre-Launch Gates (Blocks Production Go-Live)
 *   [x] **Phase 28.8 Error Isolation** ➔ Stop unexpected DB errors in `updateClientProfile` reaching the client as an uncaught 500 (58.3/58.4 wait on it).
+*   [ ] **Phase 28.11 Abuse Test Tier** ➔ Prove the per-email and per-account limits hold when public endpoints are hit in parallel bursts.
 *   [ ] **Phase 50 Navigation Layouts** ➔ Build responsive primary header and avatar identity menus.
-*   [ ] **Phase 53.4–53.8 Pre-Launch Hardening** ➔ Scope and execute remaining unscoped stability, infrastructure, and performance hardening tasks.
+*   [ ] **Phase 53.4–53.8, 53.10 Pre-Launch Hardening** ➔ Scope and execute remaining unscoped stability, infrastructure, and performance hardening tasks. 53.10 gives the public `/@handle` error pages a way out.
 *   [ ] **Phase 56 Payment Integrity** ➔ Deploy failed refund sweep mechanics and Connect reversals (`56.8–56.13`).
 *   [ ] **Phase 58 Auth Hardening** ➔ Implement guest-profile claim guards and lowercase data validation layers (`58.1–58.9`).
 *   [ ] **Go-Live Backlog Phases** (detail in `03-backlog.md`, in this order) ➔ 31 → 30 → 40 → 38.4 → 39 → 35 → 33.1 → 33.2 → 61 → 42.
@@ -159,6 +160,17 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - Data Gateway / Controller / UI / Hook / View layers: N/A — governance docs only.
   - [x] **28.10.2.1** Domain Service (governance) — rewrite `testing.md` §2's "Headless E2E Check" screenshot mandate as the three tiers, and point Phase 59's testing line in `03-backlog.md` ("Every new UI surface asserts `toHaveScreenshot()` with linux + win32 baselines") at the tier policy. Docs only. `.claude/` is gitignored, so the `testing.md` edit stays local; flag that in the handoff.
   - **Flagged, not scoped** (each needs its own breakdown if wanted): Linux-only baselines generated in the Playwright Docker image, which would drop the `-win32` PNGs and make local runs match CI; element-scoping the 6 existing public screenshots.
+- [ ] **28.11: Abuse Test Tier** — *unscoped.* Added 2026-10-14. Gates 53.3. Proves the existing per-email and per-account limits hold when someone hammers the public endpoints. All of them live in Postgres, none per IP.
+  - **Already covered at the integration tier:**
+    - `auth.otp.integration.test.ts:81-152`: parallel code requests send once, parallel guesses stop at the attempt cap, parallel verifies yield one session.
+    - `auth.otp-provisioning.integration.test.ts:167-313`: concurrent first-time provisioning.
+    - `booking.email-otp-submission.integration.test.ts:122`: a double submit of one code creates one booking.
+  - **Gaps to fill** (real-database `*.integration.test.ts`, bursts via `Promise.allSettled`):
+    - Artist login lockout under parallel wrong passwords. Today only unit tests cover it (`recordFailedLoginAttempt.test.ts`, `loginArtist.test.ts`) against a mocked client, so the atomic retry loop in `recordFailedLoginAttempt.ts` is never run against real row contention. Assert the lock lands at `MAX_FAILED_LOGIN_ATTEMPTS` and a correct password is rejected while it holds.
+    - The send cap under a burst: seed a challenge one send below `MAX_EMAIL_OTP_SENDS_PER_WINDOW` with the cooldown elapsed, fire a burst, and assert exactly one send and that every request after it hits the cap.
+  - **E2E:** no spec exercises the artist lockout or the send cap. Add both, asserting the same generic copy a real user sees (no enumeration).
+  - **Unlimited today:** `getAvailableSlotsAction` (public by design) and the unauthenticated `/api/uploadthing` endpoint. Their abuse tests land with 53.5 and 53.6, not here.
+  - **Out of scope:** per-IP limiting (53.6, a Vercel WAF rule that can only be checked on staging) and load testing.
 
 ---
 
@@ -223,6 +235,22 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 - [ ] **53.7: Error Monitoring & Alerting** — *unscoped.* Only structured `console.error` today, no APM. Add error monitoring (e.g. Sentry) with PII scrubbing, so the architecture.md §6 "log a critical alert" paths (Stripe success + local write failure) actually alert someone. Also covers health monitors on Stripe and Resend API responses (error rate, latency), folded in from the former backlog Phase 64. Gates 53.3.
 - [ ] **53.8: Legal & Compliance Pages** — *unscoped.* Privacy policy, terms of service and a cookie notice before real users. The app stores DOB, email, phone and reference images (UK GDPR). Also covers ICO data-protection fee registration, data retention/deletion expectations, and linking the pages from the portal gate and booking flow. Folded in from the former backlog Phase 62: clients and artists must accept the platform T&Cs (including the deposit/fee-protection terms) before booking or taking bookings, with the accepted version recorded per account; and a data-handling policy for reference images that show body placement. Email (former backlog Phase 63): SPF/DKIM/DMARC is 53.2.1.1. Every email sent today is transactional (sign-in and booking codes), so no unsubscribe link is needed yet; add unsubscribe handling (footer link plus a `List-Unsubscribe` header) when the first non-transactional email ships. Gates 53.3.
 - [ ] **53.9: Structured Logging & Log Correlation** — *unscoped.* Found in the 54.5.2.1 review (2026-10-08). Services log ad-hoc `console.error({ operation, reason })` objects with no levels, no request/trace ID and no shared shape, so one failure can't be followed across the action → service → Resend/Stripe hops. Add a thin server-only logger (levels, a per-request correlation ID, the same non-PII allowlist) that 53.7's monitoring ingests. Backfill the typed Prisma `errorCode` log field that 54.5.2.1 introduced (`requestBookingSubmissionCode.ts`) into `requestClientSignInCode` and the other OTP services. Design-pass decision: whether to log an email digest for per-address correlation. A plain hash can be reversed by hashing guessed addresses, so it would need an HMAC with a server secret and a change to architecture.md §8.B's non-PII rule. Design alongside 53.7; not a 53.3 gate on its own. Phase 61 (`03-backlog.md`) builds business-event logging on top of this logger.
+- [ ] **53.10: Public Error Pages Without a Dead End** — *small.* Added 2026-10-14. Gates 53.3.
+  - **Findings (reproduced 2026-10-14):** a signed-out client searched for an unused handle and got stuck on "Something went wrong" with only a "Try again" button.
+    - The cause was the dev database being down (`P1001` at `localhost:5432`), not the handle. Every well-formed handle that reached the lookup returned 500 through `failUnavailable` (`at/[handle]/page.tsx:31-36`). A reserved handle got a 404 because it is rejected before the query. `/` still loaded because the gate's session lookup fails open (`app/page.tsx:19-27`), so only the handle looked broken.
+    - With the database up, an unused handle correctly lands on the root "Page not found" (`getPublicArtistProfileByHandle` returns `null`, then `notFound()`).
+    - The real defect: `at/[handle]/error.tsx` and `at/[handle]/book/error.tsx` render only "Try again". `retry()` refreshes the same URL, so a failure that persists traps the user, and only the browser's Back button gets them out.
+  - **Confirmed sub-task breakdown** (confirmed 2026-10-14; each leaf = one isolated PR; do not combine):
+    - [ ] **53.10.1.1** Data Gateway — N/A, no schema change.
+    - [ ] **53.10.2.1** Domain Service — N/A. The lookup already returns `null` for an unknown handle.
+    - [ ] **53.10.3.1** Controller/Action — N/A.
+    - [ ] **53.10.4.1** UI Primitive — N/A. Two route files only, so no shared primitive.
+    - [ ] **53.10.5.1** Domain Hook — N/A. Retry stays Next's `retry()`.
+    - [ ] **53.10.6.1** View & Route — in both `error.tsx` files, keep "Try again" as the main button and add a secondary `<Link href="/">` "Find another artist" (`buttonVariants({ variant: "outline", className: "w-full" })`, the `not-found.tsx` link pattern). A signed-in client on `/` is redirected to `/client`, which also hosts the finder. Copy becomes "…right now. Try again, or find another artist." Tests:
+      - Co-located jsdom component tests (`at/[handle]/error.test.tsx`, `at/[handle]/book/error.test.tsx`, following `ThemePicker.test.tsx`): the button calls `retry`, and the link points to `/`.
+      - Tier-1 E2E in `e2e/portal-gate.spec.ts`: submit an unused handle from the finder, assert `toHaveURL` `/@<handle>` and the "Page not found" heading, then "Go home" lands back on `/`. This covers the in-app navigation path; `artist-profile.spec.ts:51-56` covers only a full page load. The error boundary itself can't be forced in E2E (the failure is server-side), so the component tests cover it.
+  - **§7 edge cases:** the link is a plain `<Link>`, so it works even when the failing segment can't re-render. `error.message` is still never rendered. Retry still helps with a short outage.
+  - **Flagged, not scoped:** `/` stays usable while the database is down, so the finder appears to work and every lookup then fails. In production 53.7's monitoring is the backstop.
 
 ---
 

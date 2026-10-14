@@ -12,7 +12,7 @@ Retired numbers: 62–64 were folded into 53.7/53.8 (`02-active-core.md`) and 56
 ## Priority Index
 
 ### Gates go-live (53.3)
-These run alongside the gates in `02-active-core.md` (28.8, 50, 53.4–53.8, 56.8–56.13, 58.1–58.9).
+These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53.8, 53.10, 56.8–56.13, 58.1–58.9).
 1. **31: Required Field Visual Indicator** (Client & artist forms) ➔ A workspace-wide marker for required fields, linked to the Zod schemas. Goes first so every form built after it uses the convention.
 2. **30: Post-Submission UX** (Client) ➔ Confirmation email plus copy on the existing `BookingSubmittedConfirmation`. The screen itself shipped in 54.5.4.4.
 3. **40: Min/Max Budget Inputs** (Client) ➔ Replace the Step 2 budget slider with minimum and maximum scroll inputs stepping in 5s. After 58.4, which adds the budget maximum.
@@ -26,25 +26,30 @@ These run alongside the gates in `02-active-core.md` (28.8, 50, 53.4–53.8, 56.
 11. **34: Database-Backed Tiers** (Payments) ➔ Replace the hardcoded `ComplexityTier` literals with per-artist database records.
 ### Post-launch
 1. **59: Client Passkeys** (Auth) ➔ Passkey sign-in on top of the email code. First post-launch item; fully designed below.
-2. **29: Hook State Hygiene** (Tech debt) ➔ Fix the `set-state-in-effect` sites. Before 28.5 (`02-active-core.md`), so the hook tests don't pin behaviour 29 changes.
-3. **57: Payment Event Ledger** (Payments) ➔ Append-only payment events and removal of billing's imports of booking (architecture.md §4). Before 32, 36 and 43, which would each add to that dependency.
-4. **60: Platform Admin Dashboard** (Platform) ➔ Admin-only health, Connect onboarding and manual refund tools. Builds on 56.11's decision.
-5. **36: Financial Reporting** (Payments) ➔ Read-only deposits, payouts and revenue reporting. Reads 57's ledger.
-6. **37: Active-Page Context** (Navigation) ➔ Breadcrumbs or active-nav highlighting. After 50.
-7. **38.2–38.3: Layout Consistency** (Navigation) ➔ Nested viewport-unit audit; settings back button restyle.
-8. **32: Trusted Client Deposit Exemption** (Payments) ➔ Already scoped; artists exempt trusted clients from deposits.
-9. **41: Artist Response Templates** (Artist) ➔ Quick-copy presets for approvals, declines and follow-ups.
-10. **44: In-App Chat** (Client & artist) ➔ Messaging tied to a `BookingRequest`, replacing SMS and Instagram threads.
-11. **45: VIP / Close-Friends Tiers** (Client) ➔ Invite-only booking access, separate from complexity tiers.
-12. **43: Artist Subscription Billing** (Payments) ➔ Platform SaaS fee charged to artists. Needs the Connect Accounts v2 migration first.
-13. **46: Placement & Canvas Metadata** (Client booking) ➔ Body placement fields in the booking wizard.
-14. **47: Reference Image Annotations** (Client booking) ➔ Clients add notes to individual reference photos.
-15. **48: Moodboard / Canvas Design Tool** (Client booking) ➔ Interactive concept builder; likely absorbs 46–47.
-16. **55: SMS OTP Channel** (Auth) ➔ Phone codes as a second channel. After 59.
-17. **52: Constant-Time Artist Login** (Auth) ➔ Equal response time on every login rejection. After 53.6.
-18. **51: Client-to-Artist Dual Role** (Auth) ➔ Decide how a client account gains artist access. Needs a product decision first.
-19. **49: Domain Service Refactor** (Tech debt) ➔ No scope yet; needs a scoping conversation.
-20. **65: Recovered Tech Debt** (Tech debt) ➔ Dead code and a duplicated guard flagged in 28.7.
+2. **66: Sign-In Notification Emails** (Auth) ➔ An email to artists and clients after every successful sign-in. After 59, so passkey sign-ins send it too.
+3. **29: Hook State Hygiene** (Tech debt) ➔ Fix the `set-state-in-effect` sites. Before 28.5 (`02-active-core.md`), so the hook tests don't pin behaviour 29 changes.
+4. **57: Payment Event Ledger** (Payments) ➔ Append-only payment events and removal of billing's imports of booking (architecture.md §4). Before 32, 36 and 43, which would each add to that dependency.
+5. **60: Platform Admin Dashboard** (Platform) ➔ Admin-only health, Connect onboarding and manual refund tools. Builds on 56.11's decision.
+6. **36: Financial Reporting** (Payments) ➔ Read-only deposits, payouts and revenue reporting. Reads 57's ledger.
+7. **37: Active-Page Context** (Navigation) ➔ Breadcrumbs or active-nav highlighting. After 50.
+8. **38.2–38.3: Layout Consistency** (Navigation) ➔ Nested viewport-unit audit; settings back button restyle.
+9. **32: Trusted Client Deposit Exemption** (Payments) ➔ Already scoped; artists exempt trusted clients from deposits.
+10. **41: Artist Response Templates** (Artist) ➔ Quick-copy presets for approvals, declines and follow-ups.
+11. **70: Client Request Status Timeline** (Client) ➔ Clear stages from Submitted to Confirmed, with the artist's usual reply time. Before 44, whose chat attaches to the same per-request view.
+12. **44: In-App Chat** (Client & artist) ➔ Messaging tied to a `BookingRequest`, replacing SMS and Instagram threads, with email/SMS links straight to the thread.
+13. **45: VIP / Close-Friends Tiers** (Client) ➔ Invite-only booking access, separate from complexity tiers.
+14. **43: Artist Subscription Billing** (Payments) ➔ Platform SaaS fee charged to artists. Needs the Connect Accounts v2 migration first.
+15. **67: Artist Intake Form Builder** (Artist) ➔ Per-artist required, optional and hidden fields, plus custom questions. Before 46, which it likely absorbs.
+16. **68: Booking Page Branding** (Artist) ➔ Per-artist cover image and accent colour on `/@handle`. After 67.
+17. **69: Multi-Craft Service Model** (Platform) ➔ Nails, lashes and aesthetics alongside tattoo work. After 68; also needs 34 and 67.
+18. **46: Placement & Canvas Metadata** (Client booking) ➔ Body placement fields in the booking wizard.
+19. **47: Reference Image Annotations** (Client booking) ➔ Clients add notes to individual reference photos.
+20. **48: Moodboard / Canvas Design Tool** (Client booking) ➔ Interactive concept builder; likely absorbs 46–47.
+21. **55: SMS OTP Channel** (Auth) ➔ Phone codes as a second channel. After 59.
+22. **52: Constant-Time Artist Login** (Auth) ➔ Equal response time on every login rejection. After 53.6.
+23. **51: Client-to-Artist Dual Role** (Auth) ➔ Decide how a client account gains artist access. Needs a product decision first.
+24. **49: Domain Service Refactor** (Tech debt) ➔ No scope yet; needs a scoping conversation.
+25. **65: Recovered Tech Debt** (Tech debt) ➔ Dead code and a duplicated guard flagged in 28.7.
 
 ---
 
@@ -59,6 +64,7 @@ These run alongside the gates in `02-active-core.md` (28.8, 50, 53.4–53.8, 56.
 ### Phase 30: Post-Submission Request Confirmation UX
 - [ ] **30.1: Client Post-Submission Flow** (Unscoped -- Define what a client sees/does immediately after submitting a booking request: confirmation screen state, messaging on "no auto-booking, artist will review", and any status page or email. Currently underspecified per CLAUDE.md's "no auto-booking" model).
 - **Scope update (2026-10-12):** most of this shipped in 54.5.4.4. `BookingSubmittedConfirmation` already tells the client the artist will review the request and links to `/client`. What's left: a confirmation email to the client after a request is submitted, and any copy changes to `BookingSubmittedConfirmation`. No new route: `/book/[artistId]` is now a 308 redirect to `/@handle/book` (54.1.6.2).
+- **Scope update (2026-10-14, Venue review):** the confirmation email links to the client portal (`/client`), going through sign-in if the session has expired. A link to the single request waits for the per-request route that Phase 70 adds.
 
 ---
 
@@ -152,6 +158,10 @@ These run alongside the gates in `02-active-core.md` (28.8, 50, 53.4–53.8, 56.
 ### Phase 44: In-App Client/Artist Chat
 - **Status:** Unscoped.
 - **Objectives:** Engineer a dedicated in-platform messaging context linked directly to the identifier of a single `BookingRequest`, removing operational reliance on manual off-platform channels.
+- **Scope update (2026-10-14, Venue review):** Venue gets two things right: every message lives on the appointment rather than scattered across Instagram DMs, and its emails and texts link straight into the thread. Keep both, but put the link behind sign-in.
+  - New-message emails (and SMS once Phase 55 lands) link to the request's thread under `/client`, on the per-request route Phase 70 adds. The proxy already sends signed-out visitors to sign-in with a `redirectTo`, and `safeRedirectPath` allows `/client` paths, so the link brings them straight back to the thread.
+  - The link alone grants no access. Venue's links work for anyone who holds them and are lost with the email; Vettr's thread stays reachable from the portal.
+  - The artist side links to the request under `/artist/[artistId]`, behind the same proxy guard.
 
 ---
 
@@ -204,6 +214,7 @@ These run alongside the gates in `02-active-core.md` (28.8, 50, 53.4–53.8, 56.
 - **Status:** Unscoped. Deferred from Phase 54 (user decision: email code first, SMS later).
 - **Objectives:** Add phone/SMS as a second one-time-code channel for Phase 54's booking-submission gate and portal sign-in. Open questions for the scoping pass: SMS provider (e.g. Twilio Verify, which owns code storage/rate limiting itself, vs. sending raw codes through the existing `EmailOtpChallenge` model generalised with a channel column), per-message cost, E.164 normalisation (`ClientProfile.phone` is free-form and unverified today), a verified unique phone on `Account`, whether a phone-only identity is allowed (`Account.email` and `ClientProfile.email` are required and unique today), and an e2e capture sink mirroring the email one.
 - **Sequencing (added 2026-10-09):** if both are pursued, Phase 59 (client passkeys) goes first: passkeys cost nothing per sign-in and resist phishing, while SMS adds per-message cost and SIM-swap risk. Passkeys are a separate credential, not an OTP channel, so they don't settle the channel-generalisation question above.
+- **Venue review (2026-10-14):** Venue sends separate email links per artist, so a client who books three artists manages three links. The proposed answer was one verified phone number pulling every request into one portal, with an SMS code at the final submit tap. Vettr already does both by verified email: the code is asked for only at final submit (54.5), and one account holds a client's requests with every artist (54.7). Phone-keyed identity therefore adds nothing on its own; it stays the open "phone-only identity" question above.
 
 ---
 
@@ -308,5 +319,70 @@ These run alongside the gates in `02-active-core.md` (28.8, 50, 53.4–53.8, 56.
 - [ ] **65.2: Remove the Dead Scheduling `artistId` Payload** (*small.* Since 28.7.3.2 the scheduling actions take `artistId` from the session, so the `artistId` prop/payload key in `useWeeklyHoursSettings`, `useScheduleOverrides`, `WeeklyHoursSettings` and `BlackoutDateSettings` is ignored).
 - [ ] **65.3: Shared `requireArtistId` Guard** (*small.* The guard is duplicated in the billing, booking and scheduling actions; move it to a shared module per architecture.md §4.B).
 - [ ] **65.4: Evaluate `next-themes` and a "Match Device" Theme Option** (*small.* Added 2026-10-14 from 50.2's design pass. Theming is hand-rolled: `.dark` on `<html>`, `vettr-theme` in localStorage, and an anti-flash script in `src/app/layout.tsx` that defaults to dark until 50.2.6.3 makes light the default; shadcn's Next.js dark-mode guide uses `next-themes` instead. Adopt it only if a system/device mode is wanted: 50.2's two-option Light / Dark picker doesn't need it, and a device mode would add a third "Device" card to that picker. Before adopting, check its open React 19 "Encountered a script tag" warning on Next 16.2+ (next-themes issues #385, #387) against our Next version. 50.2.4.2 keeps the theme reads and writes in `src/lib/theme.ts`, so a move touches that file, the root layout and `ThemePicker` (50.2.4.3, which replaces `ThemeSwitch`)).
+
+---
+
+### Phase 66: Sign-In Notification Emails
+- **Status:** Unscoped. Added 2026-10-14 (user decision: artists and clients, on every sign-in).
+- **Objectives:** After every successful sign-in, email the account a short "You signed in to Vettr" notice, so a sign-in the owner didn't make gets noticed.
+  - Three places create a session today. Each sends after its transaction commits, never inside it:
+    - `loginArtist.ts:62`: artist password sign-in.
+    - `signInClientWithEmailOtp.ts:89`: client portal code sign-in.
+    - `verifyEmailOtpAndProvisionClient.ts:250`: booking verification. A first-time account (`CLIENT_ACCOUNT_AND_PROFILE_CREATED`) gets a "your account is set up" version instead.
+  - Phase 59's passkey sign-ins call the same sender.
+  - The send runs in its own try/catch, so a failed email never fails or rolls back the sign-in, and it is awaited before the response returns (architecture.md §8.C). Logs use the same fixed non-PII fields as `sendVerificationEmail`.
+  - A new `sendSignInNotificationEmail` sits beside `sendVerificationEmail` in `src/domains/auth/services/`: plain text, sent through `src/lib/resend.ts`, written to `emailCaptureSink` in E2E.
+  - Data Gateway: `AuditEventType` has only `LOGIN_FAILED` for artists, so a successful artist login records nothing. Add a success event so the audit trail matches the emails.
+  - No new abuse surface: only a successful sign-in sends the email, and sign-ins are already limited (27.1's lockout, the email-code caps).
+- **Design pass:**
+  - What "wasn't you?" leads to. No artist password reset and no "sign out everywhere" exist yet, so one of them may have to come first.
+  - What the email shows. The time is safe; IP address and location count as personal data under UK GDPR (53.8).
+  - Clients get two emails per code sign-in (the code, then the notice). Accepted for now; revisit if it reads as noise.
+  - The email is transactional, so it needs no unsubscribe link (53.8).
+
+---
+
+### Phase 67: Artist Intake Form Builder
+- **Status:** Unscoped. Added 2026-10-14 from the Venue review.
+- **Objectives:** Let each artist decide what their booking form asks.
+  - Each built-in field can be required, optional or hidden per artist. Venue only half does this: the design idea is optional and reference images are forced, for every artist.
+  - Artists add custom questions (short text, a choice, yes/no), e.g. nail health or current gel status for a nail tech.
+  - Not configurable: the Instagram handle, at least one reference image and the blacklist screen (CLAUDE.md constraint 2).
+  - Answers are stored with the version of the form they were given against, so a later edit never changes what an old request says.
+  - The wizard's progress bar is worked out from the steps the artist's form actually has. Venue's jumps from 75% straight to done.
+- **Related:** 31 (required-field marker), 34 (database-backed tiers) and 46–48 (46's placement fields could become built-in fields here). Phase 69 builds on this.
+
+---
+
+### Phase 68: Artist Booking Page Branding
+- **Status:** Unscoped. Added 2026-10-14 from the Venue review.
+- **Objectives:** Make an artist's `/@handle` and `/@handle/book` pages look like theirs. Venue uses a stock background with its own logo fixed in the corner.
+  - A cover image and an accent colour per artist. The colour overrides a semantic token on a wrapper around the public pages only, so components still consume tokens.
+  - A colour is saved only if it passes a contrast check in both the light and dark themes.
+  - No Vettr watermark on the booking page.
+- **Design pass:** frontend.md §2 forbids raw colour values in components, so a per-artist colour needs a rule decision first.
+- **Order:** after 39 (profile editing) and 67.
+
+---
+
+### Phase 69: Multi-Craft Service Model
+- **Status:** Unscoped. Added 2026-10-14 from the Venue review. Needs a product decision first.
+- **Objectives:** Support nail art tiers, lash extension styles, aesthetic consultations and other custom creative work, not only tattoos. Venue is built for tattoo artists alone (e.g. "Shop flash designs").
+  - Vettr's model is tattoo-shaped today: `ComplexityTier` (`TIER_2` to `FREESTYLE`), body placement and "design reference" copy.
+  - Generalise it into a craft per artist and a service catalogue the artist defines.
+- **Order:** after 34 (database-backed tiers) and 67 (intake builder), which are its building blocks.
+
+---
+
+### Phase 70: Client Request Status Timeline
+- **Status:** Unscoped. Added 2026-10-14 from the Venue review.
+- **Objectives:** Show the client where their request is and what happens next. Venue shows a static "appointment pending" with no review time and no next step.
+  - A per-request page under `/client` (none exists today; the dashboard lists requests) with the stages Submitted → Under Review → Deposit Requested → Confirmed, plus the end states Declined, Cancelled, Completed and No-show.
+  - Stages map onto `RequestStatus` and `depositPaid`: `PENDING` is Submitted, `APPROVED` with the deposit unpaid is Deposit Requested, `APPROVED` with it paid (or none due) is Confirmed. Decide where `AWAITING_SLOT_CONFIRMATION` sits.
+  - "Under Review" needs a signal that doesn't exist yet, e.g. when the artist first opens the request.
+  - An artist-set "usually replies within N days", shown on the profile and on `BookingSubmittedConfirmation`.
+  - Phase 61's business events can supply the timestamps.
+- **Already right in Vettr** (same review, no item needed): clients start the booking form without signing in, and the email code is asked for only at the final submit (54.5). Access never depends on keeping a link, because one account holds every request (54.7).
+- **Related:** 30 (its email links here once this lands) and 44 (chat sits on the same page).
 
 ---
