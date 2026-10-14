@@ -155,7 +155,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 > Splits the dashboard header into a left-aligned Primary Nav (daily-operations links) and a right-aligned Avatar dropdown (account/context actions), isolating destructive/context-switch actions behind a divider. Collapses Primary Nav into a mobile slide-out drawer; Avatar dropdown stays anchored top-right at all viewports.
 - [ ] **50.1: Nav & Identity Menu Restructure**
   - Data Gateway / Domain Service / Controller layers: N/A — pure presentational composition reusing existing `RoleSwitcherContainer` and `logoutAction`.
-  - [ ] **50.1.4.1** UI Primitive — install shadcn `dropdown-menu`, `avatar`, `sheet` components.
+  - [x] **50.1.4.1** UI Primitive — install shadcn `dropdown-menu`, `avatar`, `sheet` components.
   - [ ] **50.1.4.2** UI Primitive — `UserMenu` component: Avatar trigger, dropdown with Settings | (RoleSwitcherContainer row) | --- | Log out.
   - [ ] **50.1.4.3** UI Primitive — `PrimaryNav` component: Dashboard | Requests | Appointments | Calendar links + existing `NavCountBadge`s (artist-only; client portal has no equivalent routes).
   - [ ] **50.1.4.4** UI Primitive — `MobileNavDrawer`: Sheet triggered by a ☰ icon, collapses `PrimaryNav` below the responsive breakpoint.
