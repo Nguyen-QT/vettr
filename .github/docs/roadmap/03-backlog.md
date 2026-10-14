@@ -12,7 +12,7 @@ Retired numbers: 62–64 were folded into 53.7/53.8 (`02-active-core.md`) and 56
 ## Priority Index
 
 ### Gates go-live (53.3)
-These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53.8, 53.10, 56.8–56.13, 58.1–58.9, 71).
+These run alongside the gates in `02-active-core.md` (50, 53.4–53.8, 53.10, 56.8–56.13, 58.1–58.9, 71).
 1. **31: Required Field Visual Indicator** (Client & artist forms) ➔ A workspace-wide marker for required fields, linked to the Zod schemas. Goes first so every form built after it uses the convention.
 2. **30: Post-Submission UX** (Client) ➔ Confirmation email plus copy on the existing `BookingSubmittedConfirmation`. The screen itself shipped in 54.5.4.4.
 3. **40: Min/Max Budget Inputs** (Client) ➔ Replace the Step 2 budget slider with minimum and maximum scroll inputs stepping in 5s. After 58.4, which adds the budget maximum.
@@ -51,6 +51,7 @@ These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53
 24. **51: Client-to-Artist Dual Role** (Auth) ➔ Decide how a client account gains artist access. Needs a product decision first.
 25. **49: Domain Service Refactor** (Tech debt) ➔ No scope yet; needs a scoping conversation.
 26. **65: Recovered Tech Debt** (Tech debt) ➔ Dead code and a duplicated guard flagged in 28.7.
+27. **73: Error Isolation Follow-Ups** (Tech debt) ➔ Uncaught throws and a TOCTOU flagged in 28.8. Not yet prioritised: decide whether any of it gates launch.
 
 ---
 
@@ -390,7 +391,7 @@ These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53
 ---
 
 ### Phase 72: Artist Lockout Tuning
-- **Status:** Unscoped. Added 2026-10-14 from 28.11's design pass (`02-active-core.md`). Post-launch, because neither item ever needs the operator.
+- **Status:** Unscoped. Added 2026-10-14 from 28.11's design pass (now archived in `01-shipped-foundations.md`). Post-launch, because neither item ever needs the operator.
 - **Objectives:**
   - **Decay window.** Failed attempts never decay: the counter resets only on a successful login, and restarts only after a lock expires. So 4 mistypes last month plus 1 today locks the account.
     - Decide a window, e.g. a `lastFailedLoginAt` column with a restart in `reserveLoginAttempt`'s SQL.
@@ -399,5 +400,15 @@ These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53
     - Add an `ACCOUNT_LOCKED` reason code, which needs a migration.
     - A row per rejected request is unbounded writes under attack, so the design pass chooses between one row per lock cycle and sampling.
 - **Order:** after 71 (`02-active-core.md`), which may change what a locked artist sees, and after 66, which migrates the artist audit enum.
+
+---
+
+### Phase 73: Error Isolation Follow-Ups
+- **Status:** Unscoped. Recovered on 2026-10-15 from 28.8's "Flagged, not fixed" list when 28.8 was archived to `01-shipped-foundations.md`. Each item was re-checked against the code that day. Not yet prioritised: an uncaught throw on the client portal shows Next's default crash screen, so decide whether 73.1–73.2 gate launch.
+- [ ] **73.1: Catch `getSessionWithAccount` Failures** (`requireClientProfileId` calls it with no catch, so a DB failure on the session read throws from every action in every domain).
+- [ ] **73.2: Client Portal Error Boundaries** (the client portal has no `error.tsx` or `global-error.tsx`, so any remaining throw, such as a transport failure or a stale action id after a deploy, shows Next's default crash screen. Only `at/[handle]` and `at/[handle]/book` have one).
+- [ ] **73.3: Guard `refundDeposit`'s First Read** (billing's `refundDeposit` calls `getBookingRequestForDeposit` outside its try/catch blocks. 28.8.2.3 guards only `cancelBookingRequest`'s call site).
+- [ ] **73.4: Status Guard on `updatePendingBookingRequest`'s Update** (it checks `PENDING`, then updates by `id` alone, so a request the artist approves in between is still edited. TOCTOU, architecture.md §8.A).
+- [ ] **73.5: Typed Failures for `cancelApprovedBookingAsArtist`** (the gap `cancelBookingRequest` had before 28.8.2.3: no catch around its read or transaction, and a `refundDeposit` throw after commit escapes. `booking.deposits-and-strikes.integration.test.ts` still pins the throw).
 
 ---
