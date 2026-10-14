@@ -228,4 +228,16 @@ export interface RoleSwitcherProps {
   isVisible: boolean;
   onSwitch: (targetRole: "ARTIST" | "CLIENT") => void;
   isPending?: boolean;
+  // "menuItem" (50.1.4.2) renders a DropdownMenuItem for UserMenu, so it
+  // must sit inside a DropdownMenu -- Base UI throws without Menu context.
+  variant?: "button" | "menuItem";
+}
+
+// UserMenu (CLAUDE.md 50.1.4.2): the avatar dropdown both dashboard
+// layouts render. Everything here is session-derived by the layout --
+// settingsHref differs per role (artist hours vs. client profile).
+export interface UserMenuProps {
+  activeRole: RoleSwitcherProps["activeRole"];
+  isDualRole: boolean;
+  settingsHref: string;
 }
