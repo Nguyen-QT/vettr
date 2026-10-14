@@ -148,7 +148,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **28.9.2.2** Domain Service (governance) — `CLAUDE.md` commands and `.claude/rules/testing.md` §2/§3/§4 switch to the `*:local` commands. Docs only.
     - [x] **28.9.2.3** Domain Service (test infra, safety) — `assertSafeDatabaseUrl` requires a `*test*` DB name even on localhost, with generic messages; called from `e2e/global-setup.ts` and `global-teardown.ts`; `assertSafeDatabaseUrl.test.ts` updated (localhost `vettr` rejected).
     - [x] **28.9.3.1–28.9.6.1** Controller/UI/Hook/View — N/A (reserved).
-- [ ] **28.10: Tiered E2E Assertion Policy** (28.10.2.1 lands before 50.2.6.1)
+- [x] **28.10: Tiered E2E Assertion Policy** (28.10.2.1 lands before 50.2.6.1)
   - `testing.md` §2 requires a full-viewport `toHaveScreenshot()` on every new page, with linux + win32 baselines and zero pixel tolerance. A screenshot can't tell an intended change from a regression, so upkeep grows with pages × platforms × UI churn: removing one fixed icon in 50.2.6.3 invalidates 12 PNGs, and the Phase 50 portal headers would churn the same way.
   - **Design (confirmed 2026-10-14):** three tiers, each catching a different class of bug.
     - **Tier 1, behaviour (every page):** role locators, actions and state assertions (`toBeChecked`, `toHaveURL`, `toHaveClass`). Playwright's actionability checks also fail a click on an element that something else covers.
@@ -157,7 +157,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - **Promotion:** a page moves up to tier 3 once its phase closes and its design is signed off.
     - The 12 existing public baselines are already tier 3 and stay. Public pages have no portal header, so Phase 50 header work won't churn them.
   - Data Gateway / Controller / UI / Hook / View layers: N/A — governance docs only.
-  - [ ] **28.10.2.1** Domain Service (governance) — rewrite `testing.md` §2's "Headless E2E Check" screenshot mandate as the three tiers, and point Phase 59's testing line in `03-backlog.md` ("Every new UI surface asserts `toHaveScreenshot()` with linux + win32 baselines") at the tier policy. Docs only. `.claude/` is gitignored, so the `testing.md` edit stays local; flag that in the handoff.
+  - [x] **28.10.2.1** Domain Service (governance) — rewrite `testing.md` §2's "Headless E2E Check" screenshot mandate as the three tiers, and point Phase 59's testing line in `03-backlog.md` ("Every new UI surface asserts `toHaveScreenshot()` with linux + win32 baselines") at the tier policy. Docs only. `.claude/` is gitignored, so the `testing.md` edit stays local; flag that in the handoff.
   - **Flagged, not scoped** (each needs its own breakdown if wanted): Linux-only baselines generated in the Playwright Docker image, which would drop the `-win32` PNGs and make local runs match CI; element-scoping the 6 existing public screenshots.
 
 ---
