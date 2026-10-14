@@ -413,6 +413,15 @@ export interface BookingPoliciesProps {
   prechargePercentage: number;
 }
 
+// Pure view props (50.1.4.3). The artist layout passes the lengths of
+// the getPendingBookingRequests / getPastDueAppointments results it
+// already fetches; `artistId` is the route param, used only for hrefs.
+export interface PrimaryNavProps {
+  artistId: string;
+  pendingRequestCount: number;
+  pastDueAppointmentCount: number;
+}
+
 // Write command (CLAUDE.md 5.6): artist-initiated cancellation of an
 // already-APPROVED booking. No clientProfileId -- ownership-checked
 // against the artist's own session at the Controller/Action layer,
