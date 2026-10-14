@@ -1,15 +1,16 @@
 import { prismaMock } from "@/testUtils/prismaMock";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { mockDeep } from "vitest-mock-extended";
 
 import { cancelDepositPaymentIntent } from "@/domains/billing/services/cancelDepositPaymentIntent";
 import { insertDepositRefundIntent } from "@/domains/billing/services/insertDepositRefundIntent";
 import { refundDeposit } from "@/domains/billing/services/refundDeposit";
 import { releaseBookedTimeSlots } from "@/domains/scheduling/services/releaseBookedTimeSlots";
-import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 
 import {
+  CANCEL_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
   CANCELLATION_WINDOW_ERROR_MESSAGE,
   REQUEST_ALREADY_RESOLVED_ERROR_MESSAGE,
   REQUEST_NOT_FOUND_ERROR_MESSAGE,
@@ -41,6 +42,8 @@ describe("cancelBookingRequest", () => {
   const clientId = "client-1";
   const requestId = "request-1";
 
+  let consoleErrorSpy: MockInstance<typeof console.error>;
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -50,12 +53,40 @@ describe("cancelBookingRequest", () => {
     vi.mocked(cancelDepositPaymentIntent).mockReset();
     vi.mocked(cancelDepositPaymentIntent).mockResolvedValue(true);
     vi.mocked(releaseBookedTimeSlots).mockReset();
+    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
+
+  const GENERIC_ERROR = {
+    success: false,
+    error: CANCEL_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE,
+  };
+
+  function knownRequestError(code: string): Prisma.PrismaClientKnownRequestError {
+    // The message names the client, so the log assertions prove it's never
+    // logged.
+    return new Prisma.PrismaClientKnownRequestError(`Failed for ${clientId}`, {
+      code,
+      clientVersion: "test",
+    });
+  }
+
+  function expectLoggedOnce(errorCode: string | undefined): void {
+    expect(consoleErrorSpy.mock.calls).toStrictEqual([
+      [
+        {
+          operation: "cancelBookingRequest",
+          reason: "unexpected_failure",
+          bookingRequestId: requestId,
+          errorCode,
+        },
+      ],
+    ]);
+  }
 
   function stubRequest(
     status: string,
@@ -106,6 +137,7 @@ describe("cancelBookingRequest", () => {
       data: { status: "CANCELLED_BY_CLIENT" },
       select: { depositPaid: true, stripePaymentIntentId: true },
     });
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
   it("does not apply a cancellation strike for a PENDING cancellation", async () => {
@@ -152,7 +184,6 @@ describe("cancelBookingRequest", () => {
   });
 
   it("logs ids only, but still reports success, when the deposit refund fails after the cancellation committed", async () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     stubRequest("APPROVED", {
       slotStarts: [farFuture()],
       depositPaid: true,
@@ -231,7 +262,7 @@ describe("cancelBookingRequest", () => {
     expect(insertDepositRefundIntent).not.toHaveBeenCalled();
   });
 
-  it("fails the cancellation, and never refunds, when the refund intent insert throws", async () => {
+  it("returns the generic error, and never refunds, when the refund intent insert throws", async () => {
     stubRequest("APPROVED", {
       slotStarts: [farFuture()],
       depositPaid: true,
@@ -239,10 +270,65 @@ describe("cancelBookingRequest", () => {
     });
     vi.mocked(insertDepositRefundIntent).mockRejectedValue(new Error("db down"));
 
-    await expect(call()).rejects.toThrow("db down");
+    const result = await call();
 
+    expect(result).toEqual(GENERIC_ERROR);
+    expectLoggedOnce(undefined);
     expect(refundDeposit).not.toHaveBeenCalled();
     expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("returns the generic error without a code when the request read fails", async () => {
+    prismaMock.bookingRequest.findUnique.mockRejectedValue(new Error("connection lost"));
+
+    const result = await call();
+
+    expect(result).toEqual(GENERIC_ERROR);
+    expectLoggedOnce(undefined);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(refundDeposit).not.toHaveBeenCalled();
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("returns the generic error and logs the Prisma code when the transaction fails", async () => {
+    stubRequest("APPROVED", {
+      slotStarts: [farFuture()],
+      depositPaid: true,
+      stripePaymentIntentId: "pi_123",
+    });
+    prismaMock.$transaction.mockRejectedValueOnce(knownRequestError("P2034"));
+
+    const result = await call();
+
+    expect(result).toEqual(GENERIC_ERROR);
+    expectLoggedOnce("P2034");
+    expect(refundDeposit).not.toHaveBeenCalled();
+    expect(cancelDepositPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("logs a failed refund, and still reports success, when refundDeposit throws after the cancellation committed", async () => {
+    stubRequest("APPROVED", {
+      slotStarts: [farFuture()],
+      depositPaid: true,
+      stripePaymentIntentId: "pi_123",
+    });
+    vi.mocked(refundDeposit).mockRejectedValue(knownRequestError("P1001"));
+
+    const result = await call();
+
+    expect(result).toEqual({ success: true });
+    expect(refundDeposit).toHaveBeenCalledWith(requestId);
+    expect(consoleErrorSpy.mock.calls).toStrictEqual([
+      [
+        {
+          operation: "cancelBookingRequest",
+          reason: "deposit_refund_failed",
+          severity: "warning",
+          bookingRequestId: requestId,
+          paymentIntentId: "pi_123",
+        },
+      ],
+    ]);
   });
 
   it("cancels an unpaid booking's stored PaymentIntent and does not refund", async () => {

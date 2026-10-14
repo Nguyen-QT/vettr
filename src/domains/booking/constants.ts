@@ -113,6 +113,12 @@ export const REQUEST_NOT_EDITABLE_ERROR_MESSAGE =
 export const UPDATE_PENDING_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong saving your changes. Please try again.";
 
+// cancelBookingRequest (28.8.2.3): every failure before the cancel commits
+// is retryable and gets the same copy -- the cause is in the ops log,
+// never the response.
+export const CANCEL_BOOKING_REQUEST_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong cancelling your request. Please try again.";
+
 // Cancellation & No-Show Lifecycle (CLAUDE.md 5.6): a ClientProfile is
 // flagged for enforcePrecharge once cancellationCount reaches this many
 // strikes. Only an APPROVED-booking client cancellation or a no-show
