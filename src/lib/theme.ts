@@ -1,5 +1,5 @@
 // Shared between the root layout's anti-flash inline script (server
-// component) and the client theme controls (ThemeToggle, ThemePicker)
+// component) and the client theme control (ThemePicker)
 // -- kept in a plain module rather than exported from a "use client"
 // file so importing it doesn't drag that boundary into the layout.
 // The layout imports only the constant; the helpers below touch
