@@ -12,7 +12,7 @@ Retired numbers: 62–64 were folded into 53.7/53.8 (`02-active-core.md`) and 56
 ## Priority Index
 
 ### Gates go-live (53.3)
-These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53.8, 53.10, 56.8–56.13, 58.1–58.9).
+These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53.8, 53.10, 56.8–56.13, 58.1–58.9, 71).
 1. **31: Required Field Visual Indicator** (Client & artist forms) ➔ A workspace-wide marker for required fields, linked to the Zod schemas. Goes first so every form built after it uses the convention.
 2. **30: Post-Submission UX** (Client) ➔ Confirmation email plus copy on the existing `BookingSubmittedConfirmation`. The screen itself shipped in 54.5.4.4.
 3. **40: Min/Max Budget Inputs** (Client) ➔ Replace the Step 2 budget slider with minimum and maximum scroll inputs stepping in 5s. After 58.4, which adds the budget maximum.
@@ -27,29 +27,30 @@ These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53
 ### Post-launch
 1. **59: Client Passkeys** (Auth) ➔ Passkey sign-in on top of the email code. First post-launch item; fully designed below.
 2. **66: Sign-In Notification Emails** (Auth) ➔ An email to artists and clients after every successful sign-in. After 59, so passkey sign-ins send it too.
-3. **29: Hook State Hygiene** (Tech debt) ➔ Fix the `set-state-in-effect` sites. Before 28.5 (`02-active-core.md`), so the hook tests don't pin behaviour 29 changes.
-4. **57: Payment Event Ledger** (Payments) ➔ Append-only payment events and removal of billing's imports of booking (architecture.md §4). Before 32, 36 and 43, which would each add to that dependency.
-5. **60: Platform Admin Dashboard** (Platform) ➔ Admin-only health, Connect onboarding and manual refund tools. Builds on 56.11's decision.
-6. **36: Financial Reporting** (Payments) ➔ Read-only deposits, payouts and revenue reporting. Reads 57's ledger.
-7. **37: Active-Page Context** (Navigation) ➔ Breadcrumbs or active-nav highlighting. After 50.
-8. **38.2–38.3: Layout Consistency** (Navigation) ➔ Nested viewport-unit audit; settings back button restyle.
-9. **32: Trusted Client Deposit Exemption** (Payments) ➔ Already scoped; artists exempt trusted clients from deposits.
-10. **41: Artist Response Templates** (Artist) ➔ Quick-copy presets for approvals, declines and follow-ups.
-11. **70: Client Request Status Timeline** (Client) ➔ Clear stages from Submitted to Confirmed, with the artist's usual reply time. Before 44, whose chat attaches to the same per-request view.
-12. **44: In-App Chat** (Client & artist) ➔ Messaging tied to a `BookingRequest`, replacing SMS and Instagram threads, with email/SMS links straight to the thread.
-13. **45: VIP / Close-Friends Tiers** (Client) ➔ Invite-only booking access, separate from complexity tiers.
-14. **43: Artist Subscription Billing** (Payments) ➔ Platform SaaS fee charged to artists. Needs the Connect Accounts v2 migration first.
-15. **67: Artist Intake Form Builder** (Artist) ➔ Per-artist required, optional and hidden fields, plus custom questions. Before 46, which it likely absorbs.
-16. **68: Booking Page Branding** (Artist) ➔ Per-artist cover image and accent colour on `/@handle`. After 67.
-17. **69: Multi-Craft Service Model** (Platform) ➔ Nails, lashes and aesthetics alongside tattoo work. After 68; also needs 34 and 67.
-18. **46: Placement & Canvas Metadata** (Client booking) ➔ Body placement fields in the booking wizard.
-19. **47: Reference Image Annotations** (Client booking) ➔ Clients add notes to individual reference photos.
-20. **48: Moodboard / Canvas Design Tool** (Client booking) ➔ Interactive concept builder; likely absorbs 46–47.
-21. **55: SMS OTP Channel** (Auth) ➔ Phone codes as a second channel. After 59.
-22. **52: Constant-Time Artist Login** (Auth) ➔ Equal response time on every login rejection. After 53.6.
-23. **51: Client-to-Artist Dual Role** (Auth) ➔ Decide how a client account gains artist access. Needs a product decision first.
-24. **49: Domain Service Refactor** (Tech debt) ➔ No scope yet; needs a scoping conversation.
-25. **65: Recovered Tech Debt** (Tech debt) ➔ Dead code and a duplicated guard flagged in 28.7.
+3. **72: Artist Lockout Tuning** (Auth) ➔ A decay window for failed login attempts, and an audit row for rejections while locked. After 71 (`02-active-core.md`) and 66, which migrates the same audit enum.
+4. **29: Hook State Hygiene** (Tech debt) ➔ Fix the `set-state-in-effect` sites. Before 28.5 (`02-active-core.md`), so the hook tests don't pin behaviour 29 changes.
+5. **57: Payment Event Ledger** (Payments) ➔ Append-only payment events and removal of billing's imports of booking (architecture.md §4). Before 32, 36 and 43, which would each add to that dependency.
+6. **60: Platform Admin Dashboard** (Platform) ➔ Admin-only health, Connect onboarding and manual refund tools. Builds on 56.11's decision.
+7. **36: Financial Reporting** (Payments) ➔ Read-only deposits, payouts and revenue reporting. Reads 57's ledger.
+8. **37: Active-Page Context** (Navigation) ➔ Breadcrumbs or active-nav highlighting. After 50.
+9. **38.2–38.3: Layout Consistency** (Navigation) ➔ Nested viewport-unit audit; settings back button restyle.
+10. **32: Trusted Client Deposit Exemption** (Payments) ➔ Already scoped; artists exempt trusted clients from deposits.
+11. **41: Artist Response Templates** (Artist) ➔ Quick-copy presets for approvals, declines and follow-ups.
+12. **70: Client Request Status Timeline** (Client) ➔ Clear stages from Submitted to Confirmed, with the artist's usual reply time. Before 44, whose chat attaches to the same per-request view.
+13. **44: In-App Chat** (Client & artist) ➔ Messaging tied to a `BookingRequest`, replacing SMS and Instagram threads, with email/SMS links straight to the thread.
+14. **45: VIP / Close-Friends Tiers** (Client) ➔ Invite-only booking access, separate from complexity tiers.
+15. **43: Artist Subscription Billing** (Payments) ➔ Platform SaaS fee charged to artists. Needs the Connect Accounts v2 migration first.
+16. **67: Artist Intake Form Builder** (Artist) ➔ Per-artist required, optional and hidden fields, plus custom questions. Before 46, which it likely absorbs.
+17. **68: Booking Page Branding** (Artist) ➔ Per-artist cover image and accent colour on `/@handle`. After 67.
+18. **69: Multi-Craft Service Model** (Platform) ➔ Nails, lashes and aesthetics alongside tattoo work. After 68; also needs 34 and 67.
+19. **46: Placement & Canvas Metadata** (Client booking) ➔ Body placement fields in the booking wizard.
+20. **47: Reference Image Annotations** (Client booking) ➔ Clients add notes to individual reference photos.
+21. **48: Moodboard / Canvas Design Tool** (Client booking) ➔ Interactive concept builder; likely absorbs 46–47.
+22. **55: SMS OTP Channel** (Auth) ➔ Phone codes as a second channel. After 59.
+23. **52: Constant-Time Artist Login** (Auth) ➔ Equal response time on every login rejection. After 53.6.
+24. **51: Client-to-Artist Dual Role** (Auth) ➔ Decide how a client account gains artist access. Needs a product decision first.
+25. **49: Domain Service Refactor** (Tech debt) ➔ No scope yet; needs a scoping conversation.
+26. **65: Recovered Tech Debt** (Tech debt) ➔ Dead code and a duplicated guard flagged in 28.7.
 
 ---
 
@@ -207,6 +208,7 @@ These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53
 - **Why deferred:** (1) dummy hashing makes every unauthenticated probe for an unknown email burn a scrypt — a cheap CPU-DoS vector with no IP rate limiting in the repo; (2) real mitigation belongs at the gateway (per-IP/per-email throttling), which doesn't exist yet and whose hosting platform is unconfirmed; (3) low severity — a timing side-channel, not an account-takeover path.
 - **Prerequisite:** gateway/edge rate limiting (own roadmap item) before this is worth the CPU cost. Requires a rigorous *Mandatory Task Breakdown Rule* pass before execution; prior draft breakdown: helper `services/verifyAgainstDummyHash.ts` (unit-tested with mocked `hashPassword`/`verifyPassword`, hash built once) → `loginArtist.ts` early returns (replace the 27.1 "verifyPassword not called while locked" assertion) → `loginClient.ts`; Data Gateway/Controller/UI/Hook/View layers N/A.
 - **Scope update (2026-10-12):** `loginClient` was deleted in 54.8 (clients sign in by email code), so this now covers `loginArtist` only.
+- **Scope update (2026-10-14, 28.11):** once 28.11.2.1 lands, the locked branch is `reserveLoginAttempt` returning `false` (no attempt left in the lock cycle), not a stale `lockedUntil` read. The draft's "verifyPassword not called while locked" assertion becomes "not called when the reservation fails", and the dummy hash goes on that branch.
 
 ---
 
@@ -384,5 +386,18 @@ These run alongside the gates in `02-active-core.md` (28.8, 28.11, 50, 53.4–53
   - Phase 61's business events can supply the timestamps.
 - **Already right in Vettr** (same review, no item needed): clients start the booking form without signing in, and the email code is asked for only at the final submit (54.5). Access never depends on keeping a link, because one account holds every request (54.7).
 - **Related:** 30 (its email links here once this lands) and 44 (chat sits on the same page).
+
+---
+
+### Phase 72: Artist Lockout Tuning
+- **Status:** Unscoped. Added 2026-10-14 from 28.11's design pass (`02-active-core.md`). Post-launch, because neither item ever needs the operator.
+- **Objectives:**
+  - **Decay window.** Failed attempts never decay: the counter resets only on a successful login, and restarts only after a lock expires. So 4 mistypes last month plus 1 today locks the account.
+    - Decide a window, e.g. a `lastFailedLoginAt` column with a restart in `reserveLoginAttempt`'s SQL.
+    - The decay must stay inside that single UPDATE, so bursts stay capped (28.11.2.1).
+  - **Audit rejections while locked.** A rejection while locked writes no `AuditEvent`; only the attempts that armed the lock do.
+    - Add an `ACCOUNT_LOCKED` reason code, which needs a migration.
+    - A row per rejected request is unbounded writes under attack, so the design pass chooses between one row per lock cycle and sampling.
+- **Order:** after 71 (`02-active-core.md`), which may change what a locked artist sees, and after 66, which migrates the artist audit enum.
 
 ---

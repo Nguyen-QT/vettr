@@ -1,7 +1,7 @@
 ---
 globs: ["**/docs/roadmap/02-active-core.md"]
 ---
-# ⚡ Active Core Sprint Plane (Phases 28, 50, 53, 56, 58)
+# ⚡ Active Core Sprint Plane (Phases 28, 50, 53, 56, 58, 71)
 
 > ⚠️ **Global Structural Mandate:** Any task introducing domain input validation MUST follow the `constants.ts` / `types.ts` / `[domain].schema.ts` split defined in the global architecture rules.
 
@@ -12,7 +12,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 
 ### 🔒 Pre-Launch Gates (Blocks Production Go-Live)
 *   [x] **Phase 28.8 Error Isolation** ➔ Stop unexpected DB errors in `updateClientProfile` reaching the client as an uncaught 500 (58.3/58.4 wait on it).
-*   [ ] **Phase 28.11 Abuse Test Tier** ➔ Prove the per-email and per-account limits hold when public endpoints are hit in parallel bursts.
+*   [ ] **Phase 28.11 Abuse Test Tier** ➔ Fix the artist login lockout so a parallel burst can't get more than 5 passwords checked, then prove it and the email-code send cap hold under parallel bursts.
+*   [ ] **Phase 71 Artist Lockout Recovery** ➔ Let a locked-out artist get back in without the operator (after 28.11).
 *   [ ] **Phase 50 Navigation Layouts** ➔ Build responsive primary header and avatar identity menus.
 *   [ ] **Phase 53.4–53.8, 53.10 Pre-Launch Hardening** ➔ Scope and execute remaining unscoped stability, infrastructure, and performance hardening tasks. 53.10 gives the public `/@handle` error pages a way out.
 *   [ ] **Phase 56 Payment Integrity** ➔ Deploy failed refund sweep mechanics and Connect reversals (`56.8–56.13`).
@@ -160,16 +161,109 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - Data Gateway / Controller / UI / Hook / View layers: N/A — governance docs only.
   - [x] **28.10.2.1** Domain Service (governance) — rewrite `testing.md` §2's "Headless E2E Check" screenshot mandate as the three tiers, and point Phase 59's testing line in `03-backlog.md` ("Every new UI surface asserts `toHaveScreenshot()` with linux + win32 baselines") at the tier policy. Docs only. `.claude/` is gitignored, so the `testing.md` edit stays local; flag that in the handoff.
   - **Flagged, not scoped** (each needs its own breakdown if wanted): Linux-only baselines generated in the Playwright Docker image, which would drop the `-win32` PNGs and make local runs match CI; element-scoping the 6 existing public screenshots.
-- [ ] **28.11: Abuse Test Tier** — *unscoped.* Added 2026-10-14. Gates 53.3. Proves the existing per-email and per-account limits hold when someone hammers the public endpoints. All of them live in Postgres, none per IP.
+- [ ] **28.11: Abuse Test Tier** — Added 2026-10-14. Gates 53.3. Proves the per-email and per-account limits hold when someone hammers the public endpoints, and fixes the artist lockout, which doesn't. All of these limits live in Postgres, none per IP.
   - **Already covered at the integration tier:**
     - `auth.otp.integration.test.ts:81-152`: parallel code requests send once, parallel guesses stop at the attempt cap, parallel verifies yield one session.
     - `auth.otp-provisioning.integration.test.ts:167-313`: concurrent first-time provisioning.
     - `booking.email-otp-submission.integration.test.ts:122`: a double submit of one code creates one booking.
-  - **Gaps to fill** (real-database `*.integration.test.ts`, bursts via `Promise.allSettled`):
-    - Artist login lockout under parallel wrong passwords. Today only unit tests cover it (`recordFailedLoginAttempt.test.ts`, `loginArtist.test.ts`) against a mocked client, so the atomic retry loop in `recordFailedLoginAttempt.ts` is never run against real row contention. Assert the lock lands at `MAX_FAILED_LOGIN_ATTEMPTS` and a correct password is rejected while it holds.
-    - The send cap under a burst: seed a challenge one send below `MAX_EMAIL_OTP_SENDS_PER_WINDOW` with the cooldown elapsed, fire a burst, and assert exactly one send and that every request after it hits the cap.
-  - **E2E:** no spec exercises the artist lockout or the send cap. Add both, asserting the same generic copy a real user sees (no enumeration).
-  - **Unlimited today:** `getAvailableSlotsAction` (public by design) and the unauthenticated `/api/uploadthing` endpoint. Their abuse tests land with 53.5 and 53.6, not here.
+  - **Findings (design pass, 2026-10-14):**
+    - The artist lockout doesn't hold under a burst. `loginArtist` reads `lockedUntil` once, runs `verifyPassword` (scrypt), and counts the failure only afterwards. A burst of N wrong passwords on a clean account therefore gets all N checked before any lock lands, and on serverless N is limited only by the attacker's concurrency. The compare-and-swap in `recordFailedLoginAttempt` (3 tries, `MAX_CAS_RETRIES`) also drops failures under contention, so a burst may not lock the account at all.
+    - The OTP verify path doesn't have this gap: it reserves an attempt atomically before comparing the code.
+    - The send cap holds: `issueEmailOtp` checks it inside one atomic `updateMany`. A same-purpose burst never reaches it, though, because the 60 s cooldown blocks every request after the first. A purpose switch skips the cooldown but never the cap, so racing the cap needs alternating purposes.
+  - **Design (confirmed):**
+    - A new `reserveLoginAttempt(accountId)` reserves an attempt before `verifyPassword`. It's one `$executeRaw` UPDATE with Node-clock `Date` params, following the `pruneExpiredEmailOtpChallenges` precedent, and returns `count === 1`:
+      ```sql
+      UPDATE "Account"
+      SET "failedLoginAttempts" = CASE WHEN "lockedUntil" IS NULL THEN "failedLoginAttempts" + 1 ELSE 1 END,
+          "lockedUntil" = CASE
+            WHEN (CASE WHEN "lockedUntil" IS NULL THEN "failedLoginAttempts" + 1 ELSE 1 END) >= ${MAX_FAILED_LOGIN_ATTEMPTS}::int
+            THEN ${lockUntil}::timestamp(3) ELSE NULL END,
+          "updatedAt" = ${now}::timestamp(3)
+      WHERE "id" = ${accountId}
+        AND ("lockedUntil" IS NULL OR "lockedUntil" <= ${now}::timestamp(3))
+      ```
+    - Why it holds: under READ COMMITTED, an UPDATE that waits on a concurrent one re-checks `WHERE` and recomputes `SET` against the newest row version. At most `MAX_FAILED_LOGIN_ATTEMPTS` passwords are checked per lock cycle, and no increment is lost. It must stay a single-table UPDATE: a CTE or `FROM` subquery isn't recomputed on that re-check, which brings the lost-increment race back.
+    - The casts are required. The pg adapter sends parameters untyped, and Postgres resolves an all-`unknown` `CASE` to `text`. Assigning `text` to a timestamp column fails (42804) on every call.
+    - No timezone shift: the adapter formats a `Date` as a UTC string with no offset, and the comparison infers `timestamp`. Never use `now()` or `timestamptz` here.
+    - A thrown error fails closed: log `{ operation: "reserveLoginAttempt", reason: "unexpected_failure", accountId, errorCode }` and return `false`. The reservation is reached only for real ARTIST emails, so a 500 there would be an enumeration oracle.
+    - `loginArtist` flow:
+      1. The account lookup and the no-account / wrong-role path are unchanged.
+      2. Reserve. On `false`, return the generic error with no `verifyPassword` and no audit row, the same as today's locked path.
+      3. `verifyPassword`. On failure, write the `INVALID_PASSWORD` audit row and return the generic error. There's no further write, because the 5th reservation already armed the lock.
+      4. On success, call `resetFailedLoginAttempts` unconditionally, then `createSession`.
+    - The stale `isLocked` pre-check goes, so the reservation is the only lock check. `recordFailedLoginAttempt` is deleted; `loginArtist` is its only caller.
+    - Accepted:
+      - Correct passwords use the budget too. At count 4, a double-submitted correct login gets one success and one generic error. `LoginForm` disables the button while a submit is pending.
+      - A successful login in the middle of a burst resets the counter. Only someone holding the password can do that.
+      - If the reset fails after a success on the 5th reservation, the session is valid but the account stays locked for 15 minutes, because `resetFailedLoginAttempts` swallows errors.
+      - The code can't produce a legacy (≥5, null) row. If one exists, the next reservation arms the lock.
+    - Edge cases:
+      - One atomic statement, with no check-then-act.
+      - Every outcome shows "Incorrect email or password.", and logs carry `accountId` and `errorCode` only.
+      - An expired lock restarts the count at 1. The boundary is `<=`, as today.
+      - The lock timestamp round-trips exactly at `TIMESTAMP(3)`.
+  - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine; execute 2.1 → 2.2 → 2.3 → 6.1 → 6.2):
+    - [ ] **28.11.1.1** Data Gateway — N/A, no schema change.
+    - [ ] **28.11.2.1** Domain Service — atomic login-attempt reservation:
+      - `reserveLoginAttempt.ts` and `reserveLoginAttempt.test.ts`, mocking `prismaMock.$executeRaw` as `pruneExpiredSessions.test.ts` does, with fake timers. Cases:
+        - 1 row → `true`; 0 rows → `false`.
+        - A throw → `false`, with the exact log object.
+        - Bound values in template order: `[MAX, lockUntil, now, accountId, now]`.
+        - A header note that only the integration tier validates the SQL.
+      - Rewrite `loginArtist.ts` and `loginArtist.test.ts`:
+        - The reservation runs before `verifyPassword`.
+        - `false` → generic error, and `verifyPassword` is not called.
+        - Wrong password → audit row, no reset.
+        - Correct password → reset, then session.
+      - Delete `recordFailedLoginAttempt.ts` and its test. Correct the comments in `resetFailedLoginAttempts.ts` and `constants.ts`, which describe a "rolling window" that doesn't exist.
+      - New `auth.login-lockout.integration.test.ts`. A local `createArtistAccount()` calls `tracker.createArtist()` and then creates an ARTIST `Account`; the password is hashed once in `beforeAll`. Sequential SQL cases:
+        - Clean, one wrong → (1, null).
+        - (4, null), one wrong → (5, lock within `[t0, t1] + 15 min`).
+        - (4, null), correct → success, (0, null).
+        - Lock expired a minute ago, one wrong → (1, null).
+        - Lock expiring in a minute, correct → rejected.
+        - Legacy (5, null), wrong → locked.
+    - [ ] **28.11.2.2** Domain Service — lockout burst proofs in the same file. Bursts use `Promise.allSettled` at width 10 (the pg pool default), and every call must be fulfilled. Cases:
+      - Clean account, 10 wrong:
+        - All get the generic error.
+        - The row is (5, lock within exact bounds).
+        - Exactly 5 `INVALID_PASSWORD` audit rows for the account.
+        - No `Session` rows.
+      - Then, sequentially, the correct password is rejected, the row is unchanged, and no audit row is added.
+      - (5, expired lock), 10 wrong → exactly 5 new audit rows and a fresh lock.
+      - (4, null), 2 concurrent correct → exactly 1 success.
+      - No `console.error` calls.
+    - [ ] **28.11.2.3** Domain Service — send-cap burst proofs, in a new describe in `auth.otp.integration.test.ts`. It reuses `createEligibleClient`, `issueCode`, the `sendVerificationEmail` mock and `inParallel`; these services never reject. A seed helper sets `windowSendCount`, `sentAt` = now − cooldown − 1 s, and `windowStartedAt` = now − 1 h. Cases:
+      - Seed 9, burst of 5 `requestClientSignInCode`: all `{ success: true }`, 1 send, count 10.
+      - Age `sentAt` and burst again: all succeed, 0 sends, count stays 10, and `codeHash` is unchanged. This proves the cap blocks, not the cooldown.
+      - Seed 7, burst of 10 alternating `requestClientSignInCode` / `requestBookingSubmissionCode`:
+        - All succeed.
+        - Count ≤ 10.
+        - Sends = count − 7, and ≥ 1.
+        - `codeHash` matches one of the sent codes.
+      - An aged follow-up burst sends 0.
+    - [ ] **28.11.3.1** Controller — N/A. `loginAction` passes `result.error` through unchanged, and `auth/actions.test.ts` already pins that.
+    - [ ] **28.11.4.1–28.11.5.1** UI/Hook — N/A. The copy and the hooks don't change.
+    - [ ] **28.11.6.1** View & Route (E2E only) — `e2e/artist-login-lockout.spec.ts`:
+      - Fixture: a dedicated `e2e-artist-lockout@example.com` ARTIST account with its own `Artist` row in `global-setup.ts`, copying the `bookingOtpArtist` block. Add its artist id to `global-teardown.ts`.
+      - Never lock `artistLoginEmail`: `artist-login.spec.ts` signs in with it in parallel.
+      - `dbHelpers.ts`: `setArtistLoginLockout(email, failedLoginAttempts, lockedUntil)`.
+      - The spec is serial and re-seeds in `beforeEach`, because UI-mode re-runs skip global setup. Wait for `networkidle` before the first click, because `LoginForm` has no `noValidate`.
+      - Cases:
+        - (4, null): a wrong password shows "Incorrect email or password." and stays on `/artist/login`. Reload so the alert isn't stale, then the correct password shows the same text and the URL still doesn't change.
+        - (5, expired): the correct password lands on `/artist/{id}`.
+      - Tier 1 only.
+    - [ ] **28.11.6.2** View & Route (E2E only) — `e2e/client-sign-in-send-cap.spec.ts`:
+      - Fixture: a dedicated eligible client, `e2e-client-otp-cap@example.com`, using the OTP client recipe in `global-setup.ts`.
+      - `dbHelpers.ts`: `seedEmailOtpChallengeAtSendCap(email)` deletes, then inserts a `CLIENT_SIGN_IN` row at count 10, with `windowStartedAt` = now − 1 h, `sentAt` = now − 2 min, and `id` from `randomUUID()` (the column has no DB default).
+      - Case: on `/client/login`, requesting a code shows the same "has a client account with us, we've sent it a 6-digit code" copy and "Resend code in" countdown as a real send. `readCapturedEmails()` has nothing for the address; the action awaits the send before it responds, so checking the sink then is sound.
+      - Tier 1, no new screenshot. The booking-wizard path is covered by 28.11.2.3's alternating-purpose case.
+  - **Flagged, not fixed** (each has a home):
+    - Lockout DoS: anyone who knows an artist's email can keep the account locked with 5 wrong passwords every 15 minutes, and 53.6's per-IP limit doesn't help at that rate. Existing sessions survive, because only `loginArtist` reads `lockedUntil`. But recovery today is the operator clearing the lock by hand → **Phase 71** (gates 53.3).
+    - Failed attempts never decay (4 last month plus 1 today locks the account), and rejections while locked write no audit row → **Phase 72** (`03-backlog.md`, post-launch).
+    - The not-found path skips scrypt, so response time shows whether an artist email exists → **Phase 52** (`03-backlog.md`).
+    - Raw-SQL errors all surface as `P2010`, so the reservation's log can't tell a lost connection from a SQL fault → **53.7**.
+    - Still unlimited: `getAvailableSlotsAction` (public by design) → **53.6**; `/api/uploadthing` → **53.5**.
   - **Out of scope:** per-IP limiting (53.6, a Vercel WAF rule that can only be checked on staging) and load testing.
 
 ---
@@ -226,13 +320,13 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - [ ] **53.2.1.1** Provision Neon (UK/EU region), run `prisma migrate deploy` with the direct URL, set Vercel env vars (Stripe test keys). Staging gets its own Neon project/branch, never shared with production. Moved earlier from 53.3.1.1: verify `vettr.studio` as the Resend sending domain (SPF, DKIM, DMARC DNS records) and set `EMAIL_FROM` to a `@vettr.studio` address.
   - [ ] **53.2.1.2** Deploy to Vercel; point a Stripe test-mode webhook at the URL, subscribed to the events listed under 56.1; smoke-test signup, booking intake and a deposit payment. Attach `staging.vettr.studio` (DNS at the registrar) and set `NEXT_PUBLIC_APP_URL` per Vercel environment (staging URL here, never localhost). Check whether `account.updated` (Connect) needs a separate Connect-type webhook endpoint. Hand-provision a test artist including `handle`, and smoke-test `/@handle` → booking → email code → deposit once those routes exist.
   - [ ] **53.2.1.3** Set `APP_URL` (the production deployment URL, not a preview, since Deployment Protection would 401 the cron `curl`) and `CRON_SECRET` repo secrets, re-enable the Session Cleanup workflow (27.4.6.1), trigger it once and confirm `deletedCount` in the job log. Note: the workflow is not disabled — it is active and has failed on every scheduled run since 2026-10-05 because these two secrets don't exist yet. Then re-enable the Deposit Refund Retry workflow (56.7.6.1; disabled after merge so it doesn't fail hourly until these secrets exist), trigger it once and confirm `reconciled`/`refunded`/`failed`/`deferred` in the job log.
-- [ ] **53.3: Production Go-Live** (operational; 27.1 login throttling already shipped; also waits for Phase 56, Phase 58 and 54.5–54.8, which remove the unverified guest-profile takeover)
+- [ ] **53.3: Production Go-Live** (operational; 27.1 login throttling already shipped; also waits for Phase 56, Phase 58, Phase 71 and 54.5–54.8, which remove the unverified guest-profile takeover)
   - [ ] **53.3.1.1** Swap to live Stripe keys and a live webhook secret (never mix test/live), attach a custom domain, verify the Resend sending domain. Specifics: upgrade to the Vercel Pro plan (Hobby forbids commercial use and deposits are commercial); complete Stripe account activation and the Connect platform profile/branding; attach the apex `vettr.studio` as canonical with `www` → 308 to apex (the session cookie is host-only, so only one host may serve the app); set production `NEXT_PUBLIC_APP_URL=https://vettr.studio` and repoint the cron `APP_URL` repo secret to it. Resend verification is already done in 53.2.1.1.
   - [ ] **53.3.1.2** Enable DB backups/point-in-time recovery (paid plan) before holding real artist data; re-run the smoke test with a real low-value payment. Refund that payment afterwards to also prove the refund webhook path with real money: `refund.created`, then `refund.updated` once the card's ARN resolves (56.1; record how long the ARN takes in live mode).
 - [ ] **53.4: Security Headers** — *unscoped.* No security headers exist today (no `headers()` in `next.config.ts`, none in `src/proxy.ts`). Add HSTS, `frame-ancestors`/X-Frame-Options, Referrer-Policy, and a CSP that still allows Stripe Elements/Connect and UploadThing. Any Permissions-Policy must keep `publickey-credentials-get` and `publickey-credentials-create` allowed for `self`, or Phase 59's passkeys (post-launch) fail with no visible error. Gates 53.3.
 - [ ] **53.5: Upload Endpoint Hardening** — *unscoped.* Both flagged in Phase 54: the `/api/uploadthing` `designReferenceImages` endpoint has no auth, and `designReferenceImageUrls` accept any host. Needs a design pass for how unauthenticated booking clients upload before the email-code step (e.g. a short-lived upload token tied to the wizard draft). Gates 53.3.
-- [ ] **53.6: Edge / Per-IP Rate Limiting** — *unscoped.* No IP-based limiting exists (all current limits are per-account/per-email in the DB). Use Vercel Firewall/WAF rate-limit rules on artist login, email-code send/verify and booking submit. This is also Phase 52's stated prerequisite. Phase 59 (post-launch) later adds unauthenticated passkey sign-in actions to the same pages; they join these rules rather than needing a new mechanism. Gates 53.3.
-- [ ] **53.7: Error Monitoring & Alerting** — *unscoped.* Only structured `console.error` today, no APM. Add error monitoring (e.g. Sentry) with PII scrubbing, so the architecture.md §6 "log a critical alert" paths (Stripe success + local write failure) actually alert someone. Also covers health monitors on Stripe and Resend API responses (error rate, latency), folded in from the former backlog Phase 64. Gates 53.3.
+- [ ] **53.6: Edge / Per-IP Rate Limiting** — *unscoped.* No IP-based limiting exists (all current limits are per-account/per-email in the DB). Use Vercel Firewall/WAF rate-limit rules on artist login, email-code send/verify, booking submit and `getAvailableSlotsAction` (public by design, with no limit of its own; 28.11). These rules don't stop a lockout DoS, which needs only 5 requests every 15 minutes; that's Phase 71. This is also Phase 52's stated prerequisite. Phase 59 (post-launch) later adds unauthenticated passkey sign-in actions to the same pages; they join these rules rather than needing a new mechanism. Gates 53.3.
+- [ ] **53.7: Error Monitoring & Alerting** — *unscoped.* Only structured `console.error` today, no APM. Add error monitoring (e.g. Sentry) with PII scrubbing, so the architecture.md §6 "log a critical alert" paths (Stripe success + local write failure) actually alert someone. Also covers health monitors on Stripe and Resend API responses (error rate, latency), folded in from the former backlog Phase 64. Raw-SQL Prisma errors all surface as `P2010`, and 28.11.2.1's `reserveLoginAttempt` fails closed on one, so also capture the driver's SQLSTATE to tell a lost connection from a SQL fault. Gates 53.3.
 - [ ] **53.8: Legal & Compliance Pages** — *unscoped.* Privacy policy, terms of service and a cookie notice before real users. The app stores DOB, email, phone and reference images (UK GDPR). Also covers ICO data-protection fee registration, data retention/deletion expectations, and linking the pages from the portal gate and booking flow. Folded in from the former backlog Phase 62: clients and artists must accept the platform T&Cs (including the deposit/fee-protection terms) before booking or taking bookings, with the accepted version recorded per account; and a data-handling policy for reference images that show body placement. Email (former backlog Phase 63): SPF/DKIM/DMARC is 53.2.1.1. Every email sent today is transactional (sign-in and booking codes), so no unsubscribe link is needed yet; add unsubscribe handling (footer link plus a `List-Unsubscribe` header) when the first non-transactional email ships. Gates 53.3.
 - [ ] **53.9: Structured Logging & Log Correlation** — *unscoped.* Found in the 54.5.2.1 review (2026-10-08). Services log ad-hoc `console.error({ operation, reason })` objects with no levels, no request/trace ID and no shared shape, so one failure can't be followed across the action → service → Resend/Stripe hops. Add a thin server-only logger (levels, a per-request correlation ID, the same non-PII allowlist) that 53.7's monitoring ingests. Backfill the typed Prisma `errorCode` log field that 54.5.2.1 introduced (`requestBookingSubmissionCode.ts`) into `requestClientSignInCode` and the other OTP services. Design-pass decision: whether to log an email digest for per-address correlation. A plain hash can be reversed by hashing guessed addresses, so it would need an HMAC with a server secret and a change to architecture.md §8.B's non-PII rule. Design alongside 53.7; not a 53.3 gate on its own. Phase 61 (`03-backlog.md`) builds business-event logging on top of this logger.
 - [ ] **53.10: Public Error Pages Without a Dead End** — *small.* Added 2026-10-14. Gates 53.3.
@@ -597,4 +691,19 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 - [ ] **58.9: Status Precondition on Approve/Decline** — *unscoped, small.* Recovered from 28.7's "Flagged, not fixed" list.
   - `setBookingRequestStatus` has no status precondition, so declining an already-APPROVED request orphans its BOOKED slots and skips the strike logic.
   - Same family as 56.2 and 56.10 (handlers that don't check booking status): design them together, ship them separately.
+
+---
+
+### 📦 Phase 71: Artist Lockout Recovery (pre-go-live)
+> Found on 2026-10-14 in 28.11's design pass. Gates 53.3 so that a locked-out artist never needs the operator. Starts after 28.11.2.1, whose `reserveLoginAttempt` it builds on.
+- [ ] **71.1: Self-Service Lockout Recovery** — *unscoped.*
+  - Anyone who knows an artist's email can keep the account locked: 5 wrong passwords every 15 minutes re-arm the lock. 53.6's per-IP rules don't catch that rate.
+  - Signed-in sessions survive, because only `loginArtist` reads `lockedUntil` and sessions last 30 days. Signing in on a new device still fails until the operator clears `failedLoginAttempts` and `lockedUntil` by hand.
+  - There's no artist password reset either, so a forgotten password is also an operator job today.
+  - Goal: an artist gets back in without the operator.
+  - Candidate (decide in the design pass): a password reset by emailed code that also clears the lock. It would reuse `EmailOtpChallenge` with a new purpose, inheriting its send cap and cooldown.
+  - Constraints:
+    - The reset must keep the generic copy, so it adds no enumeration channel.
+    - Without inbox access, it must not be a way around the lock.
+  - Needs a confirmed layer breakdown before any code.
     
