@@ -2,16 +2,16 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 // Runs before hydration so the class is already correct on first
-// paint -- without this, the server always renders the "dark"
-// fallback below and a stored "light" preference would flash dark
-// before ThemeToggle's own effect corrects it on mount.
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem(${JSON.stringify(
+// paint. The server can't read localStorage, so it always renders
+// light (no "dark" class below); this adds "dark" only when that is
+// the stored choice. Anything else, including storage throwing,
+// stays light.
+const THEME_INIT_SCRIPT = `(function(){try{if(localStorage.getItem(${JSON.stringify(
   THEME_STORAGE_KEY
-)});if(t==="light"){document.documentElement.classList.remove("dark")}else{document.documentElement.classList.add("dark")}}catch(e){document.documentElement.classList.add("dark")}})();`;
+)})==="dark"){document.documentElement.classList.add("dark")}}catch(e){}})();`;
 
 const generalSans = localFont({
   src: [
@@ -66,16 +66,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${generalSans.variable} h-full antialiased dark`}
+      className={`${generalSans.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-[100dvh] w-full flex flex-col overflow-y-auto overscroll-bounce bg-background text-foreground font-sans">
-        <div className="fixed top-3 right-3 z-50">
-          <ThemeToggle />
-        </div>
         {children}
       </body>
     </html>
