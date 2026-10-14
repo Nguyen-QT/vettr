@@ -610,12 +610,60 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - [x] **56.7.3.1** Controller/Action — move the bearer check to `src/lib/cronAuth.ts`; session-cleanup uses it, behaviour unchanged (+ `cronAuth.test.ts`; session-cleanup's route tests pass unchanged).
     - [x] **56.7.3.2** Controller/Action — `POST /api/cron/deposit-refund-retry` with `maxDuration = 300` (+ route unit tests: the 401 cases, 200 with counts, 500 without leaking Prisma codes). `.env.example` names both routes.
     - [x] **56.7.6.1** View & Route — `.github/workflows/deposit-refund-retry.yml` as above (the 27.4.6.1 analog).
-- [ ] **56.8: Disputes and Failed Payments** — *unscoped.*
+- [ ] **56.8: Disputes and Failed Payments** (execute 1.1 → 2.1 → 3.1 → 3.2)
   - The webhook ignores `charge.dispute.*` events entirely. A chargeback on a deposit would go unnoticed: Stripe debits the platform for disputes on destination charges, and evidence has a deadline.
   - `payment_intent.payment_failed` is only logged.
   - Minimum for go-live: record dispute events against the booking and raise a critical alert (53.7).
   - Artist-facing dispute UI and evidence submission are out of scope. Decide whether an open dispute blocks further deposit actions on that booking.
   - Design constraint: no new billing → booking calls. Dispute state goes in a billing-owned table keyed by `bookingRequestId` (the Phase 56 design constraint above), and billing must not call booking services to record it. Each new call adds to the circular dependency Phase 57 (`03-backlog.md`) has to undo.
+  - **Stripe facts (docs, 2026-10-14):**
+    - A refund is refused while a chargeback is open, and after one is lost (`charge_disputed` / `refund_disputed_payment`). An inquiry (`warning_*`) can still be refunded, which closes it.
+    - Statuses move both ways: an inquiry can escalate to a chargeback, and a loss can become a late win. One payment can have more than one dispute.
+    - A destination charge's dispute debits the platform's balance, and Stripe doesn't reverse the transfer.
+    - A Dispute carries its PaymentIntent's id, not its metadata.
+  - **Design (confirmed 2026-10-14):**
+    - No in-app block. Stripe already refuses the refunds that a dispute rules out, and a paid deposit can't get a new PaymentIntent (56.4). Nothing else in the deposit flow needs to stop.
+    - Storage: a billing-owned `DepositDispute`, one row per Stripe dispute.
+      - Fields: `stripeDisputeId @unique`, `stripePaymentIntentId`, `status`, `reason` (Stripe's code, not PII), `amount` (pence, Stripe's disputed amount, which can differ from the deposit), `evidenceDueBy` (nullable), `createdAt`, `updatedAt`.
+      - `bookingRequestId` is an FK with `onDelete: Cascade` (like `DepositRefund`) and a plain index, not unique.
+      - `DepositDisputeStatus` maps Stripe's eight statuses 1:1. No backfill.
+    - Linking to the booking: billing retrieves the dispute with `expand: ["payment_intent"]` and reads the PaymentIntent's `metadata.bookingRequestId`.
+      - This is the one exception to "metadata never picks a booking". A dispute record moves no money, and the metadata names the booking the PaymentIntent was created for, even one the booking no longer stores.
+      - No booking call: the only complete PaymentIntent → booking lookup is booking's.
+    - Ordering: every event re-reads the dispute from Stripe and writes its current status. A fixed precedence like 56.6's can't hold, because statuses move both ways.
+      - `DEPOSIT_DISPUTE_STATUSES_REPLACEABLE` stops a stale concurrent handler from re-opening a closed dispute. An open status replaces only open ones. A closed one (`WON`, `LOST`, `PREVENTED`, `WARNING_CLOSED`) replaces any other, so a late win lands.
+    - `syncDepositDispute(stripeDisputeId)` reads and writes only billing's tables. In turn:
+      1. Retrieve, in its own try/catch. A failure logs a `dispute_retrieve_failed` warning (ids only) and throws, so the route answers 500 and Stripe redelivers.
+      2. No expanded PaymentIntent, or no metadata: critical `dispute_unmatched` with ids, status, reason, amount and due date. Returns `UNMATCHED`, and the route answers 200 because a retry can't create a match.
+      3. An unknown status is logged critical with the raw value, and nothing is written (`UNKNOWN_STATUS`).
+      4. Read the booking's `DepositRefund` status, before the insert so a failed read can't swallow the alert. A `due_by` of null or 0 is stored as null.
+      5. `createMany` with `skipDuplicates` on `stripeDisputeId`. An insert logs critical `dispute_opened` with ids, status, reason, amount, `evidenceDueBy`, `isChargeRefundable` and the refund status, so a dispute on an already-refunded deposit stands out (the refund is the evidence). Returns `RECORDED`.
+         - A P2003 (the metadata names a missing booking) is caught: critical `dispute_unmatched` with its `errorCode`, then `UNMATCHED`. Any other database error propagates (500, redelivery).
+      6. No insert: one `updateManyAndReturn` where the stored status is replaceable, writing status, reason, amount and due date. A returned row logs `dispute_status_changed`, critical for `NEEDS_RESPONSE`, `WARNING_NEEDS_RESPONSE` and `LOST` and a warning otherwise (`UPDATED`). Nothing returned is `UNCHANGED`. So each transition alerts once, and a redelivery writes nothing.
+      - Ids and enum codes only. Never log the dispute or the PaymentIntent: the expanded PaymentIntent holds `receipt_email` and `shipping`, and a dispute's evidence can hold the client's name and email.
+    - Route: `charge.dispute.created`, `.updated`, `.closed`, `.funds_withdrawn` and `.funds_reinstated` all go to `syncDepositDispute(event.data.object.id)`. The outcome is ignored, and a throw answers 500. Endpoint registration (53.2.1.2, 53.3.1.1) adds all five.
+    - `payment_intent.payment_failed` stays stateless. The PaymentIntent returns to `requires_payment_method`, 56.4 reuses it, and the Payment Element shows the error inline.
+      - The log becomes structured: `operation: "stripeWebhook"`, `reason: "deposit_payment_failed"`, `severity: "warning"`, `paymentIntentId`, `bookingRequestId` (metadata, log-only), and `last_payment_error`'s `code` and `decline_code`.
+      - Never its `message` or the payment method. The stale "No failure-handling UI yet" comment goes.
+  - **Flagged, not fixed:**
+    - A cancel during an open chargeback leaves an id-less `PENDING` refund row. The sweep retries it daily and alerts `refund_retry_failing` at 5. A win lets a later retry refund the client, which is right because they cancelled. A loss fails every day until someone clears it, so 56.11 needs a "settled by chargeback" outcome.
+    - Recovering a disputed amount from the artist (a transfer reversal) is 56.12's.
+    - A lost dispute doesn't count toward client flagging (CLAUDE.md constraint 4). That's a product decision.
+    - Alerts are logged after the commit, so a crash between the two loses one (same as 56.6's `FAILED` item; 53.7 or Phase 57). If the retrieve fails on every redelivery, nothing is recorded, and Stripe's own dispute email is the backstop.
+    - A stale open status can overwrite a newer open one and raise a false alert. The next event corrects it, since every dispute ends with `charge.dispute.closed`. A deadline change without a status change isn't written; the Dashboard is the source of truth.
+    - CI's Stripe-tier tests share the test account with staging, so each run's test dispute reaches staging as a critical `dispute_unmatched`, as `refund_unmatched` already does (53.7).
+    - The route's catch-all logs the raw error object (`route.ts:102`).
+  - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **56.8.4.1 / 56.8.5.1 / 56.8.6.1** UI/Hook/View — N/A. Dispute UI is out of scope and the client's refund label is unchanged. API-only, so no E2E (as 56.6.3.1).
+    - [ ] **56.8.1.1** Data Gateway — `DepositDispute` + `DepositDisputeStatus` + the `BookingRequest` back-relation (the "billing owns it" comment) + migration in the style of `20261011013021_add_deposit_refund`, with no backfill. No app code. Integration `wipe()` needs no change (it cascades).
+    - [ ] **56.8.2.1** Domain Service — billing: the Stripe-status union and outcome type, the three `Record`s (status map, replaceable, severity) and `syncDepositDispute`.
+      - Unit tests per path: the retrieve throws, no PaymentIntent or metadata, unknown status, an insert with the exact alert, P2003, a transition with its severity, no transition, and a `due_by` of 0.
+      - `billing.integration.test.ts` cases (Stripe mocked): concurrent first syncs make one row and one alert; a transition writes and alerts once and a redelivery is `UNCHANGED`; an open status after a closed one writes nothing; a late win is written; a missing booking is `UNMATCHED` with no row (proves the adapter's P2003); two disputes on one PaymentIntent make two rows.
+      - New `depositDisputeLifecycle.stripe-integration.test.ts`, paying with `pm_card_createDispute`: the sync records `NEEDS_RESPONSE`/`fraudulent` and a second one is `UNCHANGED`. `refunds.create` rejects while the dispute is open; after `disputes.close` the sync moves it to `LOST` and `refunds.create` still rejects (proves the no-block decision).
+    - [ ] **56.8.3.1** Controller/Action — the webhook route sends the five dispute events to `syncDepositDispute`, and its header lists them.
+      - Route unit tests: each event type calls it once with the dispute id and answers 200; `UNMATCHED` answers 200; a throw answers 500.
+      - Stripe-tier replay of a real `charge.dispute.created` through the route (as 56.1.3.1).
+    - [ ] **56.8.3.2** Controller/Action — the structured `payment_intent.payment_failed` warning (+ route unit tests: the exact log with and without metadata, no service called, 200).
 - [ ] **56.9: Out-of-Order `account.updated` Events** — *unscoped, small.*
   - `syncArtistConnectAccountStatus` writes whichever event arrives last, but Stripe doesn't guarantee delivery order. A delayed older event can overwrite fresh `chargesEnabled`/`payoutsEnabled` values.
   - A stale `true` makes `createDepositPaymentIntent` send `on_behalf_of` to an account that can't take charges, so the deposit can't be created. A stale `false` sends the deposit to the platform instead of the artist.
