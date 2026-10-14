@@ -14,7 +14,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 *   [x] **Phase 28.8 Error Isolation** ➔ Stop unexpected DB errors in `updateClientProfile` reaching the client as an uncaught 500 (58.3/58.4 wait on it).
 *   [ ] **Phase 28.11 Abuse Test Tier** ➔ Fix the artist login lockout so a parallel burst can't get more than 5 passwords checked, then prove it and the email-code send cap hold under parallel bursts.
 *   [ ] **Phase 71 Artist Lockout Recovery** ➔ Let a locked-out artist get back in without the operator (after 28.11).
-*   [ ] **Phase 50 Navigation Layouts** ➔ Build responsive primary header and avatar identity menus.
+*   [x] **Phase 50 Navigation Layouts** ➔ Build responsive primary header and avatar identity menus.
 *   [ ] **Phase 53.4–53.8, 53.10 Pre-Launch Hardening** ➔ Scope and execute remaining unscoped stability, infrastructure, and performance hardening tasks. 53.10 gives the public `/@handle` error pages a way out.
 *   [ ] **Phase 56 Payment Integrity** ➔ Deploy failed refund sweep mechanics and Connect reversals (`56.8–56.13`).
 *   [ ] **Phase 58 Auth Hardening** ➔ Implement guest-profile claim guards and lowercase data validation layers (`58.1–58.9`).
@@ -204,7 +204,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - The lock timestamp round-trips exactly at `TIMESTAMP(3)`.
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine; execute 2.1 → 2.2 → 2.3 → 6.1 → 6.2):
     - [x] **28.11.1.1** Data Gateway — N/A, no schema change.
-    - [ ] **28.11.2.1** Domain Service — atomic login-attempt reservation:
+    - [x] **28.11.2.1** Domain Service — atomic login-attempt reservation:
       - `reserveLoginAttempt.ts` and `reserveLoginAttempt.test.ts`, mocking `prismaMock.$executeRaw` as `pruneExpiredSessions.test.ts` does, with fake timers. Cases:
         - 1 row → `true`; 0 rows → `false`.
         - A throw → `false`, with the exact log object.
@@ -223,7 +223,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
         - Lock expired a minute ago, one wrong → (1, null).
         - Lock expiring in a minute, correct → rejected.
         - Legacy (5, null), wrong → locked.
-    - [ ] **28.11.2.2** Domain Service — lockout burst proofs in the same file. Bursts use `Promise.allSettled` at width 10 (the pg pool default), and every call must be fulfilled. Cases:
+    - [x] **28.11.2.2** Domain Service — lockout burst proofs in the same file. Bursts use `Promise.allSettled` at width 10 (the pg pool default), and every call must be fulfilled. Cases:
       - Clean account, 10 wrong:
         - All get the generic error.
         - The row is (5, lock within exact bounds).
@@ -270,7 +270,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 
 ### 📦 Phase 50: Primary Nav Header & Avatar Identity Menu
 > Splits the dashboard header into a left-aligned Primary Nav (daily-operations links) and a right-aligned Avatar dropdown (account/context actions), isolating destructive/context-switch actions behind a divider. Collapses Primary Nav into a mobile slide-out drawer; Avatar dropdown stays anchored top-right at all viewports.
-- [ ] **50.1: Nav & Identity Menu Restructure**
+- [x] **50.1: Nav & Identity Menu Restructure**
   - Data Gateway / Domain Service / Controller layers: N/A — pure presentational composition reusing existing `RoleSwitcherContainer` and `logoutAction`.
   - [x] **50.1.4.1** UI Primitive — install shadcn `dropdown-menu`, `avatar`, `sheet` components.
   - [x] **50.1.4.2** UI Primitive — `UserMenu` component: Avatar trigger, dropdown with Settings | (RoleSwitcherContainer row) | --- | Log out.
@@ -279,9 +279,9 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - **Design (confirmed 2026-10-14):** `src/domains/booking/components/PrimaryNav.tsx`, unmounted until 50.1.6.1. Props `{ artistId, pendingRequestCount, pastDueAppointmentCount }` (`PrimaryNavProps` in `booking/types.ts`); hrefs built from `artistId`. No `"use client"` (no hooks), so both the server layout and 50.1.4.4's Sheet can render it. Plain links, no active-route highlighting (same convention as the settings sub-nav). `<nav aria-label="Primary">` with today's classes. `NavCountBadge` moves in unchanged as a private helper; the layout's inline copy is deleted by 50.1.6.1. Settings, the role switch and Log out are not in it (they're in `UserMenu`). Verified by a jsdom component test, `PrimaryNav.test.tsx`; E2E and a screenshot come with wiring.
   - [ ] **50.1.4.4** UI Primitive — `MobileNavDrawer`: Sheet triggered by a ☰ icon, collapses `PrimaryNav` below the responsive breakpoint.
     - **Design (confirmed 2026-10-14):** `src/domains/booking/components/MobileNavDrawer.tsx` (`"use client"`), unmounted until 50.1.6.1. Props `MobileNavDrawerProps` = `PrimaryNavProps` minus `variant`. The breakpoint is `lg`, the layout's only one (below it the header is a fixed `max-w-lg` column). Both halves of the breakpoint live in the booking components, so 50.1.6.1 just renders the two side by side: the ☰ trigger is `lg:hidden`, and `PrimaryNav` gets `variant: "bar" | "drawer"` (default `"bar"`, which becomes `hidden lg:flex`; `"drawer"` is a vertical stack with `py-2` touch targets). The Sheet opens from the left with a visible "Menu" title. Open state is controlled with no effects. A click on any link inside the drawer closes it, because the layout survives client-side navigation; this also covers a tap on the current route. Accepted and not handled: rotating across `lg` with the drawer open leaves it open, and the overlay, Esc or X dismiss it. Verified by a jsdom component test, `MobileNavDrawer.test.tsx`, and `PrimaryNav.test.tsx` now covers both variants; E2E and a screenshot come with wiring.
-  - [ ] **50.1.6.1** View & Route — wire `PrimaryNav` + `MobileNavDrawer` + `UserMenu` into `ArtistDashboardLayout` (`src/app/artist/[artistId]/layout.tsx`), replacing the current inline nav/logout markup.
-  - [ ] **50.1.6.2** View & Route — wire `UserMenu` only into `ClientLayout` (`src/app/client/(portal)/layout.tsx`); add a Settings entry → `/client/profile` (client portal currently has none). Also remove `RoleSwitcher`'s now-unused `button` variant (both layouts then render it only through `UserMenu`).
-- [ ] **50.2: Theme Toggle Relocation** (lands before 50.1.6.1 resumes; 28.10.2.1 lands before 50.2.6.1)
+  - [x] **50.1.6.1** View & Route — wire `PrimaryNav` + `MobileNavDrawer` + `UserMenu` into `ArtistDashboardLayout` (`src/app/artist/[artistId]/layout.tsx`), replacing the current inline nav/logout markup.
+  - [x] **50.1.6.2** View & Route — wire `UserMenu` only into `ClientLayout` (`src/app/client/(portal)/layout.tsx`); add a Settings entry → `/client/profile` (client portal currently has none). Also remove `RoleSwitcher`'s now-unused `button` variant (both layouts then render it only through `UserMenu`).
+- [x] **50.2: Theme Toggle Relocation** (lands before 50.1.6.1 resumes; 28.10.2.1 lands before 50.2.6.1)
   - The root layout pins `ThemeToggle` at `fixed top-3 right-3 z-50` on every page. It covers 50.1.6.1's `UserMenu` avatar wherever the header reaches the viewport edge (below ~1250px; at 390px the avatar is almost unclickable), and 50.1.6.2's client header would hit the same collision.
   - **Design (confirmed 2026-10-14, revised the same day):** The quick-access icon goes, and theme control moves into Settings as a Theme picker: Light and Dark options, each with a phone preview drawn in that theme. This replaces the original single "Dark mode" switch, which felt too thin once it was built. Artists get a new `/artist/[artistId]/settings/appearance` tab (one route per settings section, as today). Clients get an "Appearance" section on `/client/profile`, 50.1.6.2's Settings target. Logged-out pages (`/`, the logins, `/@handle`, `/@handle/book`) get no control: they show the browser's stored choice, else light. **Default theme:** light. The dark fallback (the hard-coded `dark` class on `<html>` and the init script's fallback branches, both from `2be3843`) was unintended. 50.2.6.3 flips it, because it already edits those lines and regenerates the same 12 baselines, so they are regenerated once. Until then the default stays dark. The other mechanics don't change: the anti-flash init script and `suppressHydrationWarning` stay in `src/app/layout.tsx`, and `vettr-theme` stays the storage key. Two options, with no system/device mode (see 65.4). E2E follows 28.10's tiers, so the new surfaces get behaviour checks and aria snapshots, not PNGs.
   - Data Gateway / Domain Service / Controller / Domain Hook layers: N/A — client-side presentation only; theme state is a class on `<html>` plus localStorage, with no domain logic.
