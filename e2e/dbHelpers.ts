@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { config } from "dotenv";
 import { Client } from "pg";
 
@@ -95,6 +97,54 @@ export async function setArtistLoginLockout(
     if (result.rowCount !== 1) {
       throw new Error(`setArtistLoginLockout: no Account for ${email}`);
     }
+  } finally {
+    await client.end();
+  }
+}
+
+// Mirrors src/domains/auth/constants.ts's MAX_EMAIL_OTP_SENDS_PER_WINDOW --
+// duplicated rather than imported, same reasoning as authHelpers.ts's
+// SESSION_COOKIE_NAME.
+const MAX_EMAIL_OTP_SENDS_PER_WINDOW = 10;
+
+// Replaces an address's EmailOtpChallenge row (28.11.6.2) with one that has
+// used its whole send window, so only the cap can block the next request:
+// sentAt is past the 60s cooldown and windowStartedAt is well inside the 24h
+// window, so neither the cooldown nor the rollover can explain a skipped send.
+// The column has no DB default for id (cuid() is Prisma-side).
+//
+// Timestamps are bound as UTC ISO strings for the same reason as
+// setArtistLoginLockout above -- a bare Date would put sentAt in the future
+// under BST, and the cooldown would block instead of the cap. They come from
+// the Node clock, not Postgres now(): the Next server compares against this
+// host's clock, not the database container's.
+export async function seedEmailOtpChallengeAtSendCap(email: string): Promise<void> {
+  config();
+  const now = Date.now();
+  const sentAt = new Date(now - 2 * 60_000);
+  const windowStartedAt = new Date(now - 60 * 60_000);
+  const expiresAt = new Date(sentAt.getTime() + 15 * 60_000);
+
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(`DELETE FROM "EmailOtpChallenge" WHERE email = $1`, [email]);
+    await client.query(
+      `INSERT INTO "EmailOtpChallenge"
+         (id, email, purpose, "expiresAt", "sentAt", "windowStartedAt", "windowSendCount")
+       VALUES (
+         $1, $2, 'CLIENT_SIGN_IN',
+         $3::timestamp(3), $4::timestamp(3), $5::timestamp(3), $6
+       )`,
+      [
+        randomUUID(),
+        email,
+        expiresAt.toISOString(),
+        sentAt.toISOString(),
+        windowStartedAt.toISOString(),
+        MAX_EMAIL_OTP_SENDS_PER_WINDOW,
+      ]
+    );
   } finally {
     await client.end();
   }

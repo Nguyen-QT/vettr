@@ -161,7 +161,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
   - Data Gateway / Controller / UI / Hook / View layers: N/A — governance docs only.
   - [x] **28.10.2.1** Domain Service (governance) — rewrite `testing.md` §2's "Headless E2E Check" screenshot mandate as the three tiers, and point Phase 59's testing line in `03-backlog.md` ("Every new UI surface asserts `toHaveScreenshot()` with linux + win32 baselines") at the tier policy. Docs only. `.claude/` is gitignored, so the `testing.md` edit stays local; flag that in the handoff.
   - **Flagged, not scoped** (each needs its own breakdown if wanted): Linux-only baselines generated in the Playwright Docker image, which would drop the `-win32` PNGs and make local runs match CI; element-scoping the 6 existing public screenshots.
-- [ ] **28.11: Abuse Test Tier** — Added 2026-10-14. Gates 53.3. Proves the per-email and per-account limits hold when someone hammers the public endpoints, and fixes the artist lockout, which doesn't. All of these limits live in Postgres, none per IP.
+- [x] **28.11: Abuse Test Tier** — Added 2026-10-14. Gates 53.3. Proves the per-email and per-account limits hold when someone hammers the public endpoints, and fixes the artist lockout, which doesn't. All of these limits live in Postgres, none per IP.
   - **Already covered at the integration tier:**
     - `auth.otp.integration.test.ts:81-152`: parallel code requests send once, parallel guesses stop at the attempt cap, parallel verifies yield one session.
     - `auth.otp-provisioning.integration.test.ts:167-313`: concurrent first-time provisioning.
@@ -253,10 +253,11 @@ globs: ["**/docs/roadmap/02-active-core.md"]
         - (4, null): a wrong password shows "Incorrect email or password." and stays on `/artist/login`. Reload so the alert isn't stale, then the correct password shows the same text and the URL still doesn't change.
         - (5, expired): the correct password lands on `/artist/{id}`.
       - Tier 1 only.
-    - [ ] **28.11.6.2** View & Route (E2E only) — `e2e/client-sign-in-send-cap.spec.ts`:
+    - [x] **28.11.6.2** View & Route (E2E only) — `e2e/client-sign-in-send-cap.spec.ts`:
       - Fixture: a dedicated eligible client, `e2e-client-otp-cap@example.com`, using the OTP client recipe in `global-setup.ts`.
-      - `dbHelpers.ts`: `seedEmailOtpChallengeAtSendCap(email)` deletes, then inserts a `CLIENT_SIGN_IN` row at count 10, with `windowStartedAt` = now − 1 h, `sentAt` = now − 2 min, and `id` from `randomUUID()` (the column has no DB default).
-      - Case: on `/client/login`, requesting a code shows the same "has a client account with us, we've sent it a 6-digit code" copy and "Resend code in" countdown as a real send. `readCapturedEmails()` has nothing for the address; the action awaits the send before it responds, so checking the sink then is sound.
+      - `dbHelpers.ts`: `seedEmailOtpChallengeAtSendCap(email)` deletes, then inserts a `CLIENT_SIGN_IN` row at count 10, with `windowStartedAt` = now − 1 h, `sentAt` = now − 2 min, and `id` from `randomUUID()` (the column has no DB default). The timestamps come from the Node clock as UTC ISO strings cast with `::timestamp(3)`, like 6.1's `setArtistLoginLockout`. Raw `pg` sends a bare `Date` in local time, which under BST would put `sentAt` in the future, so the cooldown would block instead of the cap.
+      - Case: on `/client/login`, requesting a code shows the same "has a client account with us, we've sent it a 6-digit code" copy and "Resend code in" countdown as a real send, with no field error. The address's `readCapturedEmails()` count is unchanged; the action awaits the send before it responds, so checking the sink then is sound. Counts are compared before and after because global setup clears the sink only once per run.
+      - Control: `resetEmailOtpChallenge`, then request again, and exactly one code arrives. A capped address looks the same as an ineligible one, so without this a broken fixture would also pass.
       - Tier 1, no new screenshot. The booking-wizard path is covered by 28.11.2.3's alternating-purpose case.
   - **Flagged, not fixed** (each has a home):
     - Lockout DoS: anyone who knows an artist's email can keep the account locked with 5 wrong passwords every 15 minutes, and 53.6's per-IP limit doesn't help at that rate. Existing sessions survive, because only `loginArtist` reads `lockedUntil`. But recovery today is the operator clearing the lock by hand → **Phase 71** (gates 53.3).
