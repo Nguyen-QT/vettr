@@ -126,6 +126,10 @@ export interface E2eFixture {
   // sharing otpClientEmail's single EmailOtpChallenge row would let
   // client-auth.spec.ts's resets/cooldowns invalidate the gate's code.
   gateOtpClientEmail: string;
+  // A third OTP-eligible CLIENT Account (28.11.6.2), driven only by
+  // client-sign-in-send-cap.spec.ts, which seeds its EmailOtpChallenge row at
+  // the send cap -- no other spec's reset or cooldown can touch that row.
+  otpCapClientEmail: string;
   // A CLIENT Account + ClientProfile with no bookings (54.5.6.2), driven only
   // by booking-verification.spec.ts's "existing client email" case -- its own
   // EmailOtpChallenge row, and a booking count that spec can reset and pin.
@@ -1088,6 +1092,22 @@ export default async function globalSetup() {
     [randomUUID(), gateOtpClientEmail, gateOtpClientId]
   );
 
+  // Same shape again, for client-sign-in-send-cap.spec.ts only (see
+  // otpCapClientEmail's comment on E2eFixture).
+  const otpCapClientId = randomUUID();
+  const otpCapClientEmail = "e2e-client-otp-cap@example.com";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [otpCapClientId, "e2e_client_otp_cap", otpCapClientEmail]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [randomUUID(), otpCapClientEmail, otpCapClientId]
+  );
+
   // An existing passwordless client for the booking code flow (54.5.6.2) --
   // the shape verifyEmailOtpAndProvisionClient creates (null password,
   // already verified). No bookings, so the spec can pin a count of one.
@@ -1185,6 +1205,7 @@ export default async function globalSetup() {
       dashboardTodayClientId,
       otpClientId,
       gateOtpClientId,
+      otpCapClientId,
       bookingOtpClientId,
     ],
     bookingRequestIds: [
@@ -1236,6 +1257,7 @@ export default async function globalSetup() {
     refundStatusClientSessionId,
     otpClientEmail,
     gateOtpClientEmail,
+    otpCapClientEmail,
     bookingOtpClientEmail,
     bookingOtpClientHandle,
     bookingOtpArtistId,
