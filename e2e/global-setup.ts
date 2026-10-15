@@ -116,6 +116,10 @@ export interface E2eFixture {
   // dashboard's refund status labels. Kept off clientLoginProfileId for
   // the same tier-collision reason as imageClientEmail.
   refundStatusClientSessionId: string;
+  // A dedicated CLIENT Session (53.4.6.1) with its own APPROVED, unpaid
+  // TIER_4 booking, for the CSP violation guard's deposit PaymentElement.
+  // Kept off clientLoginProfileId so it never races deposit-payment.spec.ts.
+  cspGuardClientSessionId: string;
   // A dedicated CLIENT Account eligible for passwordless sign-in (54.3.6.1)
   // -- the only fixture client-auth.spec.ts drives the real OTP screen
   // with, so its EmailOtpChallenge row and the Sessions sign-in creates are
@@ -1066,6 +1070,39 @@ export default async function globalSetup() {
     [refundStatusClientSessionId, sessionExpiresAt, refundStatusClientAccountId]
   );
 
+  // A dedicated CLIENT with one APPROVED, unpaid TIER_4 booking, so the CSP
+  // violation guard (53.4.6.1) can open a deposit PaymentElement. Kept off
+  // depositRequestId: under fullyParallel, two in-flight PaymentIntent
+  // creates for one booking share an idempotency key and Stripe 409s one.
+  const cspGuardClientId = randomUUID();
+  const cspGuardClientEmail = "e2e-client-csp-guard@example.com";
+
+  await client.query(
+    `INSERT INTO "ClientProfile" (id, "instagramHandle", email, "updatedAt")
+     VALUES ($1, $2, $3, now())`,
+    [cspGuardClientId, "e2e_client_csp_guard", cspGuardClientEmail]
+  );
+  await client.query(
+    `INSERT INTO "BookingRequest"
+       (id, status, "clientId", "artistId", tier, "minPrice", "maxPrice", "designTags", "aestheticTags", "estimatedPrice", "updatedAt")
+     VALUES
+       ($1, 'APPROVED', $2, $3, 'TIER_4', 200, 400, ARRAY[]::text[], ARRAY[]::text[], 300, now())`,
+    [randomUUID(), cspGuardClientId, artistId]
+  );
+  const cspGuardClientAccountId = randomUUID();
+  const cspGuardClientSessionId = randomUUID();
+
+  await client.query(
+    `INSERT INTO "Account" (id, email, role, "clientProfileId", "emailVerifiedAt", "updatedAt")
+     VALUES ($1, $2, 'CLIENT', $3, now(), now())`,
+    [cspGuardClientAccountId, cspGuardClientEmail, cspGuardClientId]
+  );
+  await client.query(
+    `INSERT INTO "Session" (id, "expiresAt", "accountId", "activeRole")
+     VALUES ($1, $2, $3, 'CLIENT')`,
+    [cspGuardClientSessionId, sessionExpiresAt, cspGuardClientAccountId]
+  );
+
   // A CLIENT Account with a linked ClientProfile -- exactly what
   // requestClientSignInCode requires before it issues a code (54.3.6.1).
   // No booking: the sign-in spec only asserts the dashboard renders.
@@ -1291,6 +1328,7 @@ export default async function globalSetup() {
     onboardedClientSessionId,
     imageClientSessionId,
     refundStatusClientSessionId,
+    cspGuardClientSessionId,
     otpClientEmail,
     gateOtpClientEmail,
     otpCapClientEmail,
