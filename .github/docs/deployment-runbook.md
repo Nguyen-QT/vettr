@@ -185,12 +185,13 @@ Copy this endpoint's signing secret (`whsec_…`) into `STRIPE_CONNECT_WEBHOOK_S
 
 Why a second endpoint: Stripe only delivers a connected account's `account.updated` to an endpoint whose *Events from* is **Connected accounts**, and every endpoint has its own signing secret. `src/app/api/webhooks/stripe/connect/route.ts` checks only `STRIPE_CONNECT_WEBHOOK_SECRET` and only acts on `account.updated`; it calls `syncArtistConnectAccountStatus`, which turns an artist's `stripeConnectChargesEnabled` on once onboarding completes. Without this endpoint, deposits still work but fall back to plain platform charges: the money stays in the platform balance instead of routing to the artist.
 
-Local dev uses one `stripe listen` for both endpoints:
+Local dev uses one `stripe listen` for both endpoints. It's one line, so it pastes into Git Bash or PowerShell, and the event list is quoted so PowerShell doesn't split it at the commas:
 
 ```bash
-stripe listen --forward-to localhost:3000/api/webhooks/stripe \
-  --forward-connect-to localhost:3000/api/webhooks/stripe/connect
+stripe listen --events "payment_intent.succeeded,payment_intent.payment_failed,refund.created,refund.updated,refund.failed,account.updated" --forward-to localhost:3000/api/webhooks/stripe --forward-connect-to localhost:3000/api/webhooks/stripe/connect
 ```
+
+Recent Stripe CLI versions (checked on 1.51.1) refuse to forward without `--events`, `--all-snapshot` or `--all-thin`. The list above is §5.2's events plus §5.3's; add to it whenever either route starts handling a new event.
 
 It signs every forwarded event with the one secret it prints, so locally both `STRIPE_WEBHOOK_SECRET` and `STRIPE_CONNECT_WEBHOOK_SECRET` take that value. That also means a local run can't catch the two secrets being swapped; on staging, check each endpoint's deliveries in Stripe instead (§9 step 5).
 
