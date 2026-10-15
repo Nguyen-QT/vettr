@@ -725,7 +725,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
         - Ineligible account: generic error plus a REJECTED audit row.
         - Lost race: generic error.
         - DB failure: generic error plus the exact log object.
-    - [ ] **71.1.2.5** Domain Service (integration) — `auth.password-reset.integration.test.ts`. Mock only `sendPasswordResetEmail`; `afterEach` asserts `console.error` was never called. Cases:
+    - [x] **71.1.2.5** Domain Service (integration) — `auth.password-reset.integration.test.ts`. Mock only `sendPasswordResetEmail`; `afterEach` asserts `console.error` was never called. Cases:
       - A burst of 10 requests issues exactly 1 link.
       - Seeded live rows past the cooldown: 3 live means a burst issues none; 2 live plus 1 expired issues exactly 1 and deletes the expired row.
       - A burst of 10 resets with one link: exactly 1 success, 1 session and 1 password change.
