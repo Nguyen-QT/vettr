@@ -191,6 +191,10 @@ export const CLIENT_LOGIN_PATH = "/client/login";
 // email link scanners stay harmless.
 export const ARTIST_RESET_PASSWORD_PATH = "/artist/reset-password";
 
+// Where an artist asks for a reset link (71.1). The reset page's invalid-link
+// state points back here so a dead link is one click from a new one.
+export const ARTIST_FORGOT_PASSWORD_PATH = "/artist/forgot-password";
+
 // The session-derived client dashboard (CLAUDE.md 5.2.4), and the fallback
 // for any rejected post-sign-in redirectTo.
 export const CLIENT_DASHBOARD_PATH = "/client";
