@@ -50,7 +50,8 @@ Set under each project's *Settings → Environment Variables*, **Production scop
 | `DATABASE_URL` | Runtime | Staging Neon **pooled** URL | Production Neon **pooled** URL | No error at boot; first query fails |
 | `STRIPE_SECRET_KEY` | Module load | `sk_test_…` | `sk_live_…` | `src/lib/stripe.ts` throws; every route importing it fails |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | **Build** | `pk_test_…` | `pk_live_…` | Payment form fails to load in the browser |
-| `STRIPE_WEBHOOK_SECRET` | Per request | Test endpoint's `whsec_…` | Live endpoint's `whsec_…` | Every webhook gets 400; Stripe keeps retrying |
+| `STRIPE_WEBHOOK_SECRET` | Per request | Test platform endpoint's `whsec_…` (§5.2) | Live platform endpoint's `whsec_…` | Every platform webhook gets 400; Stripe keeps retrying |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | Per request | Test Connect endpoint's `whsec_…` (§5.3) | Live Connect endpoint's `whsec_…` | Every Connect webhook gets 400; artists' charges never turn on, so deposits stay in the platform balance |
 | `UPLOADTHING_TOKEN` | Per request | Staging app token | Production app token | Reference image uploads fail |
 | `RESEND_API_KEY` | Module load | Sending-only key | Same key, or a new one | `src/lib/resend.ts` throws; every route loading the email-code auth actions fails |
 | `EMAIL_FROM` | Per send | `Vettr <no-reply@vettr.studio>` | Same | Nothing throws; logs `missing_email_from_env`, no code is sent |
@@ -142,7 +143,7 @@ Do this once per project: `vettr-staging` in 53.2, `vettr` in 53.3 (§11), each 
 6. **Env vars:** that project's column of §2.1, Production scope only.
 7. **Previews off:** *Settings → Build and Deployment → Ignored Build Step* → **Only build production** (see §1 for why).
 8. **Domain:** *Settings → Domains*, assigned to Production: `staging.vettr.studio` on `vettr-staging`; `vettr.studio` and `www.vettr.studio` on `vettr` (§11). Add the records Vercel shows at the registrar and wait until Vercel reports them valid.
-9. **Deployment Protection:** *Settings → Deployment Protection* should be **Standard Protection** (or off). Standard Protection guards everything except production domains, so `staging.vettr.studio` and `vettr.studio` stay public while `*.vercel.app` deployment URLs require a Vercel login. That is why the Stripe webhook URL, `APP_URL` and `NEXT_PUBLIC_APP_URL` must all use the custom domain. Never choose *All Deployments*: it would answer Stripe and the cron jobs with a login wall.
+9. **Deployment Protection:** *Settings → Deployment Protection* should be **Standard Protection** (or off). Standard Protection guards everything except production domains, so `staging.vettr.studio` and `vettr.studio` stay public while `*.vercel.app` deployment URLs require a Vercel login. That is why both Stripe webhook URLs, `APP_URL` and `NEXT_PUBLIC_APP_URL` must all use the custom domain. Never choose *All Deployments*: it would answer Stripe and the cron jobs with a login wall.
 
 ---
 
@@ -152,7 +153,7 @@ Do this once per project: `vettr-staging` in 53.2, `vettr` in 53.3 (§11), each 
 
 - Staging uses **test mode**: *Developers → API keys*. `sk_test_…` → `STRIPE_SECRET_KEY`, `pk_test_…` → `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
 - Connect must be enabled on the platform account (in test mode for staging). Artists onboard through `createArtistConnectAccount.ts` and `createConnectOnboardingLink.ts`; the onboarding return and refresh URLs come from `NEXT_PUBLIC_APP_URL`.
-- **Never mix modes.** The secret key, publishable key and webhook secret must all come from the same mode.
+- **Never mix modes.** The secret key, publishable key and both webhook secrets must all come from the same mode.
 
 ### 5.2 Webhook endpoint (platform events)
 
@@ -163,19 +164,38 @@ Do this once per project: `vettr-staging` in 53.2, `vettr` in 53.3 (§11), each 
 | Events from | **Your account** |
 | URL | `https://staging.vettr.studio/api/webhooks/stripe` |
 | API version | `2026-08-26.dahlia`, the version the installed `stripe` package pins (`node_modules/stripe/esm/apiVersion.js`). `src/lib/stripe.ts` doesn't set one, so the code is typed against the SDK's version. **Recheck after every `stripe` upgrade.** |
-| Events | `payment_intent.succeeded`, `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `refund.failed`, `account.updated` (the list in the route's header comment and roadmap 56.1) |
+| Events | `payment_intent.succeeded`, `payment_intent.payment_failed`, `refund.created`, `refund.updated`, `refund.failed` (the list in `src/app/api/webhooks/stripe/route.ts`'s header comment). Not `account.updated`: artists' account events go to §5.3. |
 
 Copy the endpoint's signing secret (`whsec_…`) into `STRIPE_WEBHOOK_SECRET` and redeploy. You can create the endpoint before the first deploy, since the URL is known in advance.
 
 Deposits are platform charges, routed to the artist with `on_behalf_of` + `transfer_data` once their Connect account can take charges (`createDepositPaymentIntent.ts`). Either way the PaymentIntent and its refunds belong to the platform account, so their events arrive on this endpoint.
 
-### 5.3 ⚠️ Open: `account.updated` needs a second endpoint (53.2.1.2)
+### 5.3 Webhook endpoint (connected-account events)
 
-- Stripe only delivers `account.updated` for **connected accounts** to an endpoint whose *Events from* is **Connected accounts**, and every endpoint has its own signing secret.
-- `src/app/api/webhooks/stripe/route.ts` verifies a single `STRIPE_WEBHOOK_SECRET`, so it cannot accept events from both endpoints.
-- `syncArtistConnectAccountStatus` is only ever called from that webhook. On a deployed environment, an artist's `stripeConnectChargesEnabled` therefore never turns on after onboarding. Payments still work, but deposits fall back to plain platform charges: the money stays in the platform balance instead of routing to the artist.
-- Local dev hides this: `stripe listen` signs forwarded account and Connect events with the same secret.
-- Fixing it is a code change (for example, a second secret checked in the route). 53.2.1.2 owns the decision; it must be settled before the deposit smoke test can prove routing to the artist.
+*Workbench → Webhooks → add an endpoint*, a second one next to §5.2:
+
+| Setting | Value |
+|---|---|
+| Events from | **Connected accounts** |
+| URL | `https://staging.vettr.studio/api/webhooks/stripe/connect` |
+| API version | Same as §5.2 |
+| Events | `account.updated` |
+
+Copy this endpoint's signing secret (`whsec_…`) into `STRIPE_CONNECT_WEBHOOK_SECRET` and redeploy.
+
+Why a second endpoint: Stripe only delivers a connected account's `account.updated` to an endpoint whose *Events from* is **Connected accounts**, and every endpoint has its own signing secret. `src/app/api/webhooks/stripe/connect/route.ts` checks only `STRIPE_CONNECT_WEBHOOK_SECRET` and only acts on `account.updated`; it calls `syncArtistConnectAccountStatus`, which turns an artist's `stripeConnectChargesEnabled` on once onboarding completes. Without this endpoint, deposits still work but fall back to plain platform charges: the money stays in the platform balance instead of routing to the artist.
+
+Local dev uses one `stripe listen` for both endpoints. It's one line, so it pastes into Git Bash or PowerShell, and the event list is quoted so PowerShell doesn't split it at the commas:
+
+```bash
+stripe listen --events "payment_intent.succeeded,payment_intent.payment_failed,refund.created,refund.updated,refund.failed,account.updated" --forward-to localhost:3000/api/webhooks/stripe --forward-connect-to localhost:3000/api/webhooks/stripe/connect
+```
+
+Recent Stripe CLI versions (checked on 1.51.1) refuse to forward without `--events`, `--all-snapshot` or `--all-thin`. The list above is §5.2's events plus §5.3's; add to it whenever either route starts handling a new event.
+
+It signs every forwarded event with the one secret it prints, so locally both `STRIPE_WEBHOOK_SECRET` and `STRIPE_CONNECT_WEBHOOK_SECRET` take that value. That also means a local run can't catch the two secrets being swapped; on staging, check each endpoint's deliveries in Stripe instead (§9 step 5).
+
+Stripe doesn't guarantee delivery order, so a delayed older `account.updated` can overwrite newer flags. That's roadmap 56.9, not handled yet.
 
 ---
 
@@ -237,15 +257,16 @@ Scheduled jobs run from **GitHub Actions**, not Vercel Cron. Each workflow POSTs
 Mapped to the 53.2 sub-tasks.
 
 1. **53.2.1.1**: Neon staging project (§3.1); `migrate status` then `migrate deploy` with the direct URL (§3.3). Resend domain, DNS and key (§7).
-2. Stripe test keys and the platform webhook endpoint (§5.1, §5.2). UploadThing staging app (§6). Generate `CRON_SECRET` (§8).
-3. Vercel project `vettr-staging` (§4): production branch `main`, Node version, region `lhr1`, all nine env vars, previews off, domain `staging.vettr.studio`, Deployment Protection check.
-4. **53.2.1.2**: deploy (push to `main`, or *Redeploy*). Settle §5.3 first if the smoke test should cover routing deposits to the artist.
+2. Stripe test keys and both webhook endpoints, platform and Connected accounts (§5.1, §5.2, §5.3). UploadThing staging app (§6). Generate `CRON_SECRET` (§8).
+3. Vercel project `vettr-staging` (§4): production branch `main`, Node version, region `lhr1`, all ten env vars, previews off, domain `staging.vettr.studio`, Deployment Protection check.
+4. **53.2.1.2**: deploy (push to `main`, or *Redeploy*).
 5. Smoke test on `https://staging.vettr.studio`:
    - Artist sign-in and Connect onboarding with Stripe test data.
+   - After onboarding, the Connected-accounts endpoint shows a 2xx `account.updated` delivery for the artist's account.
    - Client email code arrives from Resend. Check spam placement and that the headers show SPF and DKIM `pass`.
    - Booking intake with a reference image upload.
-   - Deposit payment with test card `4242 4242 4242 4242`.
-   - In Stripe, the webhook endpoint's deliveries show 2xx. Vercel *Logs* show no errors.
+   - Deposit payment with test card `4242 4242 4242 4242`. The payment transfers to the artist's connected account.
+   - In Stripe, both webhook endpoints' deliveries show 2xx. Vercel *Logs* show no errors.
 6. **53.2.1.3**: GitHub secrets, enable and trigger both workflows, read the counts in the job logs (§8).
 
 ---
@@ -277,7 +298,7 @@ Protect `release` in GitHub (repo *Settings → Rules* or *Branches*): block for
 - **`release` branch:** create it from a commit that staging is running and you've checked, `git push origin <checked-sha>:refs/heads/release`, and protect it (§10).
 - **`vettr` project:** every §4 step, with production branch `release`, region `lhr1` and previews off.
 - **Neon:** a new production project in the same region, migrated with §3.3. Turn on backups and point-in-time restore (paid plan) before holding real artist data (53.3.1.2).
-- **Stripe:** complete account activation and the Connect platform profile and branding. Use live keys. Create a new live-mode endpoint with the §5.2 settings, pointed at `https://vettr.studio/api/webhooks/stripe`; it has its own `whsec_`. If §5.3 added a Connect endpoint, create its live counterpart too. Staging keeps its test-mode endpoint.
+- **Stripe:** complete account activation and the Connect platform profile and branding. Use live keys. Create two new live-mode endpoints: one with the §5.2 settings pointed at `https://vettr.studio/api/webhooks/stripe`, and one with the §5.3 settings pointed at `https://vettr.studio/api/webhooks/stripe/connect`. Each has its own `whsec_`, which goes into `STRIPE_WEBHOOK_SECRET` and `STRIPE_CONNECT_WEBHOOK_SECRET` on `vettr`. Staging keeps its test-mode endpoints.
 - **UploadThing:** production app, its own token.
 - **`CRON_SECRET`:** a new value on `vettr`; staging keeps its own.
 - **Domains (on `vettr`):** apex `vettr.studio` as the production domain, and `www.vettr.studio` redirecting 308 to the apex. The session cookie is host-only, so only one host may serve the app. `staging.vettr.studio` stays on `vettr-staging`.
