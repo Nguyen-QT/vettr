@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { Page } from "@playwright/test";
 
+import type { CapturedEmail } from "../src/lib/emailCaptureSink";
 import type { E2eFixture } from "./global-setup";
 
 // Must match src/domains/auth/constants.ts's SESSION_COOKIE_NAME --
@@ -39,35 +40,48 @@ export async function loginAsClient(page: Page, sessionId: string) {
   await loginWithSessionId(page, sessionId);
 }
 
-// Where the dev server's sendVerificationEmail writes instead of calling
-// Resend (src/lib/emailCaptureSink.ts) -- wired into the webServer env in
-// playwright.config.ts. Absolute so server and specs agree on cwd.
+// Where the dev server's sendVerificationEmail and sendPasswordResetEmail
+// write instead of calling Resend (src/lib/emailCaptureSink.ts) -- wired into
+// the webServer env in playwright.config.ts. Absolute so server and specs
+// agree on cwd.
 export const EMAIL_CAPTURE_SINK_PATH = path.join(__dirname, ".email-sink.jsonl");
-
-interface CapturedEmailRecord {
-  to: string;
-  code: string;
-}
 
 // Reads every record in the capture sink once, without polling (empty if
 // nothing has been sent yet) -- for asserting an address was never sent a
-// code (54.3.6.1).
-export async function readCapturedEmails(): Promise<CapturedEmailRecord[]> {
+// code or link (54.3.6.1, 71.1.6.1).
+export async function readCapturedEmails(): Promise<CapturedEmail[]> {
   const raw = await readFile(EMAIL_CAPTURE_SINK_PATH, "utf-8").catch(() => "");
   return raw
     .split("\n")
     .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as CapturedEmailRecord);
+    .map((line) => JSON.parse(line) as CapturedEmail);
 }
 
 // Polls the capture sink for the newest verification code sent to `email`
-// (JSONL, last matching line wins -- see captureEmail).
+// (JSONL, last matching line wins -- see captureEmail). Reset-link records
+// for the same address are skipped.
 export async function readCapturedCode(email: string): Promise<string> {
   for (let attempt = 0; attempt < 50; attempt++) {
     const records = await readCapturedEmails();
-    const match = records.filter((record) => record.to === email).pop();
-    if (match) return match.code;
+    const match = records
+      .filter((record) => record.to === email && "code" in record)
+      .pop();
+    if (match && "code" in match) return match.code;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
   throw new Error(`No captured verification email for ${email}`);
+}
+
+// Polls the capture sink for the newest password-reset link sent to `email`
+// (71.1.6.1), same last-match-wins rule as readCapturedCode.
+export async function readCapturedResetLink(email: string): Promise<string> {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const records = await readCapturedEmails();
+    const match = records
+      .filter((record) => record.to === email && "resetLink" in record)
+      .pop();
+    if (match && "resetLink" in match) return match.resetLink;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error(`No captured password-reset email for ${email}`);
 }

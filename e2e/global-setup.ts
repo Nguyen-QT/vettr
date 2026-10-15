@@ -14,7 +14,7 @@ const FIXTURE_PATH = path.join(__dirname, ".fixture.json");
 // format and params, duplicated rather than imported -- globalSetup
 // runs outside Next's runtime, same reasoning as the raw pg usage
 // below rather than the generated Prisma client.
-function hashPasswordForFixture(password: string): string {
+export function hashPasswordForFixture(password: string): string {
   const salt = randomBytes(16);
   const derivedKey = scryptSync(password, salt, 64);
   return `${salt.toString("hex")}:${derivedKey.toString("hex")}`;
@@ -147,6 +147,13 @@ export interface E2eFixture {
   lockoutArtistId: string;
   lockoutArtistEmail: string;
   lockoutArtistPassword: string;
+  // An artist-only ARTIST Account on its own Artist (71.1.6.1), driven only by
+  // artist-password-reset.spec.ts, which locks it and replaces its password.
+  // Not lockoutArtistEmail: that spec locks its account in parallel, and a
+  // reset here clears the lock and rewrites the hash.
+  resetArtistId: string;
+  resetArtistEmail: string;
+  resetArtistPassword: string;
   // A dynamically-dated (always "today"), already-started APPROVED
   // booking for the artist dashboard spec (Phase 22).
   dashboardTodayClientHandle: string;
@@ -1183,6 +1190,35 @@ export default async function globalSetup() {
     ]
   );
 
+  // Same shape as lockoutArtistEmail above, for the password-reset spec only
+  // (see resetArtistEmail's comment on E2eFixture). The spec restores the
+  // password, lock and tokens itself before each test.
+  const resetArtistId = randomUUID();
+  const resetArtistEmail = "e2e-artist-reset@example.com";
+  const resetArtistPassword = "e2e-test-password-123";
+
+  await client.query(
+    `INSERT INTO "Artist" (id, name, "instagramHandle", handle, email, "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, now())`,
+    [
+      resetArtistId,
+      "E2E Reset Artist",
+      "e2e_reset_artist",
+      "e2e_reset_artist",
+      "e2e-fixture-reset-artist@example.com",
+    ]
+  );
+  await client.query(
+    `INSERT INTO "Account" (id, email, "passwordHash", role, "artistId", "updatedAt")
+     VALUES ($1, $2, $3, 'ARTIST', $4, now())`,
+    [
+      randomUUID(),
+      resetArtistEmail,
+      hashPasswordForFixture(resetArtistPassword),
+      resetArtistId,
+    ]
+  );
+
   await client.end();
 
   const fixture: E2eFixture = {
@@ -1265,6 +1301,9 @@ export default async function globalSetup() {
     lockoutArtistId,
     lockoutArtistEmail,
     lockoutArtistPassword,
+    resetArtistId,
+    resetArtistEmail,
+    resetArtistPassword,
     maxEndTimeClientHandle,
     pastDueNoShowClientHandle,
     pastDueCompleteClientHandle,

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { Client } from "pg";
 
+import { hashPasswordForFixture } from "./global-setup";
+
 // Refreshes the artist-dashboard spec's "today, in-progress" appointment
 // fixture immediately before the test that depends on it, rather than
 // relying on the value global-setup.ts computed once at the very start
@@ -97,6 +99,37 @@ export async function setArtistLoginLockout(
     if (result.rowCount !== 1) {
       throw new Error(`setArtistLoginLockout: no Account for ${email}`);
     }
+  } finally {
+    await client.end();
+  }
+}
+
+// Returns the password-reset fixture Account to its seeded state (71.1.6.1):
+// the original password hash, no lock, no reset links. Deleting the links also
+// clears the 60s request cooldown and the 3-live cap, so every test can issue a
+// fresh one -- UI mode re-runs skip global-setup.ts. Throws unless exactly one
+// Account matched, so a missing fixture can't leave a test on unseeded state.
+export async function restoreArtistResetFixture(
+  email: string,
+  password: string
+): Promise<void> {
+  config();
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    const result = await client.query<{ id: string }>(
+      `UPDATE "Account"
+       SET "passwordHash" = $2, "failedLoginAttempts" = 0, "lockedUntil" = NULL
+       WHERE email = $1
+       RETURNING id`,
+      [email, hashPasswordForFixture(password)]
+    );
+    if (result.rowCount !== 1) {
+      throw new Error(`restoreArtistResetFixture: no Account for ${email}`);
+    }
+    await client.query(`DELETE FROM "PasswordResetToken" WHERE "accountId" = $1`, [
+      result.rows[0].id,
+    ]);
   } finally {
     await client.end();
   }

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import {
+  ARTIST_FORGOT_PASSWORD_PATH,
   ARTIST_LOGIN_PATH,
+  ARTIST_RESET_PASSWORD_PATH,
   CLIENT_LOGIN_PATH,
   SESSION_COOKIE_NAME,
 } from "@/domains/auth/constants";
@@ -19,6 +21,16 @@ import type { SessionWithAccount } from "@/domains/auth/types";
 // everything else requires a session (CLAUDE.md 5.2.3). Clients are
 // passwordless (54.8), so there is no signup or verify-email page.
 const PUBLIC_CLIENT_PATHS = [CLIENT_LOGIN_PATH];
+
+// Login plus the password-reset pair (71.1.6.1) are the only public paths
+// under /artist -- any other /artist/<x> is treated as an artist id below. A
+// locked-out artist has no session, so the reset pages must be reachable
+// without one. Matched on pathname, so a link's ?token= never matters.
+const PUBLIC_ARTIST_PATHS = [
+  ARTIST_LOGIN_PATH,
+  ARTIST_FORGOT_PASSWORD_PATH,
+  ARTIST_RESET_PASSWORD_PATH,
+];
 
 async function getSessionFromRequest(
   request: NextRequest
@@ -46,7 +58,7 @@ function redirectToLogin(request: NextRequest, loginPath: string) {
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname === ARTIST_LOGIN_PATH || PUBLIC_CLIENT_PATHS.includes(pathname)) {
+  if (PUBLIC_ARTIST_PATHS.includes(pathname) || PUBLIC_CLIENT_PATHS.includes(pathname)) {
     return NextResponse.next();
   }
 

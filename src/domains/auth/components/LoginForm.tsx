@@ -1,8 +1,11 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ARTIST_FORGOT_PASSWORD_PATH } from "@/domains/auth/constants";
 import { useArtistLogin } from "@/domains/auth/hooks/useArtistLogin";
 
 export function LoginForm() {
@@ -33,6 +36,13 @@ export function LoginForm() {
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Signing in..." : "Sign in"}
         </Button>
+
+        <Link
+          href={ARTIST_FORGOT_PASSWORD_PATH}
+          className={buttonVariants({ variant: "link", className: "h-auto w-fit p-0 text-sm" })}
+        >
+          Forgot password?
+        </Link>
       </FieldGroup>
     </form>
   );
