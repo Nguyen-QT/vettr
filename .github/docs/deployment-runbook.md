@@ -126,8 +126,76 @@ Remove-Item Env:DATABASE_URL
 ```
 
 - **Order:** migrate *before* deploying the code that needs it. The old deployment keeps serving until the new one is live, so a migration must not break the code that's still running: add first, drop in a later release.
-- **Never run `npm run db:seed` against Neon.** It's the local dev fixture script: it inserts dev accounts and deletes rows whose Instagram handle starts `test_client_` or `e2e_`. Hand-provision staging data instead (53.2.1.2).
+- **Never run `npm run db:seed` against Neon.** It's the local dev fixture script: it inserts dev accounts and deletes rows whose Instagram handle starts `test_client_` or `e2e_`. Hand-provision staging data instead (§3.4).
 - Test suites never point at Neon. `test:local` / `test:e2e:local` use throwaway Docker databases.
+
+### 3.4 Hand-provision a test artist (staging)
+
+There is no artist signup in the app, so the staging smoke test (§9 step 5) needs one artist created by hand. It's three things: an `Artist` row (the public `/@handle` page), an `Account` row with `role = 'ARTIST'` (the sign-in), and one `ArtistDepositSetting` row per tier. **The deposit rows are not optional:** a tier with no row means no deposit is required, so the booking would never reach a payment. Weekly hours (no row = fully open) and tier reference images (optional gallery) are skipped. Leave the Stripe Connect columns alone: the artist creates the Connect account through the real onboarding flow, and the Connected-accounts webhook (§5.3) then turns charges on.
+
+Staging only. Use a throwaway password and an email address you can read, since Stripe test-mode onboarding and password-reset mail go there.
+
+1. **Hash the password.** SQL can't compute scrypt, so generate the `salt:hash` string the app stores. It uses the same parameters as `hashPassword` (16-byte salt, 64-byte key, Node's default cost). Set `PW` first, so the password never sits in the script text; the new-password policy is 12–128 characters:
+
+   ```bash
+   # Git Bash
+   PW='<password>' node -e "const c=require('node:crypto');const s=c.randomBytes(16);console.log(s.toString('hex')+':'+c.scryptSync(process.env.PW,s,64).toString('hex'))"
+   ```
+
+   ```powershell
+   # PowerShell
+   $env:PW = '<password>'
+   node -e "const c=require('node:crypto');const s=c.randomBytes(16);console.log(s.toString('hex')+':'+c.scryptSync(process.env.PW,s,64).toString('hex'))"
+   Remove-Item Env:PW
+   ```
+
+2. **Insert the rows** against the **direct** URL (psql, or Neon's SQL editor), after confirming the host as in §3.3. Replace every `<…>` placeholder. `<handle>` and `<email>` must be lower case, and `<instagram>` has no `@`. The ids are `gen_random_uuid()::text` because the schema has no database default for them (Prisma generates ids in the app), and `updatedAt` has none either. `<hash>` is step 1's output; the deposit amounts are pounds and are yours to change.
+
+   ```sql
+   BEGIN;
+
+   WITH new_artist AS (
+     INSERT INTO "Artist" (id, name, "instagramHandle", handle, email, "updatedAt")
+     VALUES (gen_random_uuid()::text, '<name>', '<instagram>', '<handle>', '<email>', now())
+     RETURNING id
+   ), new_account AS (
+     INSERT INTO "Account" (id, email, "passwordHash", role, "artistId", "updatedAt")
+     SELECT gen_random_uuid()::text, '<email>', '<hash>', 'ARTIST', id, now()
+     FROM new_artist
+   )
+   INSERT INTO "ArtistDepositSetting" (id, tier, "depositAmount", "artistId", "updatedAt")
+   SELECT gen_random_uuid()::text, t.tier::"ComplexityTier", t.amount, a.id, now()
+   FROM new_artist a
+   CROSS JOIN (VALUES ('TIER_2', 20.00), ('TIER_3', 35.00), ('TIER_4', 50.00), ('FREESTYLE', 75.00))
+     AS t(tier, amount);
+
+   COMMIT;
+   ```
+
+   It is one transaction, so a failure leaves nothing half-created. A handle that isn't lower case or fails the format check (`Artist_handle_format_check`), or an email, handle or Instagram name that already exists, aborts the whole thing. Don't run it twice for the same artist.
+
+3. **Check it:**
+
+   ```sql
+   SELECT a.handle, a.email, ac.role, ac."artistId" = a.id AS linked,
+          (SELECT count(*) FROM "ArtistDepositSetting" d WHERE d."artistId" = a.id) AS deposit_rows
+   FROM "Artist" a JOIN "Account" ac ON ac."artistId" = a.id
+   WHERE a.handle = '<handle>';
+   ```
+
+   Expect one row: `role` `ARTIST`, `linked` true, `deposit_rows` 4. Then sign in at `https://staging.vettr.studio/artist/login` with the email and password, and open `https://staging.vettr.studio/@<handle>`.
+
+4. **Undo** (child rows first, because the foreign keys restrict):
+
+   ```sql
+   BEGIN;
+   DELETE FROM "ArtistDepositSetting" WHERE "artistId" = (SELECT id FROM "Artist" WHERE handle = '<handle>');
+   DELETE FROM "Account" WHERE "artistId" = (SELECT id FROM "Artist" WHERE handle = '<handle>');
+   DELETE FROM "Artist" WHERE handle = '<handle>';
+   COMMIT;
+   ```
+
+   This fails once the artist has booking requests; delete those first, or provision a fresh handle instead.
 
 ---
 
@@ -259,8 +327,9 @@ Mapped to the 53.2 sub-tasks.
 1. **53.2.1.1**: Neon staging project (§3.1); `migrate status` then `migrate deploy` with the direct URL (§3.3). Resend domain, DNS and key (§7).
 2. Stripe test keys and both webhook endpoints, platform and Connected accounts (§5.1, §5.2, §5.3). UploadThing staging app (§6). Generate `CRON_SECRET` (§8).
 3. Vercel project `vettr-staging` (§4): production branch `main`, Node version, region `lhr1`, all ten env vars, previews off, domain `staging.vettr.studio`, Deployment Protection check.
-4. **53.2.1.2**: deploy (push to `main`, or *Redeploy*).
+4. **53.2.1.2**: deploy (push to `main`, or *Redeploy*), then hand-provision the test artist (§3.4).
 5. Smoke test on `https://staging.vettr.studio`:
+   - `/@<handle>` loads for the provisioned artist, then run the whole booking below from its book page.
    - Artist sign-in and Connect onboarding with Stripe test data.
    - After onboarding, the Connected-accounts endpoint shows a 2xx `account.updated` delivery for the artist's account.
    - Client email code arrives from Resend. Check spam placement and that the headers show SPF and DKIM `pass`.
