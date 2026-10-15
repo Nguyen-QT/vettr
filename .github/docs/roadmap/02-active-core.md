@@ -606,14 +606,154 @@ globs: ["**/docs/roadmap/02-active-core.md"]
 
 ### 📦 Phase 71: Artist Lockout Recovery (pre-go-live)
 > Found on 2026-10-14 in 28.11's design pass. Gates 53.3 so that a locked-out artist never needs the operator. Starts after 28.11.2.1, whose `reserveLoginAttempt` it builds on.
-- [ ] **71.1: Self-Service Lockout Recovery** — *unscoped.*
+- [ ] **71.1: Self-Service Lockout Recovery** (execute 1.1 → 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 3.1 → 4.1 → 4.2 → 5.1 → 5.2 → 6.1)
   - Anyone who knows an artist's email can keep the account locked: 5 wrong passwords every 15 minutes re-arm the lock. 53.6's per-IP rules don't catch that rate.
   - Signed-in sessions survive, because only `loginArtist` reads `lockedUntil` and sessions last 30 days. Signing in on a new device still fails until the operator clears `failedLoginAttempts` and `lockedUntil` by hand.
   - There's no artist password reset either, so a forgotten password is also an operator job today.
   - Goal: an artist gets back in without the operator.
-  - Candidate (decide in the design pass): a password reset by emailed code that also clears the lock. It would reuse `EmailOtpChallenge` with a new purpose, inheriting its send cap and cooldown.
   - Constraints:
     - The reset must keep the generic copy, so it adds no enumeration channel.
     - Without inbox access, it must not be a way around the lock.
-  - Needs a confirmed layer breakdown before any code.
+  - **Findings (design pass, 2026-10-15):** the roadmap's candidate, a 6-digit code reusing `EmailOtpChallenge`, could be blocked by the same attacker:
+    - `checkEmailOtpCode` kills a code after 5 wrong guesses, so whoever can keep the lock armed can keep every reset code dead.
+    - There is one `EmailOtpChallenge` row per email, shared with booking codes. `requestBookingSubmissionCode` sends to any address, and a change of purpose skips the 60s cooldown (`issueEmailOtp.ts:50-72`). So a booking-code request overwrites a pending reset code, or uses up the shared 10-per-24h cap, within seconds.
+    - If the reset only clears the lock and sends the artist back to `/artist/login`, the attacker can re-arm it before they sign in.
+    - Other gaps in the current code:
+      - `src/proxy.ts:49` makes only `/artist/login` public. Any other `/artist/<x>` is treated as an artist id and redirected to login.
+      - There is no "sign out everywhere" helper.
+      - Nothing in production code sets a password, and no password rules exist (54.8 deleted the old minimum).
+      - `Account_passwordHash_role_check` requires ARTIST ⇒ non-null hash.
+  - **Design (confirmed 2026-10-15):**
+    - **Mechanism: an emailed single-use link, not a code.** A new auth-owned table, `PasswordResetToken` (only ARTIST accounts hold passwords, per `Account_passwordHash_role_check`), holds many rows per account:
+      - The token is `randomBytes(32)` base64url (43 chars). Only its sha256 hex is stored, in `tokenHash @unique`.
+      - A row is live while it exists and `expiresAt > now`. There is no `consumedAt`: using a link deletes the rows.
+      - A 256-bit token can't be guessed, so there's no attempt cap for an attacker to exhaust.
+      - Requesting a new link never cancels older ones, so an attacker's requests only add working links to the artist's inbox.
+      - Booking and client codes are untouched.
+    - **Issue limits:**
+      - At most 3 live links per account, a 60s cooldown between requests, and links last 1 hour. These are new constants in `auth/constants.ts`.
+      - The cap counts *live* links, so whenever a request is refused, the artist's inbox already holds a working link.
+      - The worst-case inbox flood is 3 links an hour per address.
+    - **`issuePasswordResetToken(accountId)`**, one interactive `$transaction`, using times from the Node clock:
+      1. `SELECT … FROM "Account" WHERE id = … FOR UPDATE`, which serialises concurrent requests for the same account.
+      2. Delete that account's expired rows. This is bounded, because an account never holds more than 3 rows.
+      3. If the newest remaining `createdAt` is within the cooldown, or 3 links are live, return `{ issued: false }`.
+      4. Otherwise insert, and return `{ issued: true, token }`.
+      - Like `issueEmailOtp`, it catches nothing.
+    - **`requestArtistPasswordReset({ email })`** mirrors `requestClientSignInCode`:
+      - It looks up the account by the normalised email. Only an account with role ARTIST and an `artistId` is issued a link and sent it.
+      - A locked account still gets a link; that's the point.
+      - Every other address, a refused issue, a failed send and a timed-out send all return the same success with no email.
+      - The send runs under the 1s `EMAIL_OTP_SEND_TIMEOUT_MS`, and every outcome is padded to a 1.5s floor (own constant).
+      - A DB error logs `{ operation, reason: "unexpected_failure", errorCode }` and returns a generic error.
+    - **`sendPasswordResetEmail(email, token)`** works like `sendVerificationEmail`:
+      - Resend, or the e2e capture sink, which gains a reset-link record.
+      - Plain text. Subject "Reset your Vettr password". The body explains the 1-hour expiry and says that if this wasn't you, nothing has changed.
+      - The link is `${NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/artist/reset-password?token=…`, the same fallback `createConnectOnboardingLink` uses.
+      - It never rejects, and logs fixed reason strings only (never the email, token or link).
+    - **`resetArtistPassword({ token, newPassword })`:**
+      1. Hash the token and find the live row; there is no scrypt on a miss.
+      2. Load the account. If it's no longer ARTIST-home, record a REJECTED audit row (`ROLE_MISMATCH` / `NOT_LINKED_TO_ARTIST`) and return the generic error.
+      3. Run `hashPassword` outside the transaction.
+      4. One `$transaction`:
+         - `account.update` sets `passwordHash`, `failedLoginAttempts: 0` and `lockedUntil: null`. It goes first so it waits on any in-flight issue's row lock.
+         - A guarded `passwordResetToken.deleteMany({ id, expiresAt > now })` must hit exactly 1 row, otherwise it throws as a lost race and the whole transaction rolls back.
+         - Delete every other token for the account, then every session for the account.
+         - `createSession(accountId, "ARTIST", tx)`.
+      5. After commit, record a SUCCESS audit row (`PASSWORD_RESET` / `PASSWORD_RESET_WITH_EMAIL_LINK`).
+      6. Return `{ success, sessionId, expiresAt, artistId }`.
+      - A DB error returns the generic error, logging `{ operation, reason, accountId?, errorCode }`.
+    - **Signing in straight after the reset** removes the window in which the attacker could re-lock the account. This is the one sanctioned exception to Phase 54's rule that an ARTIST-home account never gets a session from emailed proof: the same transaction replaces the password, so the inbox already controls the account. OTP codes still never reach artist accounts.
+    - **Password policy:** 12 to 128 characters, with no character-mix rules. It applies to new passwords only; login keeps no minimum, so existing passwords still work.
+    - **Copy:**
+      - Request: "If {email} belongs to an artist account, we've sent it a reset link. It expires in 1 hour; use the newest one." This shows for every outcome.
+      - Reset: "This reset link is invalid or has expired. Request a new one." This covers unknown, expired, used, lost-race and ineligible links alike.
+      - The copy for a locked artist login doesn't change. `LoginForm` only gains a "Forgot password?" link, which tells Phase 72 that 71 doesn't change what a locked artist sees.
+    - **Privacy:** `/artist/reset-password` sets `referrer: "no-referrer"` metadata so the token never leaks in a Referer header. A GET never consumes a link, so email link scanners are harmless.
+    - **§7 edge cases:**
+      - Parallel requests are serialised by the row lock, so a burst issues exactly 1 link.
+      - Parallel resets with one link: the guarded delete lets exactly one win.
+      - A reset racing an issue serialises on the Account row.
+      - An account deleted mid-reset cascades its tokens away, so the guarded delete hits 0 rows and returns the generic error.
+      - The clock is Node's on both sides, with live meaning `expiresAt > now`.
+      - A failed send keeps the cooldown, so there's no retry storm.
+      - The audit write is non-critical and never throws (`recordAuditEvent`).
+  - **Flagged, not fixed:**
+    - A stored mixed-case artist email never gets a link, because the lookup is by the normalised email (`loginArtist` uses the raw email) → **58.3** (its lowercase CHECK on `Account.email`).
+    - A login already in flight with the old password can still create a session after the reset commits, because `loginArtist` verifies against the hash it read before reserving an attempt. The window is one scrypt → **Phase 72**.
+    - An unknown or expired link writes no audit row, since there's no account to attach it to → **Phase 72**.
+    - Both new actions need 53.6's per-IP rules, because the per-address limit still allows 3 emails an hour → **53.6**.
+    - The reset is a fourth place a session is created, and the obvious target for a "wasn't you?" email. A "your password was changed" email belongs there too → **Phase 66**.
+  - **Out of scope:**
+    - A common-password blocklist and breached-password checks (NIST 800-63B-4) → revisit with Phase 72.
+    - Artist passkeys (Phase 59, deferred).
+  - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
+    - [ ] **71.1.1.1** Data Gateway — the `PasswordResetToken` model, its `Account` back-relation, the `AuditEventType.PASSWORD_RESET` and `AuditReasonCode.PASSWORD_RESET_WITH_EMAIL_LINK` values, and a migration in the style of `20261007001623_add_email_otp_challenge`. No app code.
+      - Model fields: `id`, `accountId` (→ `Account`, `onDelete: Cascade`), `tokenHash String @unique`, `expiresAt`, `createdAt`, `@@index([accountId])`.
+      - The integration `wipe()` should need no change, because tokens cascade from `Account`. Confirm that.
+    - [ ] **71.1.2.1** Domain Service — `generatePasswordResetToken.ts` (token + sha256), `issuePasswordResetToken.ts`, the issue constants and the result type.
+      - Unit tests with mocked Prisma and fake timers:
+        - Issues when no rows exist.
+        - The cooldown blocks.
+        - The 3-live cap blocks.
+        - Expired rows are deleted before counting.
+        - The row-lock query runs first.
+        - The stored hash is not the token, and the token is 43 base64url chars.
+        - A DB error propagates.
+    - [ ] **71.1.2.2** Domain Service — `sendPasswordResetEmail.ts`, plus a reset-link record in `src/lib/emailCaptureSink.ts`, plus the `ARTIST_RESET_PASSWORD_PATH` constant.
+      - If the `CapturedEmail` type changes, keep `e2e/authHelpers.ts` `readCapturedCode` compiling.
+      - Unit tests mirror `sendVerificationEmail.test.ts`:
+        - Sink path.
+        - Missing `EMAIL_FROM`.
+        - Resend error.
+        - A throw never rejects.
+        - Link built from `NEXT_PUBLIC_APP_URL`, and from its fallback.
+        - No email, token or link in any log.
+    - [ ] **71.1.2.3** Domain Service — `requestArtistPasswordReset.ts` and its input/result types.
+      - Fake-timer unit tests:
+        - An artist is sent a link.
+        - A CLIENT account, a missing account or a null `artistId` is neither issued nor sent a link, and gets the same success.
+        - A refused issue means no send.
+        - A timed-out send is logged.
+        - The floor holds on every path.
+        - A DB failure returns the generic error.
+        - The email is normalised.
+    - [ ] **71.1.2.4** Domain Service — `resetArtistPassword.ts`, its types, and the `types.ts` audit mirrors (this is the first writer).
+      - Unit tests with `txMock`, in the style of `signInClientWithEmailOtp.test.ts`:
+        - Success: the transaction calls run in order, `hashPassword` runs before the transaction, the lock is cleared, sessions and tokens are deleted, and the result is right.
+        - Unknown or expired token: generic error, no scrypt.
+        - Ineligible account: generic error plus a REJECTED audit row.
+        - Lost race: generic error.
+        - DB failure: generic error plus the exact log object.
+    - [ ] **71.1.2.5** Domain Service (integration) — `auth.password-reset.integration.test.ts`. Mock only `sendPasswordResetEmail`; `afterEach` asserts `console.error` was never called. Cases:
+      - A burst of 10 requests issues exactly 1 link.
+      - Seeded live rows past the cooldown: 3 live means a burst issues none; 2 live plus 1 expired issues exactly 1 and deletes the expired row.
+      - A burst of 10 resets with one link: exactly 1 success, 1 session and 1 password change.
+      - A locked account is cleared. `loginArtist` then accepts the new password and rejects the old one.
+      - Earlier sessions and other links are gone after a reset.
+      - A CLIENT or unknown email gets no row and no send.
+      - An expired link is rejected and the password is unchanged.
+    - [ ] **71.1.3.1** Controller/Action:
+      - `MIN_ARTIST_PASSWORD_LENGTH = 12` and `MAX_ARTIST_PASSWORD_LENGTH = 128`.
+      - In `auth.schema.ts`: `requestArtistPasswordResetInputSchema` (`normalizedEmailSchema`), `resetArtistPasswordInputSchema` (a token matching `/^[A-Za-z0-9_-]{43}$/` plus a new password), and `artistPasswordResetFormSchema` (adds the confirmation `refine`).
+      - `requestArtistPasswordResetAction` and `resetArtistPasswordAction`; the second sets the cookie only on success.
+      - Tests in `actions.test.ts` and `auth.schema.test.ts`: the length bounds, the confirmation mismatch, and a malformed token.
+    - [ ] **71.1.4.1** UI Primitive — `auth/components/ArtistForgotPasswordForm.tsx`: an email step, then a "check your inbox" step with the generic copy.
+    - [ ] **71.1.4.2** UI Primitive — `auth/components/ArtistResetPasswordForm.tsx`: new password and confirmation fields, plus an invalid-link state linking to `ARTIST_FORGOT_PASSWORD_PATH` (a new constant).
+    - [ ] **71.1.5.1** Domain Hook — `useArtistForgotPassword`, with tests in the style of `useClientSignIn.test.ts`.
+    - [ ] **71.1.5.2** Domain Hook — `useArtistResetPassword(token)`.
+      - It uses `zodResolver(artistPasswordResetFormSchema)`, with `try/finally` so the form never sticks (58.4's lesson).
+      - On success it calls `router.replace(\`/artist/${artistId}\`)`. On failure it shows the invalid-link state.
+      - Covered by tests.
+    - [ ] **71.1.6.1** View & Route:
+      - Pages: `src/app/artist/forgot-password/page.tsx` and `src/app/artist/reset-password/page.tsx`. The second reads `searchParams.token` and sets `referrer: "no-referrer"`.
+      - Both paths become public in `src/proxy.ts`.
+      - Add a "Forgot password?" link to `LoginForm`.
+      - E2E in `e2e/artist-password-reset.spec.ts`, serial:
+        - Fixture: a dedicated `e2e-artist-reset@example.com` ARTIST account with its own `Artist` row in `global-setup.ts`, copying the `lockoutArtist` block, plus teardown.
+        - `dbHelpers`: a helper that restores the fixture's password hash, clears its lock and deletes its tokens.
+        - `authHelpers`: `readCapturedResetLink(email)`.
+        - Tier 1: a locked artist clicks "Forgot password?", requests a link, opens it, sets a new password and lands on `/artist/<id>`. After logout, the old password is rejected with the generic copy and the new one works. A reused link shows the invalid state. A non-artist email gets the identical confirmation and leaves no sink record. A mismatched confirmation shows a field error.
+        - Tier 2: `toMatchAriaSnapshot()` on both forms.
+        - No `toHaveScreenshot()` until the design is signed off (28.10 promotion).
     
