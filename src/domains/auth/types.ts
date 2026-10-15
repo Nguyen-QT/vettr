@@ -63,6 +63,14 @@ export interface RequestArtistPasswordResetInput {
 // accounts. Only a DB failure differs, with a retryable message.
 export type RequestArtistPasswordResetResult = { success: true } | { success: false; error: string };
 
+// resetArtistPassword (71.1.2.4) -- resolves to LoginResult, so the action
+// sets the cookie and redirects to the artist dashboard from the same
+// session-shaped result as a login.
+export interface ResetArtistPasswordInput {
+  token: string;
+  newPassword: string;
+}
+
 // checkEmailOtpCode (54.3.2.5)
 export interface CheckEmailOtpCodeInput {
   email: string;
@@ -124,7 +132,8 @@ export type AuditEventTypeValue =
   | "ROLE_SWITCH"
   | "CLIENT_PROFILE_LINK"
   | "EMAIL_OTP_SIGN_IN"
-  | "EMAIL_OTP_BOOKING_VERIFICATION";
+  | "EMAIL_OTP_BOOKING_VERIFICATION"
+  | "PASSWORD_RESET";
 
 export type AuditEventOutcomeValue = "SUCCESS" | "REJECTED";
 
@@ -143,7 +152,8 @@ export type AuditReasonCodeValue =
   | "SIGNED_IN_WITH_EMAIL_OTP"
   | "CLIENT_ACCOUNT_AND_PROFILE_CREATED"
   | "CLIENT_ACCOUNT_LINKED_TO_EXISTING_PROFILE"
-  | "INSTAGRAM_HANDLE_TAKEN";
+  | "INSTAGRAM_HANDLE_TAKEN"
+  | "PASSWORD_RESET_WITH_EMAIL_LINK";
 
 export interface RecordAuditEventInput {
   eventType: AuditEventTypeValue;
