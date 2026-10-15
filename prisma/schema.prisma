@@ -93,8 +93,9 @@ model Account {
   clientProfile   ClientProfile? @relation(fields: [clientProfileId], references: [id])
   clientProfileId String?        @unique
 
-  sessions    Session[]
-  auditEvents AuditEvent[]
+  sessions            Session[]
+  auditEvents         AuditEvent[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 // DB-backed so a session can actually be revoked (logout, or a future
@@ -435,6 +436,7 @@ enum AuditEventType {
   CLIENT_PROFILE_LINK
   EMAIL_OTP_SIGN_IN
   EMAIL_OTP_BOOKING_VERIFICATION
+  PASSWORD_RESET
 }
 
 enum AuditEventOutcome {
@@ -458,6 +460,7 @@ enum AuditReasonCode {
   CLIENT_ACCOUNT_AND_PROFILE_CREATED
   CLIENT_ACCOUNT_LINKED_TO_EXISTING_PROFILE
   INSTAGRAM_HANDLE_TAKEN
+  PASSWORD_RESET_WITH_EMAIL_LINK
 }
 
 model AuditEvent {
@@ -516,4 +519,22 @@ model EmailOtpChallenge {
   // Prune scan (54.3.2.8): once sentAt is older than the send window the
   // code has expired and the window has rolled over, so the row is dead.
   @@index([sentAt])
+}
+
+// Single-use artist password-reset link (71.1). Many rows per account; only
+// the sha256 hex of the emailed token is stored. A row is live while it
+// exists and expiresAt is in the future -- using a link deletes the
+// account's rows, so there is no consumedAt. Cascades with its Account,
+// like Session.
+model PasswordResetToken {
+  id String @id @default(cuid())
+
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
 }
