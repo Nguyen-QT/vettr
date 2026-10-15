@@ -60,3 +60,41 @@ test.describe("static security headers (53.4.3.1)", () => {
     expectStaticSecurityHeaders(response.headers());
   });
 });
+
+// Playwright lowercases response header names. Report-Only until 53.4.2.2.
+const CSP_REPORT_ONLY_HEADER = "content-security-policy-report-only";
+
+function nonceFrom(csp: string | undefined): string | undefined {
+  return csp?.match(/'nonce-([^']+)'/)?.[1];
+}
+
+test.describe("nonce CSP (53.4.3.2)", () => {
+  for (const pathname of ["/", "/artist/login"]) {
+    test(`${pathname} carries the Report-Only CSP with a nonce`, async ({ request }) => {
+      const response = await request.get(pathname, { maxRedirects: 0 });
+
+      expect(response.status()).toBe(200);
+      const csp = response.headers()[CSP_REPORT_ONLY_HEADER];
+      expect(csp).toContain("'strict-dynamic'");
+      expect(nonceFrom(csp)).toBeDefined();
+    });
+  }
+
+  test("two loads of / carry different nonces", async ({ request }) => {
+    const first = await request.get("/", { maxRedirects: 0 });
+    const second = await request.get("/", { maxRedirects: 0 });
+
+    const firstNonce = nonceFrom(first.headers()[CSP_REPORT_ONLY_HEADER]);
+    expect(firstNonce).toBeDefined();
+    expect(nonceFrom(second.headers()[CSP_REPORT_ONLY_HEADER])).not.toBe(firstNonce);
+  });
+
+  test("the UploadThing API route carries no CSP", async ({ request }) => {
+    const response = await request.get("/api/uploadthing", { maxRedirects: 0 });
+
+    expect(response.status()).not.toBe(404);
+    const headers = response.headers();
+    expect(headers[CSP_REPORT_ONLY_HEADER]).toBeUndefined();
+    expect(headers["content-security-policy"]).toBeUndefined();
+  });
+});
