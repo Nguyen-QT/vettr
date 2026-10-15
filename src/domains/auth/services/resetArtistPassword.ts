@@ -16,8 +16,9 @@ const INVALID_RESULT: LoginResult = {
   error: INVALID_PASSWORD_RESET_LINK_ERROR_MESSAGE,
 };
 
-// Thrown inside the transaction when the link is already gone, so the
-// password write that ran before it rolls back -- returning would commit it.
+// Thrown inside the transaction when the link is already gone, or the
+// account changed or was deleted, so any password write that already ran
+// rolls back -- returning would commit it.
 class LostResetRaceError extends Error {}
 
 // Domain Service (71.1.2.4): redeems an emailed password-reset link -- the
@@ -43,9 +44,12 @@ class LostResetRaceError extends Error {}
 // guarded delete finds the link gone and throws, rolling back its own
 // password write.
 //
-// - updateMany, not update: an account deleted mid-reset makes update throw
-//   P2025, while updateMany hits 0 rows and the guarded delete (its links
-//   cascaded away) then fails as a lost race.
+// - The update re-checks the ARTIST-home guard in its own WHERE, which
+//   Postgres re-evaluates on the locked row, so the pre-check above can't go
+//   stale (Sec8.A). An account deleted or made ineligible mid-reset updates
+//   0 rows and throws as a lost race -- updateMany, not update, which would
+//   throw P2025 instead. That path writes no audit row: 0 rows can't tell a
+//   deletion from a role change, and only operator SQL reaches it.
 // - The guarded delete takes a fresh Node-clock `now`, so a link that
 //   expires while scrypt runs is rejected.
 export async function resetArtistPassword(input: ResetArtistPasswordInput): Promise<LoginResult> {
@@ -86,17 +90,20 @@ export async function resetArtistPassword(input: ResetArtistPasswordInput): Prom
     const passwordHash = await hashPassword(input.newPassword);
 
     const session = await prisma.$transaction(async (tx) => {
-      await tx.account.updateMany({
-        where: { id: account.id },
+      const { count: updated } = await tx.account.updateMany({
+        where: { id: account.id, role: "ARTIST", artistId: { not: null } },
         data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null },
       });
+      if (updated !== 1) {
+        throw new LostResetRaceError();
+      }
 
       const { count: consumed } = await tx.passwordResetToken.deleteMany({
         where: { id: link.id, expiresAt: { gt: new Date() } },
       });
       if (consumed !== 1) {
-        // A concurrent reset with the same link got there first, the link
-        // expired mid-reset, or the account was deleted.
+        // A concurrent reset with the same link got there first, or the
+        // link expired mid-reset.
         throw new LostResetRaceError();
       }
 

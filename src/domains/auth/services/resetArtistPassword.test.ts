@@ -126,8 +126,9 @@ describe("resetArtistPassword", () => {
     expect(JSON.stringify(prismaMock.passwordResetToken.findUnique.mock.calls)).not.toContain(TOKEN);
     expect(hashPassword).toHaveBeenCalledWith(NEW_PASSWORD);
 
+    // The ARTIST-home guard is re-checked on the locked row (Sec8.A).
     expect(txMock.account.updateMany).toHaveBeenCalledWith({
-      where: { id: ACCOUNT_ID },
+      where: { id: ACCOUNT_ID, role: "ARTIST", artistId: { not: null } },
       data: { passwordHash: NEW_PASSWORD_HASH, failedLoginAttempts: 0, lockedUntil: null },
     });
     expect(txMock.passwordResetToken.deleteMany).toHaveBeenCalledTimes(2);
@@ -221,19 +222,26 @@ describe("resetArtistPassword", () => {
   );
 
   it.each([
-    ["a concurrent reset already used the link", 1],
-    ["the account was deleted mid-reset", 0],
-  ])("rolls the password write back when %s", async (_label, accountsUpdated) => {
-    txMock.account.updateMany.mockResolvedValue({ count: accountsUpdated });
-    txMock.passwordResetToken.deleteMany.mockResolvedValueOnce({ count: 0 });
+    [
+      "a concurrent reset already used the link",
+      () => txMock.passwordResetToken.deleteMany.mockResolvedValueOnce({ count: 0 }),
+      1,
+    ],
+    [
+      "the account was deleted or made ineligible mid-reset",
+      () => txMock.account.updateMany.mockResolvedValue({ count: 0 }),
+      0,
+    ],
+  ])("rolls the transaction back when %s", async (_label, arrange, guardedDeletes) => {
+    arrange();
 
     const result = await reset();
 
     expect(result).toEqual(INVALID);
-    // The callback threw rather than returned -- returning would commit the
+    // The callback threw rather than returned -- returning would commit any
     // password write that already ran.
     await expect(prismaMock.$transaction.mock.results[0]?.value).rejects.toBeInstanceOf(Error);
-    expect(txMock.passwordResetToken.deleteMany).toHaveBeenCalledTimes(1);
+    expect(txMock.passwordResetToken.deleteMany).toHaveBeenCalledTimes(guardedDeletes);
     expectNoResetWrites();
     expect(recordAuditEvent).not.toHaveBeenCalled();
     expect(consoleErrorSpy).not.toHaveBeenCalled();
