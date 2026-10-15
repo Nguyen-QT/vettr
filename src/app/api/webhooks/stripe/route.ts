@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { confirmDepositPayment } from "@/domains/billing/services/confirmDepositPayment";
-import { syncArtistConnectAccountStatus } from "@/domains/billing/services/syncArtistConnectAccountStatus";
 import { syncDepositRefundStatus } from "@/domains/billing/services/syncDepositRefundStatus";
 import { stripe } from "@/lib/stripe";
 
@@ -14,7 +13,9 @@ import { stripe } from "@/lib/stripe";
 // re-serialized JSON body would fail verification. The Stripe webhook
 // endpoint must subscribe to every event handled below (56.1, 56.6):
 // payment_intent.succeeded, payment_intent.payment_failed,
-// refund.created, refund.updated, refund.failed and account.updated.
+// refund.created, refund.updated and refund.failed. A connected
+// account's account.updated arrives on its own endpoint and secret,
+// handled by connect/route.ts (53.2.3.1).
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -84,15 +85,6 @@ export async function POST(request: NextRequest) {
           stripeStatus: refund.status,
           failureReason: refund.failure_reason,
         });
-        break;
-      }
-      case "account.updated": {
-        const account = event.data.object;
-        await syncArtistConnectAccountStatus(
-          account.id,
-          account.charges_enabled,
-          account.payouts_enabled
-        );
         break;
       }
       default:

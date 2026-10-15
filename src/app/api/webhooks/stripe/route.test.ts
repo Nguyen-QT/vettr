@@ -16,10 +16,6 @@ vi.mock("@/domains/billing/services/syncDepositRefundStatus", () => ({
   syncDepositRefundStatus: vi.fn(),
 }));
 
-vi.mock("@/domains/billing/services/syncArtistConnectAccountStatus", () => ({
-  syncArtistConnectAccountStatus: vi.fn(),
-}));
-
 const WEBHOOK_SECRET = "whsec_unit_test";
 
 // Signs with the real `generateTestHeaderString` -- pure HMAC, no network
@@ -63,10 +59,10 @@ function refund(overrides: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
-// Route-handler unit test (56.1.3.1, 56.4.3.1, 56.6.3.1):
-// payment_intent.succeeded and refund event dispatch only. Signature
-// verification is covered against real Stripe signing in
-// route.stripe-integration.test.ts.
+// Route-handler unit test (56.1.3.1, 56.4.3.1, 56.6.3.1, 53.2.3.1):
+// payment_intent.succeeded and refund event dispatch, plus account.updated
+// no longer being handled here. Signature verification is covered against
+// real Stripe signing in route.stripe-integration.test.ts.
 describe("POST /api/webhooks/stripe -- payment_intent.succeeded", () => {
   beforeEach(() => {
     vi.stubEnv("STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET);
@@ -209,5 +205,37 @@ describe("POST /api/webhooks/stripe -- refund events", () => {
     const response = await POST(buildSignedRequest("refund.created", refund()));
 
     expect(response.status).toBe(500);
+  });
+});
+
+// A connected account's account.updated belongs to connect/route.ts
+// (53.2.3.1). Deployed, the only one this endpoint can receive is the
+// platform account's own, which matches no artist; locally, `stripe
+// listen` without --forward-connect-to sends artists' here too. Either
+// way it's acknowledged and dropped.
+describe("POST /api/webhooks/stripe -- account.updated", () => {
+  beforeEach(() => {
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET);
+    vi.mocked(confirmDepositPayment).mockReset();
+    vi.mocked(syncDepositRefundStatus).mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("answers 200 without calling any billing service", async () => {
+    const response = await POST(
+      buildSignedRequest("account.updated", {
+        id: "acct_123",
+        object: "account",
+        charges_enabled: true,
+        payouts_enabled: true,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(confirmDepositPayment).not.toHaveBeenCalled();
+    expect(syncDepositRefundStatus).not.toHaveBeenCalled();
   });
 });
