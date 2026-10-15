@@ -57,6 +57,21 @@ export const CLIENT_SIGN_IN_CODE_RESPONSE_FLOOR_MS = 1500;
 // provider can't push an eligible response past it.
 export const EMAIL_OTP_SEND_TIMEOUT_MS = 1000;
 
+// How long an emailed artist password-reset link stays live (71.1). A link
+// is live while its row exists and expiresAt > now; the token is 256
+// random bits, so unlike an EmailOtpChallenge code it has no attempt cap.
+export const PASSWORD_RESET_TOKEN_EXPIRY_MS = 1000 * 60 * 60; // 1 hour
+
+// Minimum gap between issued reset links for one account, measured from
+// the newest live link's createdAt. Also caps Resend calls at one per
+// account per window, including after a failed send.
+export const PASSWORD_RESET_REQUEST_COOLDOWN_MS = 1000 * 60;
+
+// Live reset links one account may hold at once. Counting live links (not
+// sends) means a refused request always leaves a working link in the
+// inbox, and bounds an inbox flood to 3 links an hour per address.
+export const MAX_LIVE_PASSWORD_RESET_TOKENS = 3;
+
 // Retry-oriented message for an unexpected DB failure only -- every other
 // outcome (ineligible, cooldown, cap, failed send) is the same success.
 export const REQUEST_SIGN_IN_CODE_UNEXPECTED_ERROR_MESSAGE =

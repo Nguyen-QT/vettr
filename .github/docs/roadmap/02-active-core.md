@@ -688,10 +688,10 @@ globs: ["**/docs/roadmap/02-active-core.md"]
     - A common-password blocklist and breached-password checks (NIST 800-63B-4) → revisit with Phase 72.
     - Artist passkeys (Phase 59, deferred).
   - **Confirmed sub-task breakdown** (each leaf = one isolated PR; do not combine):
-    - [ ] **71.1.1.1** Data Gateway — the `PasswordResetToken` model, its `Account` back-relation, the `AuditEventType.PASSWORD_RESET` and `AuditReasonCode.PASSWORD_RESET_WITH_EMAIL_LINK` values, and a migration in the style of `20261007001623_add_email_otp_challenge`. No app code.
+    - [x] **71.1.1.1** Data Gateway — the `PasswordResetToken` model, its `Account` back-relation, the `AuditEventType.PASSWORD_RESET` and `AuditReasonCode.PASSWORD_RESET_WITH_EMAIL_LINK` values, and a migration in the style of `20261007001623_add_email_otp_challenge`. No app code.
       - Model fields: `id`, `accountId` (→ `Account`, `onDelete: Cascade`), `tokenHash String @unique`, `expiresAt`, `createdAt`, `@@index([accountId])`.
       - The integration `wipe()` should need no change, because tokens cascade from `Account`. Confirm that.
-    - [ ] **71.1.2.1** Domain Service — `generatePasswordResetToken.ts` (token + sha256), `issuePasswordResetToken.ts`, the issue constants and the result type.
+    - [x] **71.1.2.1** Domain Service — `generatePasswordResetToken.ts` (token + sha256), `issuePasswordResetToken.ts`, the issue constants and the result type.
       - Unit tests with mocked Prisma and fake timers:
         - Issues when no rows exist.
         - The cooldown blocks.
