@@ -42,6 +42,12 @@ export interface IssueEmailOtpInput {
 // outcome the caller answers with the same generic "code sent" copy.
 export type IssueEmailOtpResult = { issued: true; code: string } | { issued: false };
 
+// issuePasswordResetToken (71.1.2.1) -- the plaintext token is returned
+// only so the caller can email it. A refusal (cooldown, live-link cap, or
+// an account deleted mid-request) is a normal outcome the caller answers
+// with the same generic "link sent" copy.
+export type IssuePasswordResetTokenResult = { issued: true; token: string } | { issued: false };
+
 // checkEmailOtpCode (54.3.2.5)
 export interface CheckEmailOtpCodeInput {
   email: string;
