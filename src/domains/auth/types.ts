@@ -53,6 +53,16 @@ export type IssuePasswordResetTokenResult = { issued: true; token: string } | { 
 // success whether or not the send worked.
 export type SendPasswordResetEmailResult = { success: true } | { success: false };
 
+// requestArtistPasswordReset (71.1.2.3)
+export interface RequestArtistPasswordResetInput {
+  email: string;
+}
+
+// One result for every outcome -- eligible, ineligible, refused issue,
+// failed or timed-out send -- so the response can't enumerate artist
+// accounts. Only a DB failure differs, with a retryable message.
+export type RequestArtistPasswordResetResult = { success: true } | { success: false; error: string };
+
 // checkEmailOtpCode (54.3.2.5)
 export interface CheckEmailOtpCodeInput {
   email: string;

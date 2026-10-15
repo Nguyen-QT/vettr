@@ -72,6 +72,12 @@ export const PASSWORD_RESET_REQUEST_COOLDOWN_MS = 1000 * 60;
 // inbox, and bounds an inbox flood to 3 links an hour per address.
 export const MAX_LIVE_PASSWORD_RESET_TOKENS = 3;
 
+// Minimum response time for an artist password-reset request (71.1.2.3).
+// An eligible artist does a lookup + issue + send, any other address only
+// the lookup, so every outcome is padded to this floor. Kept above
+// EMAIL_OTP_SEND_TIMEOUT_MS, which also caps the reset email's send.
+export const ARTIST_PASSWORD_RESET_REQUEST_RESPONSE_FLOOR_MS = 1500;
+
 // Retry-oriented message for an unexpected DB failure only -- every other
 // outcome (ineligible, cooldown, cap, failed send) is the same success.
 export const REQUEST_SIGN_IN_CODE_UNEXPECTED_ERROR_MESSAGE =
@@ -81,6 +87,12 @@ export const REQUEST_SIGN_IN_CODE_UNEXPECTED_ERROR_MESSAGE =
 // cap or failed send is the same success (54.5.2.1).
 export const REQUEST_BOOKING_SUBMISSION_CODE_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong sending your verification code. Please try again.";
+
+// Retry-oriented message for an unexpected DB failure only -- an
+// ineligible address, a refused issue (cooldown, live-link cap) or a
+// failed send is the same success (71.1.2.3).
+export const REQUEST_ARTIST_PASSWORD_RESET_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong sending your reset link. Please try again.";
 
 // Deliberately generic -- a wrong, expired, consumed, capped or
 // other-purpose code and a valid code for an ineligible account all return
