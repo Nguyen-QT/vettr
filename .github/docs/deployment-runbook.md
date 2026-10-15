@@ -54,9 +54,9 @@ Set under each project's *Settings → Environment Variables*, **Production scop
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | Per request | Test Connect endpoint's `whsec_…` (§5.3) | Live Connect endpoint's `whsec_…` | Every Connect webhook gets 400; artists' charges never turn on, so deposits stay in the platform balance |
 | `UPLOADTHING_TOKEN` | Per request | Staging app token | Production app token | Reference image uploads fail |
 | `RESEND_API_KEY` | Module load | Sending-only key | Same key, or a new one | `src/lib/resend.ts` throws; every route loading the email-code auth actions fails |
-| `EMAIL_FROM` | Per send | `Vettr <no-reply@vettr.studio>` | Same | Nothing throws; logs `missing_email_from_env`, no code is sent |
+| `EMAIL_FROM` | Per send | `Vettr <no-reply@vettr.studio>` | Same | Nothing throws; logs `missing_email_from_env`, no code or reset link is sent |
 | `CRON_SECRET` | Per request | Random 32 bytes, hex | **New** random value | Every cron call gets 401 |
-| `NEXT_PUBLIC_APP_URL` | **Build** | `https://staging.vettr.studio` | `https://vettr.studio` | Silently falls back to `http://localhost:3000` in `metadataBase` and Connect onboarding return URLs |
+| `NEXT_PUBLIC_APP_URL` | **Build** | `https://staging.vettr.studio` | `https://vettr.studio` | Silently falls back to `http://localhost:3000` in `metadataBase`, Connect onboarding return URLs and artist password-reset links |
 
 Never set `EMAIL_CAPTURE_SINK_PATH` on Vercel (dev and e2e only; ignored in production anyway). `VERCEL_*` system variables are set by Vercel itself.
 

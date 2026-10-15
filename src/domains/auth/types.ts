@@ -48,6 +48,11 @@ export type IssueEmailOtpResult = { issued: true; code: string } | { issued: fal
 // with the same generic "link sent" copy.
 export type IssuePasswordResetTokenResult = { issued: true; token: string } | { issued: false };
 
+// sendPasswordResetEmail (71.1.2.2) -- no user-facing `error` field: the
+// caller (requestArtistPasswordReset) returns the same generic "link sent"
+// success whether or not the send worked.
+export type SendPasswordResetEmailResult = { success: true } | { success: false };
+
 // checkEmailOtpCode (54.3.2.5)
 export interface CheckEmailOtpCodeInput {
   email: string;

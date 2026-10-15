@@ -157,6 +157,11 @@ export const SESSION_COOKIE_NAME = "vettr_session";
 export const ARTIST_LOGIN_PATH = "/artist/login";
 export const CLIENT_LOGIN_PATH = "/client/login";
 
+// Where an emailed artist password-reset link lands (71.1). The link
+// carries its token as `?token=`; opening it must never redeem it, so
+// email link scanners stay harmless.
+export const ARTIST_RESET_PASSWORD_PATH = "/artist/reset-password";
+
 // The session-derived client dashboard (CLAUDE.md 5.2.4), and the fallback
 // for any rejected post-sign-in redirectTo.
 export const CLIENT_DASHBOARD_PATH = "/client";
