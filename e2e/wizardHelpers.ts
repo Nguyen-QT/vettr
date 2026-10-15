@@ -33,13 +33,17 @@ export async function completeServiceStep(
   await page.getByRole("button", { name: "Next", exact: true }).click();
 }
 
-const MOCK_UPLOAD_ORIGIN = "https://mock-upload.e2e.test";
+// Inside the CSP's `https://*.ingest.uploadthing.com` connect-src (53.4).
+// The browser checks CSP before Playwright's route interception sees the
+// request, so a host outside the policy would still log a violation even
+// though the PUT below is mocked.
+const MOCK_UPLOAD_ORIGIN = "https://mock-upload.ingest.uploadthing.com";
 // next.config.ts's images.remotePatterns only allows utfs.io/*.ufs.sh
 // -- the ufsUrl returned to the dropzone (and rendered via next/image
 // once it's added to the form) must resolve on that same allow-listed
 // host, or next/image throws a render-crashing "unconfigured host"
-// error. The actual mock-upload.e2e.test host above is only ever used
-// for the PUT request's own URL, which next/image never touches.
+// error. The MOCK_UPLOAD_ORIGIN host above is only ever used for the
+// PUT request's own URL, which next/image never touches.
 const MOCK_UFS_URL = "https://utfs.io/f/e2e-fixture-mock-upload.png";
 
 // A 1x1 transparent PNG -- real enough for the dropzone's own

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { headers } from "next/headers";
 import "./globals.css";
 
+import { NONCE_REQUEST_HEADER } from "@/lib/contentSecurityPolicy";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 // Runs before hydration so the class is already correct on first
@@ -58,11 +60,17 @@ export const metadata: Metadata = {
   description: "Automated booking, curation, and scheduling engine for high-demand artists.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // The proxy's per-request nonce (53.4.3.2); Next nonces its own scripts from
+  // the CSP request header, so only the theme script needs it here. Reading
+  // headers() makes every route dynamic, which a nonce needs. A route the
+  // proxy skips has no x-nonce, and no CSP either.
+  const nonce = (await headers()).get(NONCE_REQUEST_HEADER) ?? undefined;
+
   return (
     <html
       lang="en"
@@ -70,7 +78,13 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* Browsers hide `nonce` after parsing, so hydration would see a
+            mismatch; next-themes suppresses it the same way. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
       </head>
       <body className="min-h-[100dvh] w-full flex flex-col overflow-y-auto overscroll-bounce bg-background text-foreground font-sans">
         {children}
