@@ -270,6 +270,25 @@ export interface ArtistForgotPasswordFormProps {
   error?: string;
 }
 
+// ArtistResetPasswordForm (71.1.4.2) -- the "form" step submits onSubmit; the
+// "invalid" step is a dead link and shows no fields. There is deliberately no
+// token prop: the token stays in useArtistResetPassword (71.1.5.2), which also
+// maps its react-hook-form state onto errors/serverError.
+export type ArtistResetPasswordStep = "form" | "invalid";
+
+export type ArtistResetPasswordField = "newPassword" | "confirmPassword";
+
+export interface ArtistResetPasswordFormProps {
+  step: ArtistResetPasswordStep;
+  newPassword: string;
+  confirmPassword: string;
+  onFieldChange: (field: ArtistResetPasswordField, value: string) => void;
+  onSubmit: (event: React.SubmitEvent<HTMLFormElement>) => void;
+  isPending?: boolean;
+  errors?: Partial<Record<ArtistResetPasswordField, string>>;
+  serverError?: string; // a retryable failure; the form stays
+}
+
 export interface RoleSwitcherProps {
   activeRole: "ARTIST" | "CLIENT";
   isVisible: boolean;
