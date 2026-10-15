@@ -90,14 +90,16 @@ export default async function globalTeardown() {
   ]);
   // Account.artistId is ON DELETE SET NULL (CLAUDE.md 5.1.1), so it
   // won't clean itself up when Artist is deleted below -- Session
-  // cascades from Account automatically. bookingOtpArtistId (54.5.6.2) and
-  // lockoutArtistId (28.11.6.1) have only their Accounts -- none of the
-  // per-artist rows above. AuditEvent.accountId is ON DELETE SET NULL, so
-  // the lockout spec's audit rows don't block the Account delete.
+  // cascades from Account automatically. bookingOtpArtistId (54.5.6.2),
+  // lockoutArtistId (28.11.6.1) and resetArtistId (71.1.6.1) have only their
+  // Accounts -- none of the per-artist rows above. PasswordResetToken cascades
+  // from Account too. AuditEvent.accountId is ON DELETE SET NULL, so the
+  // lockout and reset specs' audit rows don't block the Account delete.
   const artistIds = [
     fixture.artistId,
     fixture.bookingOtpArtistId,
     fixture.lockoutArtistId,
+    fixture.resetArtistId,
   ];
   await client.query(`DELETE FROM "Account" WHERE "artistId" = ANY($1)`, [
     artistIds,
