@@ -3,6 +3,12 @@ import { z } from "zod";
 import { dateOfBirthSchema, instagramHandleSchema } from "@/lib/clientProfileValidation";
 import { normalizedEmailSchema } from "@/lib/email";
 
+import {
+  INVALID_PASSWORD_RESET_LINK_ERROR_MESSAGE,
+  MAX_ARTIST_PASSWORD_LENGTH,
+  MIN_ARTIST_PASSWORD_LENGTH,
+} from "./constants";
+
 // Structural validity only -- see services/loginArtist.ts for the
 // actual credential check against the database. Password has no
 // minimum length here: a login attempt validates against whatever was
@@ -40,6 +46,48 @@ export const verifyClientSignInCodeInputSchema = z.object({
   email: normalizedEmailSchema,
   code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code."),
 });
+
+// The password policy for a NEW artist password (71.1.3.1): length bounds
+// only, taken verbatim (no trim). One owner for the rule, shared by the
+// action input and the form schema below.
+const artistNewPasswordSchema = z
+  .string()
+  .min(
+    MIN_ARTIST_PASSWORD_LENGTH,
+    `Password must be at least ${MIN_ARTIST_PASSWORD_LENGTH} characters.`
+  )
+  .max(
+    MAX_ARTIST_PASSWORD_LENGTH,
+    `Password must be at most ${MAX_ARTIST_PASSWORD_LENGTH} characters.`
+  );
+
+// Structural validity only -- see services/requestArtistPasswordReset.ts for
+// the eligibility check. A malformed email can't belong to an account, so
+// rejecting it before the service's response floor reveals nothing (71.1.3.1).
+export const requestArtistPasswordResetInputSchema = z.object({
+  email: normalizedEmailSchema,
+});
+
+// Structural validity only -- see services/resetArtistPassword.ts for the
+// actual link check. The token is 32 random bytes as base64url (43 chars). A
+// malformed one gets the same copy as an unknown or expired link, so the
+// shape check adds no oracle.
+export const resetArtistPasswordInputSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, INVALID_PASSWORD_RESET_LINK_ERROR_MESSAGE),
+  newPassword: artistNewPasswordSchema,
+});
+
+// Client-side form shape for the reset page (71.1.5.2's zodResolver). No
+// token: it comes from the URL, not a field.
+export const artistPasswordResetFormSchema = z
+  .object({
+    newPassword: artistNewPasswordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match.",
+    path: ["confirmPassword"],
+  });
 
 // Structural validity only -- see services/switchActiveRole.ts for the
 // actual check that the account is linked to the target role.

@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import {
   loginInputSchema,
+  requestArtistPasswordResetInputSchema,
   requestClientSignInCodeInputSchema,
+  resetArtistPasswordInputSchema,
   setUpClientProfileInputSchema,
   switchActiveRoleInputSchema,
   verifyClientSignInCodeInputSchema,
@@ -19,7 +21,9 @@ import { deleteSession } from "./services/deleteSession";
 import { getSessionWithAccount } from "./services/getSessionWithAccount";
 import { linkOrCreateClientProfileForAccount } from "./services/linkOrCreateClientProfileForAccount";
 import { loginArtist } from "./services/loginArtist";
+import { requestArtistPasswordReset } from "./services/requestArtistPasswordReset";
 import { requestClientSignInCode } from "./services/requestClientSignInCode";
+import { resetArtistPassword } from "./services/resetArtistPassword";
 import { signInClientWithEmailOtp } from "./services/signInClientWithEmailOtp";
 import { switchActiveRole } from "./services/switchActiveRole";
 import { setSessionCookie } from "./sessionCookie";
@@ -40,6 +44,15 @@ export type SwitchActiveRoleActionResult = { success: false; error: string };
 
 export type RequestClientSignInCodeActionResult =
   | { success: true }
+  | { success: false; error: string };
+
+export type RequestArtistPasswordResetActionResult =
+  | { success: true }
+  | { success: false; error: string };
+
+// Never includes the sessionId, like LoginActionResult.
+export type ResetArtistPasswordActionResult =
+  | { success: true; artistId: string }
   | { success: false; error: string };
 
 // Controller/Action boundary (CLAUDE.md 5.1.3): validates structurally,
@@ -163,6 +176,51 @@ export async function verifyClientSignInCodeAction(
 
   await setSessionCookie(result.sessionId, result.expiresAt);
   return { success: true, clientProfileId: result.clientProfileId };
+}
+
+// Controller/Action boundary (71.1.3.1): public and unauthenticated, so it
+// reads no session. Validates the email shape only and returns the service's
+// single generic result unchanged, so nothing here can reveal whether an
+// artist account exists.
+export async function requestArtistPasswordResetAction(
+  input: unknown
+): Promise<RequestArtistPasswordResetActionResult> {
+  const parsed = requestArtistPasswordResetInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid reset request.",
+    };
+  }
+
+  return requestArtistPasswordReset(parsed.data);
+}
+
+// Controller/Action boundary (71.1.3.1): validates structurally, delegates
+// to resetArtistPassword, and sets the session cookie only on success -- the
+// reset signs the artist straight in. Only artistId goes back to the client;
+// the session id lives in the httpOnly cookie alone. Redirecting is left to
+// the caller's hook.
+export async function resetArtistPasswordAction(
+  input: unknown
+): Promise<ResetArtistPasswordActionResult> {
+  const parsed = resetArtistPasswordInputSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid password reset request.",
+    };
+  }
+
+  const result = await resetArtistPassword(parsed.data);
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  await setSessionCookie(result.sessionId, result.expiresAt);
+  return { success: true, artistId: result.artistId };
 }
 
 // Controller/Action boundary (CLAUDE.md 5.1.3, generalized 5.2.2):
