@@ -738,7 +738,8 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - In `auth.schema.ts`: `requestArtistPasswordResetInputSchema` (`normalizedEmailSchema`), `resetArtistPasswordInputSchema` (a token matching `/^[A-Za-z0-9_-]{43}$/` plus a new password), and `artistPasswordResetFormSchema` (adds the confirmation `refine`).
       - `requestArtistPasswordResetAction` and `resetArtistPasswordAction`; the second sets the cookie only on success.
       - Tests in `actions.test.ts` and `auth.schema.test.ts`: the length bounds, the confirmation mismatch, and a malformed token.
-    - [ ] **71.1.4.1** UI Primitive — `auth/components/ArtistForgotPasswordForm.tsx`: an email step, then a "check your inbox" step with the generic copy.
+    - [x] **71.1.4.1** UI Primitive — `auth/components/ArtistForgotPasswordForm.tsx`: an email step, then a "check your inbox" step with the generic copy.
+      - **Design (confirmed 2026-10-15):** `src/domains/auth/components/ArtistForgotPasswordForm.tsx`, unmounted until 71.1.6.1. It is a pure view modelled on `ClientSignInForm`, with `step: "email" | "sent"` and plain controlled props (`email`, `onEmailChange`, `onSubmit`, `isPending`, `onChangeEmail`, `error`). It has no eligibility prop, so the "sent" copy is identical for every outcome. The expiry text is derived from `PASSWORD_RESET_TOKEN_EXPIRY_MS`. Verified by a jsdom component test, `ArtistForgotPasswordForm.test.tsx`; E2E and the aria snapshot come with wiring (71.1.6.1).
     - [ ] **71.1.4.2** UI Primitive — `auth/components/ArtistResetPasswordForm.tsx`: new password and confirmation fields, plus an invalid-link state linking to `ARTIST_FORGOT_PASSWORD_PATH` (a new constant).
     - [ ] **71.1.5.1** Domain Hook — `useArtistForgotPassword`, with tests in the style of `useClientSignIn.test.ts`.
     - [ ] **71.1.5.2** Domain Hook — `useArtistResetPassword(token)`.

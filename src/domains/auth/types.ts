@@ -254,6 +254,22 @@ export interface ClientSignInFormProps extends OtpCodeInputProps {
   isVerifying?: boolean;
 }
 
+// ArtistForgotPasswordForm (71.1.4.1) -- the email step submits onSubmit; the
+// "sent" step is the same generic confirmation for every outcome, so there is
+// deliberately no eligibility prop. useArtistForgotPassword (71.1.5.1) spreads
+// these straight in.
+export type ArtistForgotPasswordStep = "email" | "sent";
+
+export interface ArtistForgotPasswordFormProps {
+  step: ArtistForgotPasswordStep;
+  email: string;
+  onEmailChange: (value: string) => void;
+  onSubmit: (event: React.SubmitEvent<HTMLFormElement>) => void;
+  isPending?: boolean;
+  onChangeEmail: () => void; // back to the email step
+  error?: string;
+}
+
 export interface RoleSwitcherProps {
   activeRole: "ARTIST" | "CLIENT";
   isVisible: boolean;
