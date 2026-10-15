@@ -718,7 +718,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
         - The floor holds on every path.
         - A DB failure returns the generic error.
         - The email is normalised.
-    - [ ] **71.1.2.4** Domain Service — `resetArtistPassword.ts`, its types, and the `types.ts` audit mirrors (this is the first writer).
+    - [x] **71.1.2.4** Domain Service — `resetArtistPassword.ts`, its types, and the `types.ts` audit mirrors (this is the first writer).
       - Unit tests with `txMock`, in the style of `signInClientWithEmailOtp.test.ts`:
         - Success: the transaction calls run in order, `hashPassword` runs before the transaction, the lock is cleared, sessions and tokens are deleted, and the result is right.
         - Unknown or expired token: generic error, no scrypt.

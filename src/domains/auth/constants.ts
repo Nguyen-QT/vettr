@@ -105,6 +105,17 @@ export const INVALID_EMAIL_OTP_ERROR_MESSAGE =
 export const SIGN_IN_WITH_EMAIL_OTP_UNEXPECTED_ERROR_MESSAGE =
   "Something went wrong signing you in. Please try again.";
 
+// Deliberately generic -- an unknown, expired, used or lost-race link and a
+// link for an account that's no longer ARTIST-home all return this, so
+// redeeming a reset link can't tell anyone why it failed (71.1.2.4).
+export const INVALID_PASSWORD_RESET_LINK_ERROR_MESSAGE =
+  "This reset link is invalid or has expired. Request a new one.";
+
+// Retry-oriented message for an unexpected DB failure only. Nothing has
+// committed, so the link is still live and a retry can use it (71.1.2.4).
+export const RESET_ARTIST_PASSWORD_UNEXPECTED_ERROR_MESSAGE =
+  "Something went wrong resetting your password. Please try again.";
+
 // Post-proof outcomes of verifyEmailOtpAndProvisionClient (54.5.2.2). Each
 // is returned only after a valid BOOKING_SUBMISSION code, so only the inbox
 // owner ever sees them. An ARTIST-home account is never issued an OTP
