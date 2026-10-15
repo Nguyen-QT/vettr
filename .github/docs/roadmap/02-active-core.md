@@ -700,7 +700,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
         - The row-lock query runs first.
         - The stored hash is not the token, and the token is 43 base64url chars.
         - A DB error propagates.
-    - [ ] **71.1.2.2** Domain Service — `sendPasswordResetEmail.ts`, plus a reset-link record in `src/lib/emailCaptureSink.ts`, plus the `ARTIST_RESET_PASSWORD_PATH` constant.
+    - [x] **71.1.2.2** Domain Service — `sendPasswordResetEmail.ts`, plus a reset-link record in `src/lib/emailCaptureSink.ts`, plus the `ARTIST_RESET_PASSWORD_PATH` constant.
       - If the `CapturedEmail` type changes, keep `e2e/authHelpers.ts` `readCapturedCode` compiling.
       - Unit tests mirror `sendVerificationEmail.test.ts`:
         - Sink path.
@@ -709,7 +709,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
         - A throw never rejects.
         - Link built from `NEXT_PUBLIC_APP_URL`, and from its fallback.
         - No email, token or link in any log.
-    - [ ] **71.1.2.3** Domain Service — `requestArtistPasswordReset.ts` and its input/result types.
+    - [x] **71.1.2.3** Domain Service — `requestArtistPasswordReset.ts` and its input/result types.
       - Fake-timer unit tests:
         - An artist is sent a link.
         - A CLIENT account, a missing account or a null `artistId` is neither issued nor sent a link, and gets the same success.
