@@ -72,6 +72,12 @@ export const PASSWORD_RESET_REQUEST_COOLDOWN_MS = 1000 * 60;
 // inbox, and bounds an inbox flood to 3 links an hour per address.
 export const MAX_LIVE_PASSWORD_RESET_TOKENS = 3;
 
+// Length bounds for a NEW artist password, set through a reset link (71.1.3.1).
+// No character-mix rules. They apply to new passwords only: loginInputSchema
+// keeps min(1), so passwords set before this policy still work.
+export const MIN_ARTIST_PASSWORD_LENGTH = 12;
+export const MAX_ARTIST_PASSWORD_LENGTH = 128;
+
 // Minimum response time for an artist password-reset request (71.1.2.3).
 // An eligible artist does a lookup + issue + send, any other address only
 // the lookup, so every outcome is padded to this floor. Kept above

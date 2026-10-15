@@ -20,6 +20,8 @@ const {
   deleteSessionMock,
   requestClientSignInCodeMock,
   signInClientWithEmailOtpMock,
+  requestArtistPasswordResetMock,
+  resetArtistPasswordMock,
 } = vi.hoisted(() => ({
   loginArtistMock: vi.fn(),
   linkOrCreateClientProfileForAccountMock: vi.fn(),
@@ -27,6 +29,8 @@ const {
   deleteSessionMock: vi.fn(),
   requestClientSignInCodeMock: vi.fn(),
   signInClientWithEmailOtpMock: vi.fn(),
+  requestArtistPasswordResetMock: vi.fn(),
+  resetArtistPasswordMock: vi.fn(),
 }));
 
 vi.mock("./services/deleteSession", () => ({ deleteSession: deleteSessionMock }));
@@ -41,12 +45,20 @@ vi.mock("./services/requestClientSignInCode", () => ({
 vi.mock("./services/signInClientWithEmailOtp", () => ({
   signInClientWithEmailOtp: signInClientWithEmailOtpMock,
 }));
+vi.mock("./services/requestArtistPasswordReset", () => ({
+  requestArtistPasswordReset: requestArtistPasswordResetMock,
+}));
+vi.mock("./services/resetArtistPassword", () => ({
+  resetArtistPassword: resetArtistPasswordMock,
+}));
 
 import {
   getCurrentSession,
   loginAction,
   logoutAction,
+  requestArtistPasswordResetAction,
   requestClientSignInCodeAction,
+  resetArtistPasswordAction,
   setUpClientProfileAction,
   switchActiveRoleAction,
   verifyClientSignInCodeAction,
@@ -54,6 +66,8 @@ import {
 import {
   ARTIST_LOGIN_PATH,
   CLIENT_LOGIN_PATH,
+  INVALID_PASSWORD_RESET_LINK_ERROR_MESSAGE,
+  MIN_ARTIST_PASSWORD_LENGTH,
   SESSION_COOKIE_NAME,
 } from "./constants";
 
@@ -171,6 +185,102 @@ describe("verifyClientSignInCodeAction", () => {
 
     expect(result).toEqual({ success: false, error: "Enter a valid email address." });
     expect(signInClientWithEmailOtpMock).not.toHaveBeenCalled();
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
+});
+
+describe("requestArtistPasswordResetAction", () => {
+  it("passes a success result through and sets no cookie", async () => {
+    requestArtistPasswordResetMock.mockResolvedValue({ success: true });
+
+    const result = await requestArtistPasswordResetAction({ email: "artist@example.com" });
+
+    expect(result).toEqual({ success: true });
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
+
+  it("passes a service failure through unchanged", async () => {
+    requestArtistPasswordResetMock.mockResolvedValue({ success: false, error: "try again" });
+
+    const result = await requestArtistPasswordResetAction({ email: "artist@example.com" });
+
+    expect(result).toEqual({ success: false, error: "try again" });
+  });
+
+  it("delegates only the normalised email, dropping identity in the payload", async () => {
+    requestArtistPasswordResetMock.mockResolvedValue({ success: true });
+
+    await requestArtistPasswordResetAction({ email: "  Artist@Example.COM ", ...hostileIdentity });
+
+    expect(requestArtistPasswordResetMock).toHaveBeenCalledWith({ email: "artist@example.com" });
+  });
+
+  it("rejects an invalid email without calling the service", async () => {
+    const result = await requestArtistPasswordResetAction({ email: "nope" });
+
+    expect(result).toEqual({ success: false, error: "Enter a valid email address." });
+    expect(requestArtistPasswordResetMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("resetArtistPasswordAction", () => {
+  const expiresAt = new Date("2030-01-01T00:00:00Z");
+  const validResetInput = { token: "A".repeat(43), newPassword: "correct horse battery" };
+
+  it("sets the session cookie and returns only the artistId on success", async () => {
+    resetArtistPasswordMock.mockResolvedValue({
+      success: true,
+      sessionId: "session-1",
+      expiresAt,
+      artistId: "artist-1",
+    });
+
+    const result = await resetArtistPasswordAction(validResetInput);
+
+    expect(result).toEqual({ success: true, artistId: "artist-1" });
+    expect(cookieSet).toHaveBeenCalledWith(
+      SESSION_COOKIE_NAME,
+      "session-1",
+      expect.objectContaining({ httpOnly: true, sameSite: "lax", path: "/", expires: expiresAt })
+    );
+  });
+
+  it("delegates only token and newPassword, dropping identity in the payload", async () => {
+    resetArtistPasswordMock.mockResolvedValue({ success: false, error: "invalid link" });
+
+    await resetArtistPasswordAction({ ...validResetInput, ...hostileIdentity });
+
+    expect(resetArtistPasswordMock).toHaveBeenCalledWith(validResetInput);
+  });
+
+  it("returns the service error and sets no cookie on failure", async () => {
+    resetArtistPasswordMock.mockResolvedValue({ success: false, error: "invalid link" });
+
+    const result = await resetArtistPasswordAction(validResetInput);
+
+    expect(result).toEqual({ success: false, error: "invalid link" });
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed token with the generic invalid-link copy, no service call or cookie", async () => {
+    const result = await resetArtistPasswordAction({ ...validResetInput, token: "short" });
+
+    expect(result).toEqual({
+      success: false,
+      error: INVALID_PASSWORD_RESET_LINK_ERROR_MESSAGE,
+    });
+    expect(resetArtistPasswordMock).not.toHaveBeenCalled();
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
+
+  it("rejects a too-short password without calling the service or setting a cookie", async () => {
+    const result = await resetArtistPasswordAction({ ...validResetInput, newPassword: "short" });
+
+    expect(result).toEqual({
+      success: false,
+      error: `Password must be at least ${MIN_ARTIST_PASSWORD_LENGTH} characters.`,
+    });
+    expect(resetArtistPasswordMock).not.toHaveBeenCalled();
     expect(cookieSet).not.toHaveBeenCalled();
   });
 });

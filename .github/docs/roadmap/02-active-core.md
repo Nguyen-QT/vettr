@@ -733,7 +733,7 @@ globs: ["**/docs/roadmap/02-active-core.md"]
       - Earlier sessions and other links are gone after a reset.
       - A CLIENT or unknown email gets no row and no send.
       - An expired link is rejected and the password is unchanged.
-    - [ ] **71.1.3.1** Controller/Action:
+    - [x] **71.1.3.1** Controller/Action:
       - `MIN_ARTIST_PASSWORD_LENGTH = 12` and `MAX_ARTIST_PASSWORD_LENGTH = 128`.
       - In `auth.schema.ts`: `requestArtistPasswordResetInputSchema` (`normalizedEmailSchema`), `resetArtistPasswordInputSchema` (a token matching `/^[A-Za-z0-9_-]{43}$/` plus a new password), and `artistPasswordResetFormSchema` (adds the confirmation `refine`).
       - `requestArtistPasswordResetAction` and `resetArtistPasswordAction`; the second sets the cookie only on success.
