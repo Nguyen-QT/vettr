@@ -146,8 +146,10 @@ async function expectNoCspViolations(page: Page, step: string): Promise<void> {
 
 // A violation from a host the policy doesn't list is a builder defect
 // (53.4.2.1): fix it there, never by loosening this guard. E2E runs `next dev`,
-// so this proves the development policy only; the production differences are
-// unit-tested and were walked on staging before enforcing (53.4.2.2).
+// so this proves the development policy only. It can't see eval: dev allows
+// 'unsafe-eval' (the staging walk found Zod's JIT probe that way, now off in
+// src/instrumentation-client.ts). The production differences are unit-tested
+// and were walked on staging before enforcing (53.4.2.2).
 test.describe("CSP violation guard (53.4.6.1)", () => {
   test("the theme init script carries the response's nonce", async ({ request }) => {
     const response = await request.get("/", { maxRedirects: 0 });

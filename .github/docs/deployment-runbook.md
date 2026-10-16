@@ -432,14 +432,15 @@ Next nonces its own scripts from the forwarded CSP header. The root layout (`src
 1. Find the directive the browser names in the violation (§13.3). Add the host to the matching constant in `contentSecurityPolicy.ts` (`STRIPE_*_HOSTS`, `UPLOADTHING_CONNECT_HOSTS`, or a new one with a comment saying why), using the narrowest host the vendor documents. Never a bare `https:`.
 2. Scripts: under `'strict-dynamic'`, a script that our own nonced code loads is already allowed, so a `script-src` violation usually means a `<script>` in the server HTML without a nonce. The host list is only the fallback for CSP2 browsers, so add the host there as well.
 3. Remote images don't go through the CSP. Every image loads through same-origin `/_next/image`, so a new image host goes in `images.remotePatterns` in `next.config.ts`, not in `img-src`.
-4. Never add `'unsafe-inline'` to `script-src` or `style-src-elem`, and never a nonce to `style-src` or `style-src-attr` (a nonce cancels `'unsafe-inline'`, which would break the `style` attributes Base UI, UploadThing and `next/image` render).
-5. Add the host to the unit tests in `contentSecurityPolicy.test.ts`. If the vendor shows up in E2E, the violation guard in `security-headers.spec.ts` covers it. E2E runs `next dev`, so also walk the flow on staging with DevTools open before releasing.
+4. Never add `'unsafe-eval'` to the production policy. A library that turns strings into code needs its own opt-out instead. Zod is the example: its JIT probes `new Function("")` when a schema is built, so `src/instrumentation-client.ts` sets `z.config({ jitless: true })` in the browser. E2E can't catch these because `next dev` allows eval, so only the staging walk shows them.
+5. Never add `'unsafe-inline'` to `script-src` or `style-src-elem`, and never a nonce to `style-src` or `style-src-attr` (a nonce cancels `'unsafe-inline'`, which would break the `style` attributes Base UI, UploadThing and `next/image` render).
+6. Add the host to the unit tests in `contentSecurityPolicy.test.ts`. If the vendor shows up in E2E, the violation guard in `security-headers.spec.ts` covers it. E2E runs `next dev`, so also walk the flow on staging with DevTools open before releasing.
 
 ### 13.3 Reading a violation
 
 Open DevTools on the affected page. Chrome logs each blocked load in the Console as *Refused to load … because it violates the following Content Security Policy directive: "…"*, lists it under the *Issues* tab, and shows the request as `(blocked:csp)` in the Network tab.
 
-- The quoted directive is the one to change. If the blocked URL is `inline`, an inline `<script>` or `<style>` had no nonce. If it's `eval`, code called `eval` (allowed only in development).
+- The quoted directive is the one to change. If the blocked URL is `inline`, an inline `<script>` or `<style>` had no nonce. If it's `eval` (Chrome's message reads *Evaluating a string as JavaScript violates…*), code called `eval` or `new Function`, which is allowed only in development. Find the library's opt-out (step 4 in §13.2).
 - A message that starts with `[Report Only]` came from a Report-Only policy, so nothing was blocked. The policy has been enforcing since 53.4.2.2, so today a violation is a real failure for whoever saw it.
 - Nothing reports violations from users' browsers yet: that's 53.7. Until then, only DevTools shows them.
 - **Emergency rollback:** if enforcing blocks payments or uploads in production, set `CSP_HEADER_NAME` in `contentSecurityPolicy.ts` back to `"Content-Security-Policy-Report-Only"` and release it (§10), or use *Instant Rollback*. `X-Frame-Options: DENY` still stops framing while the CSP is Report-Only. Then add the missing host (§13.2) and switch back.
