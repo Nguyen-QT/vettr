@@ -63,7 +63,9 @@ test.describe("static security headers (53.4.3.1)", () => {
   });
 });
 
-// Playwright lowercases response header names. Report-Only until 53.4.2.2.
+// Playwright lowercases response header names. Enforcing since 53.4.2.2; the
+// Report-Only name must not linger next to it.
+const CSP_HEADER = "content-security-policy";
 const CSP_REPORT_ONLY_HEADER = "content-security-policy-report-only";
 
 function nonceFrom(csp: string | undefined): string | undefined {
@@ -72,13 +74,15 @@ function nonceFrom(csp: string | undefined): string | undefined {
 
 test.describe("nonce CSP (53.4.3.2)", () => {
   for (const pathname of ["/", "/artist/login"]) {
-    test(`${pathname} carries the Report-Only CSP with a nonce`, async ({ request }) => {
+    test(`${pathname} carries the enforcing CSP with a nonce`, async ({ request }) => {
       const response = await request.get(pathname, { maxRedirects: 0 });
 
       expect(response.status()).toBe(200);
-      const csp = response.headers()[CSP_REPORT_ONLY_HEADER];
+      const headers = response.headers();
+      const csp = headers[CSP_HEADER];
       expect(csp).toContain("'strict-dynamic'");
       expect(nonceFrom(csp)).toBeDefined();
+      expect(headers[CSP_REPORT_ONLY_HEADER]).toBeUndefined();
     });
   }
 
@@ -86,9 +90,9 @@ test.describe("nonce CSP (53.4.3.2)", () => {
     const first = await request.get("/", { maxRedirects: 0 });
     const second = await request.get("/", { maxRedirects: 0 });
 
-    const firstNonce = nonceFrom(first.headers()[CSP_REPORT_ONLY_HEADER]);
+    const firstNonce = nonceFrom(first.headers()[CSP_HEADER]);
     expect(firstNonce).toBeDefined();
-    expect(nonceFrom(second.headers()[CSP_REPORT_ONLY_HEADER])).not.toBe(firstNonce);
+    expect(nonceFrom(second.headers()[CSP_HEADER])).not.toBe(firstNonce);
   });
 
   test("the UploadThing API route carries no CSP", async ({ request }) => {
@@ -96,8 +100,8 @@ test.describe("nonce CSP (53.4.3.2)", () => {
 
     expect(response.status()).not.toBe(404);
     const headers = response.headers();
+    expect(headers[CSP_HEADER]).toBeUndefined();
     expect(headers[CSP_REPORT_ONLY_HEADER]).toBeUndefined();
-    expect(headers["content-security-policy"]).toBeUndefined();
   });
 });
 
@@ -115,9 +119,9 @@ declare global {
   }
 }
 
-// Report-Only still fires `securitypolicyviolation`, so this sees what an
-// enforced policy would block. It runs before any page script in every
-// document, so the head's theme script is covered.
+// Every blocked load fires `securitypolicyviolation`, so this catches what the
+// policy blocks even when the page still renders. It runs before any page
+// script in every document, so the head's theme script is covered.
 async function recordCspViolations(page: Page): Promise<void> {
   await page.addInitScript(() => {
     window.__cspViolations = [];
@@ -143,12 +147,12 @@ async function expectNoCspViolations(page: Page, step: string): Promise<void> {
 // A violation from a host the policy doesn't list is a builder defect
 // (53.4.2.1): fix it there, never by loosening this guard. E2E runs `next dev`,
 // so this proves the development policy only; the production differences are
-// unit-tested and walked on staging (53.4.2.2).
+// unit-tested and were walked on staging before enforcing (53.4.2.2).
 test.describe("CSP violation guard (53.4.6.1)", () => {
   test("the theme init script carries the response's nonce", async ({ request }) => {
     const response = await request.get("/", { maxRedirects: 0 });
 
-    const headerNonce = nonceFrom(response.headers()[CSP_REPORT_ONLY_HEADER]);
+    const headerNonce = nonceFrom(response.headers()[CSP_HEADER]);
     expect(headerNonce).toBeDefined();
     const themeScriptAttributes = (await response.text()).match(
       /<script\b([^>]*)>\(function\(\)\{try\{if\(localStorage/

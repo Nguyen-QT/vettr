@@ -7,10 +7,10 @@
 // header; the root layout reads it to nonce the theme init script.
 export const NONCE_REQUEST_HEADER = "x-nonce";
 
-// Report-Only until a clean staging run (53.4.2.2 flips it to enforcing).
-// Next reads the nonce from either header name, so its own scripts are
-// nonced in both modes.
-export const CSP_HEADER_NAME = "Content-Security-Policy-Report-Only";
+// Enforcing since a clean staging run (53.4.2.2). Rolling back to
+// "Content-Security-Policy-Report-Only" is the one-line escape hatch: Next
+// reads the nonce from either header name, so its own scripts stay nonced.
+export const CSP_HEADER_NAME = "Content-Security-Policy";
 
 const NONCE_BYTE_LENGTH = 16;
 

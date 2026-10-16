@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 // Static security headers on every path (53.4.3.1); the nonce CSP is built
-// per request in the proxy. X-Frame-Options ships enforced because
-// `frame-ancestors` does nothing while the CSP is Report-Only. HSTS has no
+// per request in the proxy. X-Frame-Options stays alongside the CSP's
+// `frame-ancestors 'none'` for browsers that predate it, and it covers
+// /api, which the proxy (and so the CSP) skips. HSTS has no
 // `preload` yet. Permissions-Policy leaves out `payment` (PaymentElement
 // wallets) and `publickey-credentials-*` (Phase 59 passkeys) so their
 // defaults apply: allowed for self and delegable to Stripe's frames. The

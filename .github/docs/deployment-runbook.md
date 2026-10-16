@@ -408,3 +408,46 @@ Each Vercel project has its own Neon project, so run the steps below once per pr
 9. **Keep the old Neon project** untouched for a grace period (e.g. a week) and keep `vettr.dump`, then delete both.
 
 Resend's region is per domain and stays `eu-west-1` unless you choose to re-create the domain (§7). UploadThing is unaffected.
+
+---
+
+## 13. Security headers
+
+Vettr serves its security headers from two places. Both environments get the same headers, because the policy only varies between `next dev` and a deployed build, not between staging and production.
+
+### 13.1 Which file owns which header
+
+| Header | Owner | Served on |
+|---|---|---|
+| `Strict-Transport-Security`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` | `SECURITY_HEADERS` in [`next.config.ts`](../../next.config.ts) | Every path, `/api` included |
+| `Content-Security-Policy` (the directive list and the nonce) | [`src/lib/contentSecurityPolicy.ts`](../../src/lib/contentSecurityPolicy.ts), the only place a policy is built | — |
+| `Content-Security-Policy` (setting it) | `nextWithCsp` in [`src/proxy.ts`](../../src/proxy.ts): a fresh nonce per request, also forwarded as `x-nonce` | Pages only. The proxy matcher skips `/api`, `/_next/static`, `/_next/image` and `/favicon.ico` |
+
+Next nonces its own scripts from the forwarded CSP header. The root layout (`src/app/layout.tsx`) reads `x-nonce` for the theme init script, the app's only inline script. The reset page sets `referrer: "no-referrer"` in its metadata (`src/app/artist/reset-password/page.tsx`), which overrides `Referrer-Policy` so the `?token=` never leaks in a Referer.
+
+`Permissions-Policy` must never name `payment` (PaymentElement wallets) or `publickey-credentials-*` (Phase 59 passkeys). Their defaults allow `self` and let Stripe's frames use them. `e2e/security-headers.spec.ts` fails if either appears.
+
+### 13.2 Adding a third-party host
+
+1. Find the directive the browser names in the violation (§13.3). Add the host to the matching constant in `contentSecurityPolicy.ts` (`STRIPE_*_HOSTS`, `UPLOADTHING_CONNECT_HOSTS`, or a new one with a comment saying why), using the narrowest host the vendor documents. Never a bare `https:`.
+2. Scripts: under `'strict-dynamic'`, a script that our own nonced code loads is already allowed, so a `script-src` violation usually means a `<script>` in the server HTML without a nonce. The host list is only the fallback for CSP2 browsers, so add the host there as well.
+3. Remote images don't go through the CSP. Every image loads through same-origin `/_next/image`, so a new image host goes in `images.remotePatterns` in `next.config.ts`, not in `img-src`.
+4. Never add `'unsafe-inline'` to `script-src` or `style-src-elem`, and never a nonce to `style-src` or `style-src-attr` (a nonce cancels `'unsafe-inline'`, which would break the `style` attributes Base UI, UploadThing and `next/image` render).
+5. Add the host to the unit tests in `contentSecurityPolicy.test.ts`. If the vendor shows up in E2E, the violation guard in `security-headers.spec.ts` covers it. E2E runs `next dev`, so also walk the flow on staging with DevTools open before releasing.
+
+### 13.3 Reading a violation
+
+Open DevTools on the affected page. Chrome logs each blocked load in the Console as *Refused to load … because it violates the following Content Security Policy directive: "…"*, lists it under the *Issues* tab, and shows the request as `(blocked:csp)` in the Network tab.
+
+- The quoted directive is the one to change. If the blocked URL is `inline`, an inline `<script>` or `<style>` had no nonce. If it's `eval`, code called `eval` (allowed only in development).
+- A message that starts with `[Report Only]` came from a Report-Only policy, so nothing was blocked. The policy has been enforcing since 53.4.2.2, so today a violation is a real failure for whoever saw it.
+- Nothing reports violations from users' browsers yet: that's 53.7. Until then, only DevTools shows them.
+- **Emergency rollback:** if enforcing blocks payments or uploads in production, set `CSP_HEADER_NAME` in `contentSecurityPolicy.ts` back to `"Content-Security-Policy-Report-Only"` and release it (§10), or use *Instant Rollback*. `X-Frame-Options: DENY` still stops framing while the CSP is Report-Only. Then add the missing host (§13.2) and switch back.
+
+### 13.4 Why HSTS has no `preload`
+
+`Strict-Transport-Security` is `max-age=63072000; includeSubDomains`. `preload` (and submitting to hstspreload.org) would hard-code HTTPS for `vettr.studio` and every subdomain into browsers, and getting a domain off the preload list takes months. Add it once the apex has served HSTS cleanly for a while after go-live.
+
+### 13.5 The Vercel Toolbar
+
+Vercel can inject its Toolbar for signed-in team members. Its scripts and frames come from `vercel.live`, which the policy doesn't list, so the Toolbar is blocked and its violations show up in the Console. They don't come from the app, so ignore them, and never add `vercel.live` to the policy for the Toolbar's sake. Preview deployments, where the Toolbar usually shows, are off (§1). If it gets in the way on staging, turn it off in the project's Vercel Toolbar settings.
