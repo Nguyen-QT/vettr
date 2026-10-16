@@ -26,8 +26,8 @@ function hasDirective(policy: string, name: string): boolean {
 }
 
 describe("header names", () => {
-  it("uses the Report-Only header and the x-nonce request header", () => {
-    expect(CSP_HEADER_NAME).toBe("Content-Security-Policy-Report-Only");
+  it("uses the enforcing header and the x-nonce request header", () => {
+    expect(CSP_HEADER_NAME).toBe("Content-Security-Policy");
     expect(NONCE_REQUEST_HEADER).toBe("x-nonce");
   });
 });
