@@ -21,8 +21,12 @@ test.describe("role switcher", () => {
     await page.goto(`/artist/${fixture.artistId}`);
     await page.waitForLoadState("networkidle");
 
+    // On the artist side the switch is a row in the avatar menu
+    // (50.1.6.1); Settings being visible proves the menu is open.
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Switch to client view/ })
+      page.getByRole("menuitem", { name: /Switch to client view/ })
     ).toHaveCount(0);
   });
 
@@ -47,9 +51,10 @@ test.describe("role switcher", () => {
     await page.goto(`/artist/${fixture.dualRoleArtistId}`);
     await page.waitForLoadState("networkidle");
 
-    const toClientButton = page.getByRole("button", { name: "Switch to client view" });
-    await expect(toClientButton).toBeVisible();
-    await toClientButton.click();
+    await page.getByRole("button", { name: "Account menu" }).click();
+    const toClientItem = page.getByRole("menuitem", { name: "Switch to client view" });
+    await expect(toClientItem).toBeVisible();
+    await toClientItem.click();
 
     await page.waitForURL("**/client");
     await expect(page).toHaveURL(/\/client$/);

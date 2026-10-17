@@ -112,7 +112,9 @@ test.describe("artist password reset", () => {
 
     await expect(page).toHaveURL(`http://localhost:3000/artist/${fixture.resetArtistId}`);
 
-    await page.getByRole("button", { name: "Log out" }).click();
+    // Log out lives in the avatar menu (50.1.6.1).
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("menuitem", { name: "Log out" }).click();
     await expect(page).toHaveURL(/\/artist\/login/);
 
     await signIn(page, fixture.resetArtistEmail, fixture.resetArtistPassword);
