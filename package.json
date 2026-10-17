@@ -65,5 +65,10 @@
     "vite": "^8.3.0",
     "vitest": "^5.0.1",
     "vitest-mock-extended": "^5.1.1"
+  },
+  "overrides": {
+    "uploadthing": {
+      "effect": "3.17.7"
+    }
   }
 }
