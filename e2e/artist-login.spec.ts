@@ -61,7 +61,9 @@ test.describe("artist login and route protection", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL(`http://localhost:3000/artist/${fixture.artistId}`);
 
-    await page.getByRole("button", { name: "Log out" }).click();
+    // Log out lives in the avatar menu (50.1.6.1).
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("menuitem", { name: "Log out" }).click();
     await expect(page).toHaveURL(/\/artist\/login/);
 
     await page.goto(`/artist/${fixture.artistId}`);
